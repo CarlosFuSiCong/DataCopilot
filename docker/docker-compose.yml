@@ -1,0 +1,41 @@
+name: datacopilot
+
+services:
+  api:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: datacopilot-api
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-datacopilot}:${POSTGRES_PASSWORD:-datacopilot_dev}@postgres:5432/${POSTGRES_DB:-datacopilot}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - ../backend/app:/app/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: datacopilot-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-datacopilot}
+      POSTGRES_USER: ${POSTGRES_USER:-datacopilot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-datacopilot_dev}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - datacopilot_postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-datacopilot} -d ${POSTGRES_DB:-datacopilot}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  datacopilot_postgres_data:
