@@ -1,0 +1,18 @@
+# Documentation and planning artifacts
+*.md
+*.mdc
+docs/
+tasks/
+examples/
+sample_data/
+.cursor/rules/
+
+# Local environment and generated files
+.env
+.env.*
+__pycache__/
+.pytest_cache/
+node_modules/
+.next/
+dist/
+build/
