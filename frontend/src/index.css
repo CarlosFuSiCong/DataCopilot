@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+@theme {
+  /* IDE canvas layers */
+  --color-bg:       #13161a;
+  --color-surface:  #1a1d23;
+  --color-surface-1:#1f2329;
+  --color-surface-2:#252a32;
+  --color-hover:    #2a3040;
+
+  /* Borders */
+  --color-border:        #2d3340;
+  --color-border-subtle: #232830;
+
+  /* Text */
+  --color-text:         #cdd5e0;
+  --color-text-soft:    #8896a8;
+  --color-text-muted:   #4d5a6a;
+  --color-text-heading: #e8edf3;
+
+  /* Accent — teal (VS Code teal) */
+  --color-accent:        #4ec9b0;
+  --color-accent-dim:    #2d7a6e;
+  --color-accent-subtle: rgba(78, 201, 176, 0.08);
+
+  /* Semantic */
+  --color-blue:    #569cd6;
+  --color-yellow:  #dcdcaa;
+  --color-orange:  #ce9178;
+  --color-green:   #4ec97a;
+  --color-red:     #f48771;
+  --color-purple:  #c586c0;
+
+  /* Cell gutter */
+  --color-gutter:      #0f1215;
+  --color-cell-in:     rgba(86, 156, 214, 0.06);
+  --color-cell-out:    rgba(78, 201, 176, 0.04);
+
+  /* Fonts */
+  --font-ui:   "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", monospace;
+}
+
+@layer base {
+  html {
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-ui);
+    font-size: 14px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body { margin: 0; }
+  * { box-sizing: border-box; }
+
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: var(--color-border-subtle); filter: brightness(1.4); }
+}
