@@ -138,6 +138,10 @@ def explain(
     except Exception as exc:
         raise PlannerError(f"Explainer LLM API call failed: {exc}") from exc
 
-    text = (response.choices[0].message.content or "").strip()
+    try:
+        text = (response.choices[0].message.content or "").strip()
+    except (IndexError, AttributeError) as exc:
+        raise PlannerError(f"Explainer received unexpected response structure: {exc}") from exc
+
     logger.info("Explainer generated %d chars", len(text))
     return text
