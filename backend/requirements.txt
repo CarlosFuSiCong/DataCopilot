@@ -3,5 +3,6 @@ uvicorn[standard]
 pydantic-settings
 pandas
 python-multipart
+openai>=2.0.0
 pytest
 httpx
