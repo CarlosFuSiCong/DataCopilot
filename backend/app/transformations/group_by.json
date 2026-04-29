@@ -1,0 +1,35 @@
+{
+  "type": "group_by",
+  "description": "Group rows by a categorical column and compute an aggregate (sum, mean, count, min, max) on a numeric target column. Produces one row per group.",
+  "keywords": [
+    "group", "aggregate", "sum", "mean", "average", "count", "total", "min", "max",
+    "分组", "聚合", "汇总", "统计", "求和", "平均", "计数", "最大", "最小",
+    "按", "各", "每", "地区", "类别", "分类"
+  ],
+  "parameters": [
+    {
+      "name": "column",
+      "type": "str",
+      "required": true,
+      "description": "The column to group by (usually categorical)."
+    },
+    {
+      "name": "target",
+      "type": "str",
+      "required": true,
+      "description": "The numeric column to aggregate."
+    },
+    {
+      "name": "agg",
+      "type": "str",
+      "required": true,
+      "description": "Aggregation function. Allowed values: sum, mean, count, min, max."
+    }
+  ],
+  "example": {
+    "type": "group_by",
+    "column": "region",
+    "target": "sales",
+    "agg": "sum"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "type": "sort_values",
+  "description": "Sort all rows by a specified column in ascending or descending order.",
+  "keywords": [
+    "sort", "order", "rank", "ascending", "descending", "top", "bottom", "highest", "lowest",
+    "排序", "排列", "升序", "降序", "最高", "最低", "前几", "排名", "倒序"
+  ],
+  "parameters": [
+    {
+      "name": "column",
+      "type": "str",
+      "required": true,
+      "description": "The column to sort by."
+    },
+    {
+      "name": "ascending",
+      "type": "bool",
+      "required": false,
+      "description": "Sort direction. Default is true (ascending). Set to false for descending."
+    }
+  ],
+  "example": {
+    "type": "sort_values",
+    "column": "sales",
+    "ascending": false
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "type": "remove_missing_values",
+  "description": "Delete all rows that contain at least one missing (null/NaN) value. Use this when you want to clean the dataset before analysis.",
+  "keywords": [
+    "missing", "null", "nan", "empty", "clean", "drop", "remove",
+    "缺失", "空值", "清洗", "删除", "去除", "补全"
+  ],
+  "parameters": [],
+  "example": {
+    "type": "remove_missing_values"
+  }
+}

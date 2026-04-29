@@ -1,0 +1,12 @@
+{
+  "type": "generate_summary",
+  "description": "Request the explainer to produce a natural-language summary of the final result. Does not modify the data. Should be the last step in a workflow.",
+  "keywords": [
+    "summary", "explain", "description", "conclusion", "insight", "report", "narrate",
+    "总结", "解释", "描述", "说明", "结论", "洞察", "报告", "分析结果"
+  ],
+  "parameters": [],
+  "example": {
+    "type": "generate_summary"
+  }
+}
