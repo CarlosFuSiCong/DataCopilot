@@ -154,6 +154,21 @@ def test_explain_raises_when_llm_call_fails():
                     SAMPLE_DATASET_SUMMARY, client=mock_client)
 
 
+def test_explain_raises_planner_error_on_empty_choices():
+    """Empty choices array must raise PlannerError, not an unhandled IndexError."""
+    mock_response = MagicMock()
+    mock_response.choices = []
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.return_value = mock_response
+    with patch("app.services.result_explainer.settings") as s:
+        s.llm_api_key = "test-key"
+        s.llm_model = "gpt-4o-mini"
+        s.llm_max_tokens = 512
+        with pytest.raises(Exception, match="unexpected response structure"):
+            explain("test", SAMPLE_STEPS, SAMPLE_RESULT,
+                    SAMPLE_DATASET_SUMMARY, client=mock_client)
+
+
 # ---------------------------------------------------------------------------
 # chat router integration — explanation field present
 # ---------------------------------------------------------------------------

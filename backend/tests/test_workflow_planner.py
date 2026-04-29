@@ -192,3 +192,18 @@ def test_plan_raises_planner_error_when_llm_call_fails():
         mock_settings.llm_max_tokens = 512
         with pytest.raises(PlannerError, match="API call failed"):
             plan("test", SAMPLE_CTX, client=mock_client)
+
+
+def test_plan_raises_planner_error_on_empty_choices():
+    """Empty choices array must raise PlannerError, not an unhandled IndexError."""
+    mock_response = MagicMock()
+    mock_response.choices = []
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.return_value = mock_response
+
+    with patch("app.services.workflow_planner.settings") as mock_settings:
+        mock_settings.llm_api_key = "test-key"
+        mock_settings.llm_model = "gpt-4o-mini"
+        mock_settings.llm_max_tokens = 512
+        with pytest.raises(PlannerError, match="unexpected response structure"):
+            plan("test", SAMPLE_CTX, client=mock_client)
