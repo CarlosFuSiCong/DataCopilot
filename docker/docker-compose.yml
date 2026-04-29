@@ -14,6 +14,8 @@ services:
       - "${API_PORT:-8000}:8000"
     volumes:
       - ../backend/app:/app/app
+      - ../backend/tests:/app/tests
+      - ../backend/pytest.ini:/app/pytest.ini
     depends_on:
       postgres:
         condition: service_healthy
