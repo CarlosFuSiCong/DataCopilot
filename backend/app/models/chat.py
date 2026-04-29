@@ -17,3 +17,5 @@ class ChatResponse(BaseModel):
     planned_steps: list[dict]
     execution_result: ExecutionResult
     rag_context: RAGContext
+    # Natural-language explanation grounded in the execution result
+    explanation: str

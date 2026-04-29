@@ -12,7 +12,7 @@ from fastapi import APIRouter
 
 from app.models.chat import ChatRequest, ChatResponse
 from app.services import dataset_store, executor as executor_service
-from app.services import rag_service, validator as validator_service
+from app.services import rag_service, result_explainer, validator as validator_service
 from app.services import workflow_planner
 from app.services.profiler import profile
 
@@ -41,6 +41,13 @@ async def chat(request: ChatRequest) -> ChatResponse:
 
     execution_result = executor_service.execute(steps, content)
 
+    explanation = result_explainer.explain(
+        query=request.query,
+        planned_steps=planned_steps,
+        execution_result=execution_result,
+        dataset_summary=rag_ctx.dataset_summary.model_dump(),
+    )
+
     logger.info(
         "Chat pipeline complete: query=%r steps=%d rows=%d",
         request.query,
@@ -53,4 +60,5 @@ async def chat(request: ChatRequest) -> ChatResponse:
         planned_steps=planned_steps,
         execution_result=execution_result,
         rag_context=rag_ctx,
+        explanation=explanation,
     )
