@@ -45,16 +45,16 @@ function Sidebar({ dataset, onDatasetChange, onResult }: SidebarProps) {
       style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface-1)' }}
     >
       {/* Upload placeholder */}
-      <Section title="数据集">
+      <Section title="Dataset">
         <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-          {dataset ? `✓ ${dataset.filename}  ${dataset.row_count} 行` : '尚未上传 CSV'}
+          {dataset ? `✓ ${dataset.filename}  ${dataset.row_count} rows` : 'No CSV uploaded yet'}
         </p>
       </Section>
 
       {/* Chat placeholder */}
-      <Section title="自然语言查询">
+      <Section title="Query">
         <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-          {dataset ? '输入查询...' : '请先上传数据集'}
+          {dataset ? 'Enter a query...' : 'Upload a dataset first'}
         </p>
       </Section>
 
@@ -73,7 +73,7 @@ function ResultArea({ result }: ResultAreaProps) {
     <div className="flex-1 flex flex-col overflow-hidden p-6 gap-4">
       {result ? (
         <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-          结果面板（Workflow / 结果表 / 解释）待实现
+          Result panels (Workflow / Table / Explanation) — coming soon
         </p>
       ) : (
         <EmptyState />
@@ -90,7 +90,7 @@ function EmptyState() {
         ∅
       </div>
       <p className="text-sm font-mono" style={{ color: 'var(--color-text-muted)' }}>
-        上传 CSV，输入查询，查看结果
+        Upload a CSV, enter a query, view results
       </p>
     </div>
   )
