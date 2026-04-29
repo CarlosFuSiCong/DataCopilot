@@ -165,7 +165,11 @@ def plan(query: str, ctx: RAGContext, client: OpenAI | None = None) -> list[Work
     except Exception as exc:
         raise PlannerError(f"LLM API call failed: {exc}") from exc
 
-    raw = response.choices[0].message.content or ""
+    try:
+        raw = response.choices[0].message.content or ""
+    except (IndexError, AttributeError) as exc:
+        raise PlannerError(f"Planner received unexpected response structure: {exc}") from exc
+
     logger.info("LLM planner raw response: %s", raw)
 
     steps = _parse_steps(raw)

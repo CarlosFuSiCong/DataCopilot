@@ -1,8 +1,7 @@
 """Integration tests for POST /api/chat.
 
-The LLM planner is mocked so tests run without a real API key.
-Each test uploads a CSV, then calls /api/chat with a predefined
-mock planner response.
+Both the LLM planner and the result explainer are mocked so tests run
+without a real API key and produce deterministic results.
 """
 import io
 from unittest.mock import patch
@@ -30,6 +29,8 @@ MOCK_STEPS_GROUP_BY = [
     SortValuesStep(type="sort_values", column="sales", ascending=False),
 ]
 
+_MOCK_EXPLANATION = "Mock explanation for testing."
+
 
 def _upload(csv_bytes: bytes = BASE_CSV) -> str:
     resp = client.post(
@@ -40,45 +41,47 @@ def _upload(csv_bytes: bytes = BASE_CSV) -> str:
     return resp.json()["dataset_id"]
 
 
+def _chat(did: str, query: str = "test") -> dict:
+    """Helper: call /api/chat with both planner and explainer mocked."""
+    with patch("app.api.chat.workflow_planner.plan", return_value=MOCK_STEPS_GROUP_BY):
+        with patch("app.api.chat.result_explainer.explain", return_value=_MOCK_EXPLANATION):
+            return client.post("/api/chat", json={"dataset_id": did, "query": query})
+
+
 # ---------------------------------------------------------------------------
 # Successful chat pipeline
 # ---------------------------------------------------------------------------
 
 def test_chat_returns_200_with_mocked_planner():
     did = _upload()
-    with patch("app.api.chat.workflow_planner.plan", return_value=MOCK_STEPS_GROUP_BY):
-        resp = client.post("/api/chat", json={"dataset_id": did, "query": "按地区统计销售额"})
+    resp = _chat(did, "按地区统计销售额")
     assert resp.status_code == 200
 
 
 def test_chat_response_has_required_fields():
     did = _upload()
-    with patch("app.api.chat.workflow_planner.plan", return_value=MOCK_STEPS_GROUP_BY):
-        data = client.post("/api/chat", json={"dataset_id": did, "query": "test"}).json()
-    for field in ("query", "planned_steps", "execution_result", "rag_context"):
+    data = _chat(did).json()
+    for field in ("query", "planned_steps", "execution_result", "rag_context", "explanation"):
         assert field in data
 
 
 def test_chat_planned_steps_match_mock():
     did = _upload()
-    with patch("app.api.chat.workflow_planner.plan", return_value=MOCK_STEPS_GROUP_BY):
-        data = client.post("/api/chat", json={"dataset_id": did, "query": "test"}).json()
+    data = _chat(did).json()
     types = [s["type"] for s in data["planned_steps"]]
     assert types == ["remove_missing_values", "group_by", "sort_values"]
 
 
 def test_chat_execution_result_has_correct_groups():
     did = _upload()
-    with patch("app.api.chat.workflow_planner.plan", return_value=MOCK_STEPS_GROUP_BY):
-        data = client.post("/api/chat", json={"dataset_id": did, "query": "test"}).json()
+    data = _chat(did).json()
     # After remove_missing (drops West row) + group_by region: North and South
     assert data["execution_result"]["row_count"] == 2
 
 
 def test_chat_rag_context_includes_dataset_summary():
     did = _upload()
-    with patch("app.api.chat.workflow_planner.plan", return_value=MOCK_STEPS_GROUP_BY):
-        data = client.post("/api/chat", json={"dataset_id": did, "query": "test"}).json()
+    data = _chat(did).json()
     summary = data["rag_context"]["dataset_summary"]
     assert summary["row_count"] == 5
     col_names = [c["name"] for c in summary["columns"]]
@@ -88,16 +91,21 @@ def test_chat_rag_context_includes_dataset_summary():
 
 def test_chat_rag_context_has_debug_info():
     did = _upload()
-    with patch("app.api.chat.workflow_planner.plan", return_value=MOCK_STEPS_GROUP_BY):
-        data = client.post("/api/chat", json={"dataset_id": did, "query": "test"}).json()
+    data = _chat(did).json()
     assert data["rag_context"]["debug"]["method"] == "keyword_matching"
 
 
 def test_chat_query_echoed_in_response():
     did = _upload()
-    with patch("app.api.chat.workflow_planner.plan", return_value=MOCK_STEPS_GROUP_BY):
-        data = client.post("/api/chat", json={"dataset_id": did, "query": "按地区统计"}).json()
+    data = _chat(did, "按地区统计").json()
     assert data["query"] == "按地区统计"
+
+
+def test_chat_explanation_is_present():
+    did = _upload()
+    data = _chat(did).json()
+    assert isinstance(data["explanation"], str)
+    assert len(data["explanation"]) > 0
 
 
 # ---------------------------------------------------------------------------
@@ -106,7 +114,8 @@ def test_chat_query_echoed_in_response():
 
 def test_chat_unknown_dataset_returns_400():
     with patch("app.api.chat.workflow_planner.plan", return_value=MOCK_STEPS_GROUP_BY):
-        resp = client.post("/api/chat", json={"dataset_id": "no-such-id", "query": "test"})
+        with patch("app.api.chat.result_explainer.explain", return_value=_MOCK_EXPLANATION):
+            resp = client.post("/api/chat", json={"dataset_id": "no-such-id", "query": "test"})
     assert resp.status_code == 400
 
 
@@ -124,6 +133,7 @@ def test_chat_validation_error_returns_400():
     bad_steps = [FilterRowsStep(type="filter_rows", column="nonexistent_col", operator=">", value=0)]
     did = _upload()
     with patch("app.api.chat.workflow_planner.plan", return_value=bad_steps):
-        resp = client.post("/api/chat", json={"dataset_id": did, "query": "test"})
+        with patch("app.api.chat.result_explainer.explain", return_value=_MOCK_EXPLANATION):
+            resp = client.post("/api/chat", json={"dataset_id": did, "query": "test"})
     assert resp.status_code == 400
     assert "nonexistent_col" in resp.json()["error"]
