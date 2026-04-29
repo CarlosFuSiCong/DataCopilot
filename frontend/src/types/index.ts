@@ -9,7 +9,6 @@ export interface ColumnProfile {
 }
 
 export interface DatasetProfile {
-  dataset_id: string
   filename: string
   row_count: number
   column_count: number
