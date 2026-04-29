@@ -33,6 +33,10 @@ class ExecutionError(DataCopilotError):
     """Raised when a workflow step fails at pandas execution time."""
 
 
+class PlannerError(DataCopilotError):
+    """Raised when the LLM planner fails to produce a valid workflow JSON."""
+
+
 async def datacoppilot_error_handler(
     request: Request, exc: DataCopilotError
 ) -> JSONResponse:
