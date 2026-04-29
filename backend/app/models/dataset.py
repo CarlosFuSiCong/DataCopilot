@@ -18,4 +18,5 @@ class DatasetProfile(BaseModel):
 
 
 class UploadResponse(BaseModel):
+    dataset_id: str
     profile: DatasetProfile
