@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from app.api import dataset as dataset_router
+from app.api import workflow as workflow_router
 from app.core.exceptions import DataCopilotError, datacoppilot_error_handler
 
 app = FastAPI(
@@ -12,6 +13,7 @@ app = FastAPI(
 app.add_exception_handler(DataCopilotError, datacoppilot_error_handler)
 
 app.include_router(dataset_router.router, prefix="/api")
+app.include_router(workflow_router.router, prefix="/api")
 
 
 @app.get("/health")

@@ -61,5 +61,14 @@ def profile(content: bytes, filename: str) -> DatasetProfile:
     )
 
 
+def get_column_names(content: bytes) -> list[str]:
+    """Return column names from raw CSV bytes without building a full profile."""
+    try:
+        df = pd.read_csv(io.BytesIO(content), nrows=0)
+    except Exception as exc:
+        raise ProfilerError(f"Could not read CSV headers: {exc}") from exc
+    return list(df.columns)
+
+
 def _round(value: float) -> float:
     return round(value, 2) if not math.isnan(value) else 0.0

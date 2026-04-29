@@ -21,6 +21,18 @@ class ProfilerError(DataCopilotError):
     """Raised when pandas fails to parse the CSV."""
 
 
+class DatasetNotFoundError(DataCopilotError):
+    """Raised when a dataset_id is not found in the store."""
+
+
+class WorkflowValidationError(DataCopilotError):
+    """Raised when a workflow step references invalid columns or parameters."""
+
+
+class ExecutionError(DataCopilotError):
+    """Raised when a workflow step fails at pandas execution time."""
+
+
 async def datacoppilot_error_handler(
     request: Request, exc: DataCopilotError
 ) -> JSONResponse:
