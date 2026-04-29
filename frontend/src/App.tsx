@@ -19,13 +19,20 @@ export default function App() {
 function Header() {
   return (
     <header
-      className="flex items-center gap-3 px-6 py-4 border-b shrink-0"
-      style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface-1)' }}
+      className="flex items-center gap-3 px-6 py-3 border-b shrink-0"
+      style={{
+        borderColor: 'var(--color-border)',
+        background: 'var(--color-surface-1)',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+      }}
     >
       <span className="font-mono text-sm font-semibold tracking-widest uppercase" style={{ color: 'var(--color-accent)' }}>
         DataCopilot
       </span>
-      <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'var(--color-accent-subtle)', color: 'var(--color-accent)' }}>
+      <span
+        className="text-xs px-2 py-0.5 rounded font-mono"
+        style={{ background: 'var(--color-accent-subtle)', color: 'var(--color-accent)', border: '1px solid var(--color-accent-border)' }}
+      >
         MVP
       </span>
     </header>
@@ -41,7 +48,7 @@ interface SidebarProps {
 function Sidebar({ dataset, onDatasetChange, onResult }: SidebarProps) {
   return (
     <aside
-      className="w-80 shrink-0 flex flex-col border-r overflow-y-auto"
+      className="w-72 shrink-0 flex flex-col border-r overflow-y-auto"
       style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface-1)' }}
     >
       {/* Upload placeholder */}
@@ -84,12 +91,14 @@ function ResultArea({ result }: ResultAreaProps) {
 
 function EmptyState() {
   return (
-    <div className="flex-1 flex flex-col items-center justify-center gap-4 opacity-40">
-      <div className="w-12 h-12 rounded-lg border-2 flex items-center justify-center font-mono text-2xl"
-        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}>
+    <div className="flex-1 flex flex-col items-center justify-center gap-3">
+      <div
+        className="w-10 h-10 rounded-lg border flex items-center justify-center font-mono text-lg"
+        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)', background: 'var(--color-surface-1)' }}
+      >
         ∅
       </div>
-      <p className="text-sm font-mono" style={{ color: 'var(--color-text-muted)' }}>
+      <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
         Upload a CSV, enter a query, view results
       </p>
     </div>
@@ -103,9 +112,11 @@ interface SectionProps {
 
 function Section({ title, children }: SectionProps) {
   return (
-    <div className="p-4 border-b" style={{ borderColor: 'var(--color-border-subtle)' }}>
-      <h2 className="text-xs font-mono font-semibold uppercase tracking-widest mb-3"
-        style={{ color: 'var(--color-text-muted)' }}>
+    <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--color-border-subtle)' }}>
+      <h2
+        className="text-xs font-mono font-semibold uppercase tracking-widest mb-2"
+        style={{ color: 'var(--color-text-muted)' }}
+      >
         {title}
       </h2>
       {children}

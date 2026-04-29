@@ -1,25 +1,27 @@
 @import "tailwindcss";
 
 @theme {
-  --color-surface: #0f1117;
-  --color-surface-1: #161b27;
-  --color-surface-2: #1e2535;
-  --color-border: #2a3347;
-  --color-border-subtle: #1e2535;
+  --color-surface: #f0f2f5;
+  --color-surface-1: #ffffff;
+  --color-surface-2: #f8f9fb;
 
-  --color-text: #c8d0e0;
-  --color-text-muted: #6b7a99;
-  --color-text-heading: #e8edf5;
+  --color-border: #e2e7f0;
+  --color-border-subtle: #edf0f5;
 
-  --color-accent: #3b82f6;
-  --color-accent-hover: #2563eb;
-  --color-accent-subtle: #1e3a5f;
+  --color-text: #374151;
+  --color-text-muted: #9ca3af;
+  --color-text-heading: #111827;
 
-  --color-success: #10b981;
-  --color-success-subtle: #052e16;
-  --color-warning: #f59e0b;
-  --color-error: #ef4444;
-  --color-error-subtle: #450a0a;
+  --color-accent: #2563eb;
+  --color-accent-hover: #1d4ed8;
+  --color-accent-subtle: #eff6ff;
+  --color-accent-border: #bfdbfe;
+
+  --color-success: #059669;
+  --color-success-subtle: #ecfdf5;
+  --color-warning: #d97706;
+  --color-error: #dc2626;
+  --color-error-subtle: #fef2f2;
 
   --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Code", monospace;
@@ -48,7 +50,7 @@
   }
 
   ::-webkit-scrollbar-track {
-    background: var(--color-surface-1);
+    background: var(--color-surface);
   }
 
   ::-webkit-scrollbar-thumb {
