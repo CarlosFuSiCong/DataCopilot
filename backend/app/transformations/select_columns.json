@@ -1,0 +1,20 @@
+{
+  "type": "select_columns",
+  "description": "Keep only the specified columns and drop everything else. Useful for focusing on relevant fields before further analysis.",
+  "keywords": [
+    "select", "columns", "fields", "keep", "pick", "subset", "projection",
+    "选择", "字段", "列", "保留", "选取", "筛选列"
+  ],
+  "parameters": [
+    {
+      "name": "columns",
+      "type": "list[str]",
+      "required": true,
+      "description": "List of column names to keep."
+    }
+  ],
+  "example": {
+    "type": "select_columns",
+    "columns": ["region", "sales", "date"]
+  }
+}

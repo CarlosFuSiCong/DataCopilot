@@ -1,0 +1,34 @@
+{
+  "type": "filter_rows",
+  "description": "Keep only rows that satisfy a comparison condition on a single column. Supports numeric and string comparisons.",
+  "keywords": [
+    "filter", "where", "condition", "greater", "less", "equal", "rows", "subset",
+    "过滤", "筛选", "条件", "大于", "小于", "等于", "行", "满足", "where"
+  ],
+  "parameters": [
+    {
+      "name": "column",
+      "type": "str",
+      "required": true,
+      "description": "The column to apply the filter condition to."
+    },
+    {
+      "name": "operator",
+      "type": "str",
+      "required": true,
+      "description": "Comparison operator. Allowed values: =, !=, >, >=, <, <="
+    },
+    {
+      "name": "value",
+      "type": "int | float | str",
+      "required": true,
+      "description": "The value to compare against."
+    }
+  ],
+  "example": {
+    "type": "filter_rows",
+    "column": "sales",
+    "operator": ">",
+    "value": 1000
+  }
+}
