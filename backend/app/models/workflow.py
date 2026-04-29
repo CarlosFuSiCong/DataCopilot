@@ -1,7 +1,7 @@
 import math
 from typing import Annotated, Literal, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # ---------------------------------------------------------------------------
@@ -17,11 +17,19 @@ class SelectColumnsStep(BaseModel):
     columns: list[str]
 
 
+_OPERATOR_ALIASES: dict[str, str] = {"==": "=", "<>": "!="}
+
+
 class FilterRowsStep(BaseModel):
     type: Literal["filter_rows"]
     column: str
     operator: Literal["=", "!=", ">", ">=", "<", "<="]
     value: Union[int, float, str]
+
+    @field_validator("operator", mode="before")
+    @classmethod
+    def normalize_operator(cls, v: str) -> str:
+        return _OPERATOR_ALIASES.get(v, v)
 
 
 class GroupByStep(BaseModel):
