@@ -4,5 +4,6 @@ pydantic-settings
 pandas
 python-multipart
 openai>=2.0.0
+asyncpg
 pytest
 httpx
