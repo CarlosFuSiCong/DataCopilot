@@ -1,6 +1,8 @@
 """Unit tests for app.services.executor."""
 import pytest
 
+from app.services.risk_rules import AFFECTS_MOST_ROWS, EMPTY_OUTPUT, NO_ROWS_MATCHED
+
 from app.core.exceptions import ExecutionError
 from app.models.workflow import (
     FilterRowsStep,
@@ -303,3 +305,108 @@ def test_preview_nan_replaced_with_none():
     west_row = next((r for r in result.preview if r.get("region") == "West"), None)
     if west_row:
         assert west_row["sales"] is None
+
+
+# ---------------------------------------------------------------------------
+# Risk rules integration — issues populated on StepResult
+# ---------------------------------------------------------------------------
+
+ZERO_MATCH_CSV = (
+    b"region,sales,month\n"
+    b"North,1200,Jan\n"
+    b"South,850,Jan\n"
+)
+
+HIGH_IMPACT_CSV = (
+    b"region,sales\n"
+    b"North,100\n"
+    b"South,200\n"
+    b"West,300\n"
+    b"East,400\n"
+    b"Central,500\n"
+    b"Northeast,600\n"
+    b"Southwest,700\n"
+    b"Midwest,800\n"
+    b"Northwest,900\n"
+    b"Southeast,1000\n"
+)
+
+
+def test_filter_zero_match_produces_no_rows_matched_warning():
+    result = execute(
+        [FilterRowsStep(type="filter_rows", column="sales", operator=">", value=9999)],
+        ZERO_MATCH_CSV,
+    )
+    codes = [i.code for i in result.step_results[0].issues]
+    assert NO_ROWS_MATCHED in codes
+
+
+def test_filter_zero_match_produces_empty_output_warning():
+    result = execute(
+        [FilterRowsStep(type="filter_rows", column="sales", operator=">", value=9999)],
+        ZERO_MATCH_CSV,
+    )
+    codes = [i.code for i in result.step_results[0].issues]
+    assert EMPTY_OUTPUT in codes
+
+
+def test_filter_zero_match_sets_warning_status():
+    result = execute(
+        [FilterRowsStep(type="filter_rows", column="sales", operator=">", value=9999)],
+        ZERO_MATCH_CSV,
+    )
+    assert result.step_results[0].status == "warning"
+
+
+def test_filter_keeping_most_rows_produces_affects_most_rows_warning():
+    result = execute(
+        [FilterRowsStep(type="filter_rows", column="sales", operator=">", value=0)],
+        HIGH_IMPACT_CSV,
+    )
+    codes = [i.code for i in result.step_results[0].issues]
+    assert AFFECTS_MOST_ROWS in codes
+
+
+def test_remove_missing_removing_most_rows_produces_affects_most_rows_warning():
+    sparse_csv = (
+        b"region,sales\n"
+        b"North,\n"
+        b"South,\n"
+        b"West,\n"
+        b"East,\n"
+        b"Central,\n"
+        b"Northeast,\n"
+        b"Southwest,\n"
+        b"Midwest,\n"
+        b"Northwest,\n"
+        b"Extra,\n"
+        b"Southeast,100\n"
+    )
+    result = execute(
+        [RemoveMissingValuesStep(type="remove_missing_values")],
+        sparse_csv,
+    )
+    codes = [i.code for i in result.step_results[0].issues]
+    assert AFFECTS_MOST_ROWS in codes
+
+
+def test_normal_step_has_no_issues():
+    result = execute(
+        [FilterRowsStep(type="filter_rows", column="region", operator="=", value="North")],
+        BASE_CSV,
+    )
+    assert result.step_results[0].issues == []
+    assert result.step_results[0].status == "success"
+
+
+def test_warning_does_not_stop_subsequent_steps():
+    result = execute(
+        [
+            FilterRowsStep(type="filter_rows", column="sales", operator=">", value=9999),
+            SortValuesStep(type="sort_values", column="sales", ascending=False),
+        ],
+        ZERO_MATCH_CSV,
+    )
+    assert len(result.step_results) == 2
+    assert result.step_results[0].status == "warning"
+    assert result.step_results[1].status in ("success", "warning")

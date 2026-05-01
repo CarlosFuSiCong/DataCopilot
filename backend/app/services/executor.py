@@ -24,6 +24,7 @@ from app.models.workflow import (
     StepResult,
     WorkflowStep,
 )
+from app.services import risk_rules
 
 logger = logging.getLogger(__name__)
 
@@ -61,10 +62,19 @@ def execute(steps: list[WorkflowStep], content: bytes) -> ExecutionResult:
         df, message, metrics = _apply_step(step, df, idx)
         output_row_count = len(df)
         output_column_count = len(df.columns)
+        issues = risk_rules.check(
+            step_type=step.type,
+            output_row_count=output_row_count,
+            match_rate=metrics.match_rate,
+            affected_rate=metrics.affected_rate,
+        )
+        status = risk_rules.worst_status(issues)
         step_results.append(
             StepResult(
                 step_index=idx,
                 step_type=step.type,
+                status=status,
+                issues=issues,
                 input_row_count=input_row_count,
                 output_row_count=output_row_count,
                 input_column_count=input_column_count,
@@ -75,6 +85,11 @@ def execute(steps: list[WorkflowStep], content: bytes) -> ExecutionResult:
                 message=message,
             )
         )
+        if status == "error":
+            raise ExecutionError(
+                f"Step {idx} ({step.type}) has a blocking error: "
+                + "; ".join(i.message for i in issues if i.severity == "error")
+            )
         logs.append(
             StepLog(
                 step_index=idx,
