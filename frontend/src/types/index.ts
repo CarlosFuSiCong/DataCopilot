@@ -40,11 +40,33 @@ export interface StepLog {
   message: string
 }
 
+export interface StepIssue {
+  severity: 'warning' | 'error'
+  code: string
+  message: string
+}
+
+export interface StepResult {
+  step_index: number
+  step_type: string
+  status: 'success' | 'warning' | 'error'
+  issues: StepIssue[]
+  input_row_count: number
+  output_row_count: number
+  input_column_count: number
+  output_column_count: number
+  match_rate: number | null
+  affected_rate: number | null
+  preview: Record<string, unknown>[]
+  message: string
+}
+
 export interface ExecutionResult {
   row_count: number
   column_count: number
   columns: string[]
   preview: Record<string, unknown>[]
+  step_results: StepResult[]
   logs: StepLog[]
   has_summary: boolean
   summary?: Record<string, unknown>
@@ -86,13 +108,32 @@ export interface RAGContext {
 export interface ChatRequest {
   dataset_id: string
   query: string
+  auto_confirm?: boolean
 }
 
 export interface ChatResponse {
   query: string
   planned_steps: WorkflowStep[]
-  execution_result: ExecutionResult
+  step_results: StepResult[]
+  has_warnings: boolean
+  has_errors: boolean
   rag_context: RAGContext
+  // Null when execution_result is not yet available (preview-only mode).
+  // The client should show a Confirm button and call POST /api/workflows/confirm.
+  explanation: string | null
+  execution_result: ExecutionResult | null
+}
+
+export interface ConfirmRequest {
+  dataset_id: string
+  steps: WorkflowStep[]
+  query: string
+}
+
+export interface ConfirmResponse {
+  query: string
+  planned_steps: WorkflowStep[]
+  execution_result: ExecutionResult
   explanation: string
 }
 
