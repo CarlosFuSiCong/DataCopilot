@@ -1,20 +1,27 @@
 {
+  "doc_type": "transformation",
+  "step_type": "select_columns",
+  "issue_code": null,
+  "source_path": "transformations/select_columns.json",
   "type": "select_columns",
-  "description": "Keep only the specified columns and drop everything else. Useful for focusing on relevant fields before further analysis.",
+  "title": "select_columns: keep only specified columns",
+  "description": "Keep only the specified columns and drop all others. Useful for reducing the dataset to relevant fields before further analysis, or for producing a clean output. All column names in the list must exist in the dataset.",
   "keywords": [
     "select", "columns", "fields", "keep", "pick", "subset", "projection",
-    "选择", "字段", "列", "保留", "选取", "筛选列"
+    "选择", "字段", "列", "保留", "选取", "筛选列", "only columns", "just show",
+    "只要", "只显示", "保留列"
   ],
   "parameters": [
     {
       "name": "columns",
       "type": "list[str]",
       "required": true,
-      "description": "List of column names to keep."
+      "description": "List of column names to keep. All names must exist in the dataset. Every column not in this list will be dropped."
     }
   ],
   "example": {
     "type": "select_columns",
     "columns": ["region", "sales", "date"]
-  }
+  },
+  "rag_note": "Every column name in the list must exist in the dataset. The validator will reject unknown column names. If the user says 'show me region and sales only', this is the right step."
 }
