@@ -10,9 +10,13 @@ sample_data/
 # Local environment and generated files
 .env
 .env.*
+!.env.example
 __pycache__/
 .pytest_cache/
 node_modules/
 .next/
 dist/
 build/
+
+# Object storage - raw user data must not be committed
+backend/storage/datasets/*/

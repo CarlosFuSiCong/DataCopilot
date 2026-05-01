@@ -1,6 +1,24 @@
 name: datacopilot
 
 services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: datacopilot-postgres
+    environment:
+      POSTGRES_DB: datacopilot
+      POSTGRES_USER: datacopilot
+      POSTGRES_PASSWORD: datacopilot
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U datacopilot -d datacopilot"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   api:
     build:
       context: ../backend
@@ -15,6 +33,10 @@ services:
       - ../backend/app:/app/app
       - ../backend/tests:/app/tests
       - ../backend/pytest.ini:/app/pytest.ini
+      - ../backend/storage:/app/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   test:
     build:
@@ -28,3 +50,10 @@ services:
       - ../backend/tests:/app/tests
       - ../backend/pytest.ini:/app/pytest.ini
       - ../sample_data:/app/sample_data
+      - ../backend/storage:/app/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
