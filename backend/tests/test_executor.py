@@ -223,6 +223,71 @@ def test_step_log_records_rows_before_and_after():
     assert log.rows_after == 4
 
 
+def test_step_results_count_matches_step_count():
+    steps = [
+        RemoveMissingValuesStep(type="remove_missing_values"),
+        GroupByStep(type="group_by", column="region", target="sales", agg="sum"),
+    ]
+    result = execute(steps, BASE_CSV)
+    assert len(result.step_results) == 2
+
+
+def test_step_result_records_row_and_column_counts():
+    result = execute(
+        [SelectColumnsStep(type="select_columns", columns=["region", "sales"])],
+        BASE_CSV,
+    )
+    step_result = result.step_results[0]
+    assert step_result.input_row_count == 5
+    assert step_result.output_row_count == 5
+    assert step_result.input_column_count == 3
+    assert step_result.output_column_count == 2
+
+
+def test_filter_step_result_records_match_rate():
+    result = execute(
+        [FilterRowsStep(type="filter_rows", column="sales", operator=">", value=1000)],
+        BASE_CSV,
+    )
+    assert result.step_results[0].match_rate == pytest.approx(2 / 5)
+
+
+def test_remove_missing_step_result_records_affected_rate():
+    result = execute([RemoveMissingValuesStep(type="remove_missing_values")], BASE_CSV)
+    assert result.step_results[0].affected_rate == pytest.approx(1 / 5)
+
+
+def test_step_result_includes_preview():
+    result = execute(
+        [FilterRowsStep(type="filter_rows", column="region", operator="=", value="North")],
+        BASE_CSV,
+    )
+    assert result.step_results[0].preview == result.preview
+
+
+def test_step_result_defaults_to_success_without_issues():
+    result = execute([RemoveMissingValuesStep(type="remove_missing_values")], BASE_CSV)
+    step_result = result.step_results[0]
+    assert step_result.status == "success"
+    assert step_result.issues == []
+
+
+def test_select_columns_affected_rate_is_none():
+    result = execute(
+        [SelectColumnsStep(type="select_columns", columns=["region"])],
+        BASE_CSV,
+    )
+    assert result.step_results[0].affected_rate is None
+
+
+def test_rename_columns_affected_rate_is_none():
+    result = execute(
+        [RenameColumnsStep(type="rename_columns", mapping={"sales": "revenue"})],
+        BASE_CSV,
+    )
+    assert result.step_results[0].affected_rate is None
+
+
 # ---------------------------------------------------------------------------
 # Preview
 # ---------------------------------------------------------------------------
