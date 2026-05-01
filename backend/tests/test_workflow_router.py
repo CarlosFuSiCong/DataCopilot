@@ -72,7 +72,15 @@ def test_execute_result_has_required_fields():
     did = _upload()
     resp = _execute(did, [{"type": "remove_missing_values"}])
     data = resp.json()
-    for field in ("row_count", "column_count", "columns", "preview", "logs", "has_summary"):
+    for field in (
+        "row_count",
+        "column_count",
+        "columns",
+        "preview",
+        "step_results",
+        "logs",
+        "has_summary",
+    ):
         assert field in data
 
 
@@ -122,6 +130,27 @@ def test_execute_logs_count_matches_step_count():
     ]
     data = _execute(did, steps).json()
     assert len(data["logs"]) == 2
+
+
+def test_execute_step_result_includes_standard_fields():
+    did = _upload()
+    data = _execute(did, [{"type": "remove_missing_values"}]).json()
+    step_result = data["step_results"][0]
+    for field in (
+        "step_index",
+        "step_type",
+        "status",
+        "issues",
+        "input_row_count",
+        "output_row_count",
+        "input_column_count",
+        "output_column_count",
+        "match_rate",
+        "affected_rate",
+        "preview",
+        "message",
+    ):
+        assert field in step_result
 
 
 # ---------------------------------------------------------------------------

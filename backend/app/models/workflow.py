@@ -1,4 +1,3 @@
-import math
 from typing import Annotated, Literal, Union
 
 from pydantic import BaseModel, Field, field_validator
@@ -78,6 +77,27 @@ class WorkflowRequest(BaseModel):
     steps: list[WorkflowStep]
 
 
+class StepIssue(BaseModel):
+    severity: Literal["warning", "error"]
+    code: str
+    message: str
+
+
+class StepResult(BaseModel):
+    step_index: int
+    step_type: str
+    status: Literal["success", "warning", "error"] = "success"
+    issues: list[StepIssue] = Field(default_factory=list)
+    input_row_count: int
+    output_row_count: int
+    input_column_count: int
+    output_column_count: int
+    match_rate: float | None = None
+    affected_rate: float | None = None
+    preview: list[dict] = Field(default_factory=list)
+    message: str
+
+
 class StepLog(BaseModel):
     step_index: int
     step_type: str
@@ -91,6 +111,8 @@ class ExecutionResult(BaseModel):
     column_count: int
     columns: list[str]
     preview: list[dict]
+    step_results: list[StepResult]
+    # Backward-compatible log shape for MVP1 frontend/tests.
     logs: list[StepLog]
     # True when the workflow includes a generate_summary step (Task 5 will use this)
     has_summary: bool

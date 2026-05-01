@@ -12,6 +12,7 @@ from app.models.workflow import (
     RemoveMissingValuesStep,
     SortValuesStep,
     StepLog,
+    StepResult,
 )
 from app.services.result_explainer import detect_language, explain
 
@@ -30,6 +31,39 @@ SAMPLE_RESULT = ExecutionResult(
         {"region": "West", "sales": 6670.0},
         {"region": "North", "sales": 5400.0},
         {"region": "East", "sales": 4390.0},
+    ],
+    step_results=[
+        StepResult(
+            step_index=0,
+            step_type="group_by",
+            input_row_count=20,
+            output_row_count=4,
+            input_column_count=4,
+            output_column_count=2,
+            affected_rate=0.8,
+            preview=[
+                {"region": "South", "sales": 7500.0},
+                {"region": "West", "sales": 6670.0},
+                {"region": "North", "sales": 5400.0},
+                {"region": "East", "sales": 4390.0},
+            ],
+            message="Grouped by 'region', aggregated 'sales' with sum.",
+        ),
+        StepResult(
+            step_index=1,
+            step_type="sort_values",
+            input_row_count=4,
+            output_row_count=4,
+            input_column_count=2,
+            output_column_count=2,
+            preview=[
+                {"region": "South", "sales": 7500.0},
+                {"region": "West", "sales": 6670.0},
+                {"region": "North", "sales": 5400.0},
+                {"region": "East", "sales": 4390.0},
+            ],
+            message="Sorted by 'sales' descending.",
+        ),
     ],
     logs=[
         StepLog(step_index=0, step_type="group_by", rows_before=20, rows_after=4,
