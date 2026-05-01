@@ -1,4 +1,4 @@
-import type { UploadResponse, DatasetProfile, ChatRequest, ChatResponse, ApiError } from '../types'
+import type { UploadResponse, DatasetProfile, ChatRequest, ChatResponse, ConfirmRequest, ConfirmResponse, ApiError } from '../types'
 
 const BASE = '/api'
 
@@ -32,4 +32,13 @@ export async function sendChat(req: ChatRequest): Promise<ChatResponse> {
     body: JSON.stringify(req),
   })
   return handleResponse<ChatResponse>(res)
+}
+
+export async function confirmWorkflow(req: ConfirmRequest): Promise<ConfirmResponse> {
+  const res = await fetch(`${BASE}/workflows/confirm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  })
+  return handleResponse<ConfirmResponse>(res)
 }
