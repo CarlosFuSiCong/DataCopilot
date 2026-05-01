@@ -29,7 +29,7 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 
 @router.post("", response_model=ChatResponse)
 async def chat(request: ChatRequest) -> ChatResponse:
-    content = dataset_store.load(request.dataset_id)
+    content = await dataset_store.load(request.dataset_id)
     dataset_profile = profile(content, filename="<cached>")
 
     rag_ctx = rag_service.build_context(

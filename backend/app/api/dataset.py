@@ -21,6 +21,11 @@ async def upload_dataset(file: UploadFile = File(...)) -> UploadResponse:
     profile = profiler_service.profile(content, file.filename)
 
     dataset_id = str(uuid.uuid4())
-    dataset_store.save(dataset_id, content)
+    await dataset_store.save(
+        dataset_id,
+        content,
+        filename=file.filename,
+        profile_data=profile.model_dump(),
+    )
 
     return UploadResponse(dataset_id=dataset_id, profile=profile)

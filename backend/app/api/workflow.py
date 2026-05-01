@@ -25,7 +25,7 @@ async def execute_workflow(request: WorkflowRequest) -> ExecutionResult:
     Deprecated: use POST /preview → user review → POST /confirm instead.
     Will be removed once the frontend completes the preview-confirm migration.
     """
-    content = dataset_store.load(request.dataset_id)
+    content = await dataset_store.load(request.dataset_id)
     column_names = get_column_names(content)
     validator_service.validate(request.steps, column_names)
     return executor_service.execute(request.steps, content)
@@ -38,7 +38,7 @@ async def preview_workflow(request: WorkflowRequest) -> PreviewResponse:
     Returns step_results with risk-rule issues so the client can surface
     warnings and errors before asking the user to confirm execution.
     """
-    content = dataset_store.load(request.dataset_id)
+    content = await dataset_store.load(request.dataset_id)
     column_names = get_column_names(content)
     validator_service.validate(request.steps, column_names)
     return executor_service.preview(request.steps, content)
@@ -53,7 +53,7 @@ async def confirm_workflow(request: ConfirmRequest) -> ConfirmResponse:
     preview path) and the result explainer is called to generate the
     natural-language explanation.
     """
-    content = dataset_store.load(request.dataset_id)
+    content = await dataset_store.load(request.dataset_id)
     column_names = get_column_names(content)
     validator_service.validate(request.steps, column_names)
 

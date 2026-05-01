@@ -18,7 +18,7 @@ router = APIRouter(prefix="/rag", tags=["rag"])
 
 @router.post("/context", response_model=RAGContext)
 async def get_rag_context(request: RAGContextRequest) -> RAGContext:
-    content = dataset_store.load(request.dataset_id)
+    content = await dataset_store.load(request.dataset_id)
     dataset_profile = profile(content, filename="<cached>")
     return rag_service.build_context(
         query=request.query,
