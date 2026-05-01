@@ -116,3 +116,19 @@ class ExecutionResult(BaseModel):
     logs: list[StepLog]
     # True when the workflow includes a generate_summary step (Task 5 will use this)
     has_summary: bool
+
+
+class PreviewResponse(BaseModel):
+    """Response for the preview-only execution endpoint.
+
+    The workflow runs through the validator and executor (with risk checks)
+    but the result explainer is never called.  Errors are captured instead of
+    raised so the client can inspect the full partial result.
+    """
+
+    planned_steps: list[dict]
+    step_results: list[StepResult]
+    has_warnings: bool
+    has_errors: bool
+    # Index of the step that caused a blocking error and stopped execution.
+    blocked_at_step: int | None = None
