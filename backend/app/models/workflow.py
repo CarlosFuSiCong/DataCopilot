@@ -132,3 +132,31 @@ class PreviewResponse(BaseModel):
     has_errors: bool
     # Index of the step that caused a blocking error and stopped execution.
     blocked_at_step: int | None = None
+
+
+class ConfirmRequest(BaseModel):
+    """Request to execute a pre-reviewed workflow and generate an explanation.
+
+    The client sends this after showing the user the preview result and
+    receiving explicit confirmation that the workflow should proceed.
+    """
+
+    dataset_id: str
+    steps: list[WorkflowStep]
+    # Original user query — used by the result explainer for language detection
+    # and grounding the explanation in the user's intent.
+    query: str
+
+
+class ConfirmResponse(BaseModel):
+    """Response from the confirm execution endpoint.
+
+    Contains the full execution result plus an LLM-generated explanation.
+    Unlike ChatResponse there is no rag_context because the confirm flow
+    receives an already-planned workflow from the client.
+    """
+
+    query: str
+    planned_steps: list[dict]
+    execution_result: ExecutionResult
+    explanation: str
