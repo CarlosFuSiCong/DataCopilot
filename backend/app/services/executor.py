@@ -16,10 +16,12 @@ from app.models.workflow import (
     FilterRowsStep,
     GenerateSummaryStep,
     GroupByStep,
+    PreviewResponse,
     RemoveMissingValuesStep,
     RenameColumnsStep,
     SelectColumnsStep,
     SortValuesStep,
+    StepIssue,
     StepLog,
     StepResult,
     WorkflowStep,
@@ -37,6 +39,8 @@ _FILTER_OPS = {
     "<": lambda s, v: s < v,
     "<=": lambda s, v: s <= v,
 }
+# Issue code used when a step raises ExecutionError at runtime (after validation).
+_EXECUTION_ERROR_CODE = "execution_error"
 
 
 @dataclass(frozen=True)
@@ -113,6 +117,101 @@ def execute(steps: list[WorkflowStep], content: bytes) -> ExecutionResult:
         step_results=step_results,
         logs=logs,
         has_summary=has_summary,
+    )
+
+
+def preview(steps: list[WorkflowStep], content: bytes) -> PreviewResponse:
+    """Run all steps for preview.
+
+    Identical execution path to execute() — same validator, same risk rules —
+    but errors are captured into StepResult instead of raised.  The result
+    explainer is never called.  Execution stops at the first error step and
+    reports blocked_at_step.
+    """
+    try:
+        df = pd.read_csv(io.BytesIO(content))
+    except Exception as exc:
+        raise ExecutionError(f"Failed to load dataset: {exc}") from exc
+
+    step_results: list[StepResult] = []
+    blocked_at_step: int | None = None
+
+    for idx, step in enumerate(steps):
+        input_row_count = len(df)
+        input_column_count = len(df.columns)
+
+        try:
+            df, message, metrics = _apply_step(step, df, idx)
+        except ExecutionError as exc:
+            step_results.append(
+                StepResult(
+                    step_index=idx,
+                    step_type=step.type,
+                    status="error",
+                    issues=[
+                        StepIssue(
+                            severity="error",
+                            code=_EXECUTION_ERROR_CODE,
+                            message=str(exc),
+                        )
+                    ],
+                    input_row_count=input_row_count,
+                    output_row_count=0,
+                    input_column_count=input_column_count,
+                    output_column_count=0,
+                    preview=[],
+                    message=str(exc),
+                )
+            )
+            blocked_at_step = idx
+            break
+
+        output_row_count = len(df)
+        output_column_count = len(df.columns)
+        issues = risk_rules.check(
+            step_type=step.type,
+            output_row_count=output_row_count,
+            match_rate=metrics.match_rate,
+            affected_rate=metrics.affected_rate,
+        )
+        status = risk_rules.worst_status(issues)
+        step_results.append(
+            StepResult(
+                step_index=idx,
+                step_type=step.type,
+                status=status,
+                issues=issues,
+                input_row_count=input_row_count,
+                output_row_count=output_row_count,
+                input_column_count=input_column_count,
+                output_column_count=output_column_count,
+                match_rate=metrics.match_rate,
+                affected_rate=metrics.affected_rate,
+                preview=_to_preview(df),
+                message=message,
+            )
+        )
+        if status == "error":
+            blocked_at_step = idx
+            break
+
+    has_warnings = any(sr.status == "warning" for sr in step_results)
+    has_errors = any(sr.status == "error" for sr in step_results)
+
+    logger.info(
+        "Preview complete: %d/%d steps, has_warnings=%s has_errors=%s",
+        len(step_results),
+        len(steps),
+        has_warnings,
+        has_errors,
+    )
+
+    return PreviewResponse(
+        planned_steps=[s.model_dump() for s in steps],
+        step_results=step_results,
+        has_warnings=has_warnings,
+        has_errors=has_errors,
+        blocked_at_step=blocked_at_step,
     )
 
 
