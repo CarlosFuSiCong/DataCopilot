@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel
 
 
@@ -20,3 +22,24 @@ class DatasetProfile(BaseModel):
 class UploadResponse(BaseModel):
     dataset_id: str
     profile: DatasetProfile
+
+
+class DatasetRecord(BaseModel):
+    """Mirrors the `datasets` table in Postgres.
+
+    Raw CSV content is not stored here.
+    storage_uri points to the actual file: local://datasets/{id}/raw.csv
+    user_id is nullable; reserved for future multi-user support (no FK in MVP3).
+    """
+
+    id: str
+    user_id: str | None = None
+    filename: str
+    storage_backend: str = "local"
+    storage_uri: str
+    content_type: str = "text/csv"
+    size_bytes: int | None = None
+    row_count: int | None = None
+    column_count: int | None = None
+    profile_json: dict | None = None
+    created_at: datetime
