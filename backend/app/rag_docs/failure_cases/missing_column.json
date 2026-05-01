@@ -10,11 +10,12 @@
     "列不存在", "找不到列", "列名错误", "无效列", "column error", "field not found",
     "KeyError", "validation error", "missing field"
   ],
-  "example_error": {
-    "step": {"type": "filter_rows", "column": "revenue", "operator": ">", "value": 1000},
-    "dataset_columns": ["region", "sales", "month"],
-    "error": "Step 0 (filter_rows): column 'revenue' not found. Available columns: region, sales, month."
-  },
   "planner_guidance": "Always verify that column names used in steps exactly match the column names listed in the dataset profile. Do not invent or guess column names. If the user refers to a concept (e.g. 'revenue') but the dataset has a different column name (e.g. 'sales'), use the actual dataset column name.",
+  "example": {
+    "bad_step": {"type": "filter_rows", "column": "revenue", "operator": ">", "value": 1000},
+    "dataset_columns": ["region", "sales", "month"],
+    "error": "column 'revenue' not found. Available: region, sales, month.",
+    "fix": "Use the actual column name from the dataset profile. If user said 'revenue', use 'sales' instead."
+  },
   "rag_note": "RAG context only assists planning. The validator is the authoritative check for column existence and will reject any reference to a non-existent column regardless of what the RAG context contains."
 }

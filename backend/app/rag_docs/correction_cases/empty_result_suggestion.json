@@ -10,17 +10,12 @@
     "空结果建议", "放宽筛选条件", "无匹配行", "调整阈值", "filter too strict",
     "try lower value", "expand filter"
   ],
-  "correction_strategy": {
-    "numeric_threshold": "If operator is > or >= and result is empty, suggest reducing the threshold value. If the column's max value is known from the dataset profile, suggest a threshold slightly below the max.",
-    "string_equality": "If filtering by string value and result is empty, check if the value exists in the dataset. Suggest the closest existing value.",
-    "user_facing_message": "The filter '{column} {operator} {value}' matched 0 rows. Try '{column} {operator} {suggested_value}' instead, or remove the filter step.",
-    "example": {
-      "original_step": {"type": "filter_rows", "column": "sales", "operator": ">", "value": 99999},
-      "dataset_max_sales": 5000,
-      "suggestion": {"type": "filter_rows", "column": "sales", "operator": ">", "value": 1000},
-      "reason": "Original threshold (99999) exceeds the maximum value in the dataset (5000)."
-    }
-  },
   "planner_guidance": "When generating a filter step, use realistic threshold values based on the dataset profile's column ranges if available. Avoid using placeholder or extreme values that are unlikely to match any data.",
+  "example": {
+    "original_step": {"type": "filter_rows", "column": "sales", "operator": ">", "value": 99999},
+    "dataset_max_sales": 5000,
+    "suggestion": {"type": "filter_rows", "column": "sales", "operator": ">", "value": 1000},
+    "reason": "Original threshold (99999) exceeds the dataset maximum (5000). Use a realistic value from the dataset profile."
+  },
   "rag_note": "This correction is applied after the preview step detects an empty_output warning. The corrector proposes a new workflow; the user must confirm before the corrected workflow is executed. RAG context provides this guidance to help the planner generate sensible initial thresholds."
 }

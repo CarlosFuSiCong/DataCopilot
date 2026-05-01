@@ -10,12 +10,12 @@
     "aggregation target", "multiple numeric columns", "group by which column",
     "聚合目标不明确", "按哪列聚合", "多个数值列", "汇总哪个字段"
   ],
-  "example_ambiguous": {
-    "user_query": "按地区汇总一下",
-    "dataset_columns": ["region", "sales", "quantity", "revenue"],
-    "problem": "Multiple numeric columns: sales, quantity, revenue. Query does not specify which to aggregate.",
-    "resolution": "Choose the column most semantically relevant to the user's context. If the conversation is about sales performance, use 'sales'. If unsure, default to the first numeric column."
-  },
   "planner_guidance": "When multiple numeric columns exist and the user's query does not specify a target, select the column most semantically aligned with the query. For 'sales analysis' context prefer 'sales'. For 'order volume' context prefer 'quantity'. Always produce a specific, unambiguous group_by step.",
+  "example": {
+    "query": "按地区汇总一下",
+    "dataset_columns": ["region", "sales", "quantity", "revenue"],
+    "problem": "Multiple numeric columns: sales, quantity, revenue — query does not specify which to aggregate.",
+    "resolution": "For sales-analysis context, choose 'sales'. When unsure, pick the first numeric column."
+  },
   "rag_note": "The validator only checks that the target column exists. Semantic correctness of the aggregation target is the planner's responsibility. RAG context provides this guidance to help the planner make a better choice."
 }

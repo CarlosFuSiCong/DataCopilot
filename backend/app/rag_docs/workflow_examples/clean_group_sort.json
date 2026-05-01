@@ -10,23 +10,12 @@
     "按类别汇总", "分组排序", "各地区总销售", "汇总后排名", "compare categories",
     "which region highest", "top category by total", "哪个地区最多"
   ],
-  "example_query": "按地区统计销售总额，从高到低排列",
-  "example_workflow": {
+  "example": {
+    "query": "按地区统计销售总额，从高到低排列",
     "steps": [
-      {
-        "type": "remove_missing_values"
-      },
-      {
-        "type": "group_by",
-        "column": "region",
-        "target": "sales",
-        "agg": "sum"
-      },
-      {
-        "type": "sort_values",
-        "column": "sales",
-        "ascending": false
-      }
+      {"type": "remove_missing_values"},
+      {"type": "group_by", "column": "region", "target": "sales", "agg": "sum"},
+      {"type": "sort_values", "column": "sales", "ascending": false}
     ]
   },
   "planning_notes": "Step 1 cleans missing values first so they do not affect the aggregation. Step 2 computes total sales per region. Step 3 sorts descending so the highest-sales region appears first. Do not skip step 1 if the dataset may contain missing values in the target column."

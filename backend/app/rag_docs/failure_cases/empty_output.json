@@ -10,15 +10,11 @@
     "空结果", "无数据", "没有行", "过滤后为空", "filter empty",
     "no_rows_matched", "empty_output", "0 rows"
   ],
-  "example_warning": {
-    "step": {"type": "filter_rows", "column": "sales", "operator": ">", "value": 999999},
-    "rows_before": 100,
-    "rows_after": 0,
-    "issues": [
-      {"code": "no_rows_matched", "severity": "warning", "message": "Filter matched 0 of 100 rows."},
-      {"code": "empty_output", "severity": "warning", "message": "Output has 0 rows."}
-    ]
-  },
   "planner_guidance": "When the user specifies a filter threshold, use the value they provided. Do not adjust thresholds preemptively. If the result is empty, the preview will surface the warning and the user can decide whether to confirm or adjust the query.",
+  "example": {
+    "step": {"type": "filter_rows", "column": "sales", "operator": ">", "value": 999999},
+    "result": "0 rows matched out of 100. Warnings: no_rows_matched, empty_output.",
+    "advice": "Use the threshold the user specified. The preview will surface the warning and the user can confirm or adjust."
+  },
   "rag_note": "Empty output is detected at preview time by risk rules, not by the validator. The workflow JSON may be valid yet still produce an empty result. RAG context cannot predict whether a specific threshold will produce zero rows against the actual data."
 }

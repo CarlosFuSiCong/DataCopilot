@@ -10,16 +10,12 @@
     "列名建议", "你是否指", "相似列名", "拼写纠正", "column not found suggestion",
     "closest column", "nearest match"
   ],
-  "correction_strategy": {
-    "step": "Find available columns from the dataset profile. Compute string similarity between the missing column name and each available column. If similarity > 0.7, suggest the closest match.",
-    "user_facing_message": "Column '{missing}' not found. Did you mean '{suggestion}'? Available columns: {columns}",
-    "example": {
-      "missing_column": "revnue",
-      "available_columns": ["region", "sales", "revenue", "month"],
-      "suggestion": "revenue",
-      "similarity": 0.86
-    }
-  },
   "planner_guidance": "If the user's query references a concept that does not exactly match a column name, look at the dataset's available columns and use the closest match. For example, if the user says 'revenue' but the dataset has 'sales', use 'sales' in the workflow and note the substitution.",
+  "example": {
+    "missing_column": "revnue",
+    "available_columns": ["region", "sales", "revenue", "month"],
+    "suggestion": "revenue",
+    "message": "Column 'revnue' not found. Did you mean 'revenue'? Use the actual column name in the workflow."
+  },
   "rag_note": "RAG context provides this correction guidance to help the planner avoid generating workflows with invalid column references. The validator will still reject invalid columns; this guidance helps the planner self-correct before validation."
 }

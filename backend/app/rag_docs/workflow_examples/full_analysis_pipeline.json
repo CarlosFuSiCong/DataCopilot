@@ -10,32 +10,14 @@
     "完整分析", "清洗过滤聚合排序总结", "end to end workflow", "multi-step analysis",
     "from raw to insight", "all steps", "综合分析", "完整流程"
   ],
-  "example_query": "帮我清洗数据，只看今年的记录，按地区统计平均销售额，从高到低排，最后给我一个总结",
-  "example_workflow": {
+  "example": {
+    "query": "帮我清洗数据，只看今年的记录，按地区统计平均销售额，从高到低排，最后给我一个总结",
     "steps": [
-      {
-        "type": "remove_missing_values"
-      },
-      {
-        "type": "filter_rows",
-        "column": "year",
-        "operator": "=",
-        "value": 2024
-      },
-      {
-        "type": "group_by",
-        "column": "region",
-        "target": "sales",
-        "agg": "mean"
-      },
-      {
-        "type": "sort_values",
-        "column": "sales",
-        "ascending": false
-      },
-      {
-        "type": "generate_summary"
-      }
+      {"type": "remove_missing_values"},
+      {"type": "filter_rows", "column": "year", "operator": "=", "value": 2024},
+      {"type": "group_by", "column": "region", "target": "sales", "agg": "mean"},
+      {"type": "sort_values", "column": "sales", "ascending": false},
+      {"type": "generate_summary"}
     ]
   },
   "planning_notes": "Order matters: (1) remove_missing_values first to avoid NaN propagation, (2) filter to the relevant subset, (3) group_by for aggregation, (4) sort_values to rank results, (5) generate_summary always last. Do not put generate_summary before other steps. Adapt column names and filter values to match the actual dataset."
