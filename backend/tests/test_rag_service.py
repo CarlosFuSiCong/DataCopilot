@@ -62,22 +62,32 @@ SAMPLE_PROFILE = DatasetProfile(
 
 def test_load_docs_returns_all_transformation_files():
     docs = load_docs()
-    types = {d["type"] for d in docs}
-    assert "group_by" in types
-    assert "filter_rows" in types
-    assert "sort_values" in types
-    assert "remove_missing_values" in types
-    assert "select_columns" in types
-    assert "rename_columns" in types
-    assert "generate_summary" in types
+    step_types = {d["step_type"] for d in docs if d.get("step_type")}
+    assert "group_by" in step_types
+    assert "filter_rows" in step_types
+    assert "sort_values" in step_types
+    assert "remove_missing_values" in step_types
+    assert "select_columns" in step_types
+    assert "rename_columns" in step_types
+    assert "generate_summary" in step_types
+
+
+def test_load_docs_includes_failure_and_example_docs():
+    docs = load_docs()
+    doc_types = {d["doc_type"] for d in docs}
+    assert "transformation" in doc_types
+    assert "failure_case" in doc_types
+    assert "correction_case" in doc_types
+    assert "workflow_example" in doc_types
 
 
 def test_load_docs_each_has_required_keys():
+    # All corpus docs must have the unified metadata fields defined in Task 4.
     for doc in load_docs():
-        assert "type" in doc
+        assert "doc_type" in doc, f"Missing 'doc_type' in {doc.get('source_path', '?')}"
+        assert "source_path" in doc, f"Missing 'source_path' in {doc.get('title', '?')}"
         assert "description" in doc
         assert "keywords" in doc
-        assert "example" in doc
 
 
 # ---------------------------------------------------------------------------

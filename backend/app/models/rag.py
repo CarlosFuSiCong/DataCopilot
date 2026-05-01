@@ -3,12 +3,17 @@ from pydantic import BaseModel
 
 
 class RetrievedDoc(BaseModel):
-    type: str
+    # Unified metadata present in all corpus doc types
+    doc_type: str = "transformation"
+    source_path: str = ""
+    title: str = ""
     description: str
     keywords: list[str]
-    parameters: list[dict]
-    example: dict
     score: int
+    # Transformation-specific fields (absent in failure/correction/example docs)
+    type: str = ""
+    parameters: list[dict] = []
+    example: dict = {}
 
 
 class DatasetSummary(BaseModel):
