@@ -6,14 +6,15 @@ interface ResultTableProps {
   columns: string[]
   rows: Record<string, unknown>[]
   rowCount: number
-  logs: StepLog[]
+  logs?: StepLog[]
+  label?: string
 }
 
-export function ResultTable({ columns, rows, rowCount, logs }: ResultTableProps) {
+export function ResultTable({ columns, rows, rowCount, logs = [], label }: ResultTableProps) {
   const [showLogs, setShowLogs] = useState(false)
 
   return (
-    <OutputBlock label={`result · ${rowCount.toLocaleString()} rows`} accent="var(--color-accent)">
+    <OutputBlock label={label ?? `result · ${rowCount.toLocaleString()} rows`} accent="var(--color-accent)">
       <div className="flex flex-col gap-2">
         {rows.length === 0 ? (
           <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: 'var(--color-text-muted)' }}>

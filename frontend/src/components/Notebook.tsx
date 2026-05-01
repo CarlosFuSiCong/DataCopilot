@@ -1,16 +1,14 @@
-import { useState } from 'react'
 import type { UploadResponse } from '../types'
 import type { NotebookCellData } from '../types/notebook'
-import { sendChat } from '../api/client'
+import { sendChat, confirmWorkflow } from '../api/client'
+import { NotebookIcon, Spinner } from './ui/Icons'
+import { Gutter } from './ui/OutputBlock'
+import { NotebookCell } from './NotebookCell'
+import { InputCell } from './InputCell'
+import { DataPreview } from './DataPreview'
 
 let _seq = 0
 function nextId() { return `cell-${++_seq}` }
-import { NotebookIcon, Spinner } from './ui/Icons'
-import { Gutter, OutputBlock } from './ui/OutputBlock'
-import { WorkflowViewer } from './WorkflowViewer'
-import { ResultTable } from './ResultTable'
-import { ExplanationPanel } from './ExplanationPanel'
-import { DataPreview } from './DataPreview'
 
 // ─── Notebook container ───────────────────────────────────────────────────────
 
@@ -29,9 +27,34 @@ export function Notebook({ cells, onAppendCell, dataset }: NotebookProps) {
 
     try {
       const result = await sendChat({ dataset_id: dataset.dataset_id, query })
-      onAppendCell({ id, query, status: 'ok', result })
+      if (result.execution_result !== null) {
+        onAppendCell({ id, query, status: 'ok', result })
+      } else {
+        onAppendCell({ id, query, status: 'preview', result })
+      }
     } catch (err) {
       onAppendCell({ id, query, status: 'error', error: err instanceof Error ? err.message : 'Unknown error' })
+    }
+  }
+
+  async function handleConfirm(cell: NotebookCellData) {
+    if (!dataset || !cell.result) return
+
+    onAppendCell({ ...cell, status: 'confirming' })
+
+    try {
+      const confirmResult = await confirmWorkflow({
+        dataset_id: dataset.dataset_id,
+        steps: cell.result.planned_steps,
+        query: cell.result.query,
+      })
+      onAppendCell({ ...cell, status: 'ok', confirmResult })
+    } catch (err) {
+      onAppendCell({
+        ...cell,
+        status: 'error',
+        error: err instanceof Error ? err.message : 'Confirm failed',
+      })
     }
   }
 
@@ -76,21 +99,14 @@ export function Notebook({ cells, onAppendCell, dataset }: NotebookProps) {
 
       {/* Cell scroll area */}
       <div className="flex-1 overflow-y-auto" style={{ background: 'var(--color-bg)' }}>
-        {/* No dataset: show empty hint */}
-        {!dataset && displayCells.length === 0 && !isLoading && (
-          <EmptyNotebook />
-        )}
+        {!dataset && displayCells.length === 0 && !isLoading && <EmptyNotebook />}
 
-        {/* Dataset loaded, no cells yet: show data preview */}
-        {dataset && displayCells.length === 0 && !isLoading && (
-          <DataPreview dataset={dataset} />
-        )}
+        {dataset && displayCells.length === 0 && !isLoading && <DataPreview dataset={dataset} />}
 
-        {/* Result cells */}
         {displayCells.length > 0 && (
           <div style={{ padding: '16px 0' }}>
             {displayCells.map((cell, i) => (
-              <NotebookCell key={cell.id} index={i + 1} cell={cell} />
+              <NotebookCell key={cell.id} index={i + 1} cell={cell} onConfirm={handleConfirm} />
             ))}
           </div>
         )}
@@ -137,95 +153,6 @@ function LoadingCell({ index }: { index: number }) {
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>
           Running pipeline…
         </span>
-      </div>
-    </div>
-  )
-}
-
-// ─── Input cell ───────────────────────────────────────────────────────────────
-
-function InputCell({ disabled, onSubmit }: { disabled: boolean; onSubmit: (q: string) => void }) {
-  const [query, setQuery] = useState('')
-
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      if (query.trim()) {
-        onSubmit(query.trim())
-        setQuery('')
-      }
-    }
-  }
-
-  return (
-    <div className="flex" style={{ padding: '4px 0', marginTop: 8 }}>
-      <Gutter label="In [ ]:" color={disabled ? 'var(--color-text-muted)' : 'var(--color-blue)'} />
-      <div
-        className="flex-1 mr-4 rounded"
-        style={{
-          background: 'var(--color-cell-in)',
-          border: `1px solid ${disabled ? 'var(--color-border-subtle)' : 'var(--color-blue)'}`,
-          opacity: disabled ? 0.45 : 1,
-        }}
-      >
-        <textarea
-          disabled={disabled}
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          onKeyDown={handleKeyDown}
-          rows={2}
-          placeholder={disabled ? 'Upload a dataset to start…' : 'Enter a query… (Enter to run, Shift+Enter for new line)'}
-          style={{
-            width: '100%', background: 'transparent', border: 'none', outline: 'none',
-            resize: 'none', padding: '10px 12px',
-            fontFamily: 'var(--font-mono)', fontSize: '0.9rem',
-            color: 'var(--color-text)', lineHeight: 1.6,
-          }}
-        />
-      </div>
-    </div>
-  )
-}
-
-// ─── Result cell ──────────────────────────────────────────────────────────────
-
-function NotebookCell({ index, cell }: { index: number; cell: NotebookCellData }) {
-  return (
-    <div style={{ marginBottom: 8 }}>
-      <div className="flex" style={{ padding: '2px 0' }}>
-        <Gutter label={`In [${index}]:`} color="var(--color-blue)" />
-        <div
-          className="flex-1 mr-4 rounded px-3 py-2"
-          style={{ background: 'var(--color-cell-in)', border: '1px solid var(--color-border)', fontFamily: 'var(--font-mono)', fontSize: '0.9rem', color: 'var(--color-text)' }}
-        >
-          {cell.query}
-        </div>
-      </div>
-
-      <div className="flex" style={{ padding: '2px 0' }}>
-        <Gutter label={`Out[${index}]:`} color={cell.status === 'error' ? 'var(--color-red)' : 'var(--color-accent)'} />
-        <div className="flex-1 mr-4 flex flex-col gap-2">
-          {cell.status === 'error' && (
-            <OutputBlock label="error" accent="var(--color-red)">
-              <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: 'var(--color-red)' }}>
-                {cell.error}
-              </p>
-            </OutputBlock>
-          )}
-
-          {cell.status === 'ok' && cell.result && (
-            <>
-              <WorkflowViewer steps={cell.result.planned_steps} />
-              <ResultTable
-                columns={cell.result.execution_result.columns}
-                rows={cell.result.execution_result.preview}
-                rowCount={cell.result.execution_result.row_count}
-                logs={cell.result.execution_result.logs}
-              />
-              <ExplanationPanel text={cell.result.explanation} />
-            </>
-          )}
-        </div>
       </div>
     </div>
   )
