@@ -1,0 +1,22 @@
+{
+  "doc_type": "workflow_example",
+  "step_type": null,
+  "issue_code": null,
+  "source_path": "rag_docs/workflow_examples/clean_group_sort.json",
+  "title": "Workflow example: clean, aggregate by category, then sort by result",
+  "description": "A three-step workflow that removes missing values, groups rows by a categorical column with sum aggregation, then sorts the result in descending order. This is the most common analysis pattern for 'which category has the highest total'. Use this as a template when the user asks to compare totals across categories, regions, or groups.",
+  "keywords": [
+    "group by and sort", "total by region", "aggregate and rank", "clean then summarise",
+    "按类别汇总", "分组排序", "各地区总销售", "汇总后排名", "compare categories",
+    "which region highest", "top category by total", "哪个地区最多"
+  ],
+  "example": {
+    "query": "按地区统计销售总额，从高到低排列",
+    "steps": [
+      {"type": "remove_missing_values"},
+      {"type": "group_by", "column": "region", "target": "sales", "agg": "sum"},
+      {"type": "sort_values", "column": "sales", "ascending": false}
+    ]
+  },
+  "planning_notes": "Step 1 cleans missing values first so they do not affect the aggregation. Step 2 computes total sales per region. Step 3 sorts descending so the highest-sales region appears first. Do not skip step 1 if the dataset may contain missing values in the target column."
+}

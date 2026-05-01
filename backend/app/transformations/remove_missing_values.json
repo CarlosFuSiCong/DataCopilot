@@ -1,12 +1,19 @@
 {
+  "doc_type": "transformation",
+  "step_type": "remove_missing_values",
+  "issue_code": null,
+  "source_path": "transformations/remove_missing_values.json",
   "type": "remove_missing_values",
-  "description": "Delete all rows that contain at least one missing (null/NaN) value. Use this when you want to clean the dataset before analysis.",
+  "title": "remove_missing_values: drop rows with null or NaN values",
+  "description": "Delete all rows that contain at least one missing (null or NaN) value in any column. Use this to clean the dataset before aggregation or analysis so that missing values do not skew results. Should typically be one of the first steps in a workflow.",
   "keywords": [
     "missing", "null", "nan", "empty", "clean", "drop", "remove",
-    "缺失", "空值", "清洗", "删除", "去除", "补全"
+    "缺失", "空值", "清洗", "删除", "去除", "补全", "invalid", "incomplete",
+    "不完整", "空白", "缺少"
   ],
   "parameters": [],
   "example": {
     "type": "remove_missing_values"
-  }
+  },
+  "rag_note": "Takes no parameters. Removes any row with at least one missing value across all columns. If most rows contain missing values, this step may dramatically reduce the dataset size. The executor will raise an affects_most_rows warning if more than 80% of rows are removed."
 }

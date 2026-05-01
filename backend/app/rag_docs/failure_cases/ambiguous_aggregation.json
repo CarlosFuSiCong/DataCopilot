@@ -1,0 +1,21 @@
+{
+  "doc_type": "failure_case",
+  "step_type": "group_by",
+  "issue_code": "ambiguous_aggregation",
+  "source_path": "rag_docs/failure_cases/ambiguous_aggregation.json",
+  "title": "Failure: ambiguous aggregation target in group_by",
+  "description": "A group_by step specifies a target column that is not clearly numeric, or the user query is ambiguous about which column to aggregate. For example, a dataset may have multiple numeric columns (sales, quantity, revenue) and the user says 'summarise by region' without specifying which value to aggregate. The validator will reject a group_by step if the target column does not exist, but it cannot detect semantic ambiguity. The planner must choose the most relevant numeric column based on the query context.",
+  "keywords": [
+    "ambiguous aggregation", "which column to aggregate", "unclear target",
+    "aggregation target", "multiple numeric columns", "group by which column",
+    "聚合目标不明确", "按哪列聚合", "多个数值列", "汇总哪个字段"
+  ],
+  "planner_guidance": "When multiple numeric columns exist and the user's query does not specify a target, select the column most semantically aligned with the query. For 'sales analysis' context prefer 'sales'. For 'order volume' context prefer 'quantity'. Always produce a specific, unambiguous group_by step.",
+  "example": {
+    "query": "按地区汇总一下",
+    "dataset_columns": ["region", "sales", "quantity", "revenue"],
+    "problem": "Multiple numeric columns: sales, quantity, revenue — query does not specify which to aggregate.",
+    "resolution": "For sales-analysis context, choose 'sales'. When unsure, pick the first numeric column."
+  },
+  "rag_note": "The validator only checks that the target column exists. Semantic correctness of the aggregation target is the planner's responsibility. RAG context provides this guidance to help the planner make a better choice."
+}

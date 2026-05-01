@@ -1,27 +1,34 @@
 {
+  "doc_type": "transformation",
+  "step_type": "sort_values",
+  "issue_code": null,
+  "source_path": "transformations/sort_values.json",
   "type": "sort_values",
-  "description": "Sort all rows by a specified column in ascending or descending order.",
+  "title": "sort_values: sort rows by a column",
+  "description": "Sort all rows by a specified column in ascending or descending order. Does not remove any rows. Use this when the user wants to rank results, find the top or bottom values, or present data in a specific order. Commonly used as the final step after aggregation.",
   "keywords": [
     "sort", "order", "rank", "ascending", "descending", "top", "bottom", "highest", "lowest",
-    "排序", "排列", "升序", "降序", "最高", "最低", "前几", "排名", "倒序"
+    "排序", "排列", "升序", "降序", "最高", "最低", "前几", "排名", "倒序",
+    "largest", "smallest", "by order", "ranked"
   ],
   "parameters": [
     {
       "name": "column",
       "type": "str",
       "required": true,
-      "description": "The column to sort by."
+      "description": "The column to sort by. Must exist in the dataset."
     },
     {
       "name": "ascending",
       "type": "bool",
       "required": false,
-      "description": "Sort direction. Default is true (ascending). Set to false for descending."
+      "description": "Sort direction. true = ascending (smallest first, A→Z). false = descending (largest first, Z→A). Defaults to true. Set to false when user asks for 'highest', 'top', or 'largest'."
     }
   ],
   "example": {
     "type": "sort_values",
     "column": "sales",
     "ascending": false
-  }
+  },
+  "rag_note": "Does not filter rows, only reorders them. Combine with group_by first when the user wants 'top N by category'. The ascending parameter should be false when the user says 'highest', 'largest', 'most', 'descending'."
 }

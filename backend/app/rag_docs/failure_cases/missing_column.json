@@ -1,0 +1,21 @@
+{
+  "doc_type": "failure_case",
+  "step_type": null,
+  "issue_code": "missing_column",
+  "source_path": "rag_docs/failure_cases/missing_column.json",
+  "title": "Failure: referenced column does not exist in dataset",
+  "description": "A workflow step references a column name that does not exist in the uploaded dataset. This causes a WorkflowValidationError before execution. Common causes: typo in column name, using a display name instead of the actual header, or assuming a column exists based on context. The validator checks all column references before any step is executed.",
+  "keywords": [
+    "missing column", "column not found", "unknown column", "invalid column",
+    "列不存在", "找不到列", "列名错误", "无效列", "column error", "field not found",
+    "KeyError", "validation error", "missing field"
+  ],
+  "planner_guidance": "Always verify that column names used in steps exactly match the column names listed in the dataset profile. Do not invent or guess column names. If the user refers to a concept (e.g. 'revenue') but the dataset has a different column name (e.g. 'sales'), use the actual dataset column name.",
+  "example": {
+    "bad_step": {"type": "filter_rows", "column": "revenue", "operator": ">", "value": 1000},
+    "dataset_columns": ["region", "sales", "month"],
+    "error": "column 'revenue' not found. Available: region, sales, month.",
+    "fix": "Use the actual column name from the dataset profile. If user said 'revenue', use 'sales' instead."
+  },
+  "rag_note": "RAG context only assists planning. The validator is the authoritative check for column existence and will reject any reference to a non-existent column regardless of what the RAG context contains."
+}

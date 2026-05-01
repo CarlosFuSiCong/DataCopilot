@@ -1,7 +1,8 @@
 """RAG service for DataCopilot.
 
 Retrieval strategy (MVP): keyword matching.
-- Load all transformation docs from app/transformations/*.json.
+- Load all corpus docs from transformations/, rag_docs/failure_cases/,
+  rag_docs/correction_cases/, and rag_docs/workflow_examples/.
 - Tokenise the user query (lowercase, split on whitespace and punctuation).
 - Score each doc by counting how many query tokens appear in the doc's
   keywords list or description text.
@@ -26,18 +27,27 @@ from app.models.rag import (
 
 logger = logging.getLogger(__name__)
 
-_DOCS_DIR = Path(__file__).parent.parent / "transformations"
+_APP_DIR = Path(__file__).parent.parent
+
+# Ordered list of corpus directories. New doc types can be added here.
+_CORPUS_DIRS = [
+    _APP_DIR / "transformations",
+    _APP_DIR / "rag_docs" / "failure_cases",
+    _APP_DIR / "rag_docs" / "correction_cases",
+    _APP_DIR / "rag_docs" / "workflow_examples",
+]
 
 
 def load_docs() -> list[dict]:
-    """Load all transformation JSON docs from the transformations directory."""
+    """Load all RAG corpus JSON docs from all corpus directories."""
     docs = []
-    for path in sorted(_DOCS_DIR.glob("*.json")):
-        try:
-            docs.append(json.loads(path.read_text(encoding="utf-8")))
-        except Exception as exc:
-            logger.warning("Could not load transformation doc '%s': %s", path.name, exc)
-    logger.info("Loaded %d transformation docs", len(docs))
+    for directory in _CORPUS_DIRS:
+        for path in sorted(directory.glob("*.json")):
+            try:
+                docs.append(json.loads(path.read_text(encoding="utf-8")))
+            except Exception as exc:
+                logger.warning("Could not load doc '%s': %s", path.name, exc)
+    logger.info("Loaded %d RAG corpus docs from %d directories", len(docs), len(_CORPUS_DIRS))
     return docs
 
 
@@ -56,22 +66,35 @@ def _score_doc(doc: dict, query_tokens: set[str]) -> int:
     return len(query_tokens & doc_tokens)
 
 
+def _doc_key(doc: dict) -> str:
+    """Return a stable unique key for a corpus doc.
+
+    Prefer source_path (present in all docs since Task 4). Fall back to
+    the legacy 'type' field so old tests that pass docs without source_path
+    continue to work.
+    """
+    return doc.get("source_path") or doc.get("type", "unknown")
+
+
 def retrieve(query: str, docs: list[dict], top_k: int = 3) -> tuple[list[RetrievedDoc], RetrievalDebug]:
     """Score and rank docs against the query; return top-k with debug info."""
     query_tokens = set(_tokenise(query))
-    scores: dict[str, int] = {doc["type"]: _score_doc(doc, query_tokens) for doc in docs}
+    scores: dict[str, int] = {_doc_key(doc): _score_doc(doc, query_tokens) for doc in docs}
 
-    ranked = sorted(docs, key=lambda d: scores[d["type"]], reverse=True)
+    ranked = sorted(docs, key=lambda d: scores[_doc_key(d)], reverse=True)
     selected = ranked[:top_k]
 
     retrieved = [
         RetrievedDoc(
-            type=doc["type"],
+            doc_type=doc.get("doc_type", "transformation"),
+            source_path=doc.get("source_path", ""),
+            title=doc.get("title", doc.get("type", "")),
+            type=doc.get("type", ""),
             description=doc["description"],
-            keywords=doc["keywords"],
+            keywords=doc.get("keywords", []),
             parameters=doc.get("parameters", []),
-            example=doc["example"],
-            score=scores[doc["type"]],
+            example=doc.get("example", {}),
+            score=scores[_doc_key(doc)],
         )
         for doc in selected
     ]

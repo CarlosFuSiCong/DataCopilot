@@ -1,16 +1,22 @@
 {
+  "doc_type": "transformation",
+  "step_type": "rename_columns",
+  "issue_code": null,
+  "source_path": "transformations/rename_columns.json",
   "type": "rename_columns",
-  "description": "Rename one or more columns using an old-name to new-name mapping.",
+  "title": "rename_columns: rename one or more columns",
+  "description": "Rename one or more columns using an old-name to new-name mapping. The original column values are unchanged; only the column header is updated. Use this to clarify column names, apply business labels, or prepare data for export.",
   "keywords": [
     "rename", "alias", "mapping", "column name", "relabel",
-    "重命名", "改名", "列名", "字段名", "别名"
+    "重命名", "改名", "列名", "字段名", "别名", "call it", "label as",
+    "改成", "命名为", "改为"
   ],
   "parameters": [
     {
       "name": "mapping",
       "type": "dict[str, str]",
       "required": true,
-      "description": "A dictionary mapping old column names to new column names."
+      "description": "A dictionary mapping old column names (keys) to new column names (values). All old column names must exist in the dataset."
     }
   ],
   "example": {
@@ -19,5 +25,6 @@
       "sales": "total_sales",
       "region": "area"
     }
-  }
+  },
+  "rag_note": "All source (old) column names must exist in the dataset. The validator will reject unknown source names. Only use this step when the user explicitly asks to rename or relabel columns."
 }

@@ -1,0 +1,21 @@
+{
+  "doc_type": "correction_case",
+  "step_type": "filter_rows",
+  "issue_code": "empty_output",
+  "source_path": "rag_docs/correction_cases/empty_result_suggestion.json",
+  "title": "Correction: suggest relaxing filter condition when result is empty",
+  "description": "When a filter_rows step produces zero matching rows, the corrector should suggest a relaxed version of the filter condition. For numeric thresholds, suggest a lower bound (e.g. change > 10000 to > 1000). For categorical filters, suggest checking that the value exists in the dataset. Show the user the original and suggested workflow so they can confirm before execution.",
+  "keywords": [
+    "empty result suggestion", "relax filter", "no rows", "adjust threshold",
+    "空结果建议", "放宽筛选条件", "无匹配行", "调整阈值", "filter too strict",
+    "try lower value", "expand filter"
+  ],
+  "planner_guidance": "When generating a filter step, use realistic threshold values based on the dataset profile's column ranges if available. Avoid using placeholder or extreme values that are unlikely to match any data.",
+  "example": {
+    "original_step": {"type": "filter_rows", "column": "sales", "operator": ">", "value": 99999},
+    "dataset_max_sales": 5000,
+    "suggestion": {"type": "filter_rows", "column": "sales", "operator": ">", "value": 1000},
+    "reason": "Original threshold (99999) exceeds the dataset maximum (5000). Use a realistic value from the dataset profile."
+  },
+  "rag_note": "This correction is applied after the preview step detects an empty_output warning. The corrector proposes a new workflow; the user must confirm before the corrected workflow is executed. RAG context provides this guidance to help the planner generate sensible initial thresholds."
+}

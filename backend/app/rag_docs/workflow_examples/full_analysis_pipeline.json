@@ -1,0 +1,24 @@
+{
+  "doc_type": "workflow_example",
+  "step_type": null,
+  "issue_code": null,
+  "source_path": "rag_docs/workflow_examples/full_analysis_pipeline.json",
+  "title": "Workflow example: full analysis pipeline with clean, filter, group, sort, and summary",
+  "description": "A five-step workflow covering the complete analysis cycle: remove missing values, filter to a relevant subset, aggregate by category, sort the result, and generate a natural-language summary. Use this as a template for complex queries that ask for cleaning, subsetting, aggregation, ranking, and explanation in a single request.",
+  "keywords": [
+    "full pipeline", "complete analysis", "clean filter group sort summarise",
+    "完整分析", "清洗过滤聚合排序总结", "end to end workflow", "multi-step analysis",
+    "from raw to insight", "all steps", "综合分析", "完整流程"
+  ],
+  "example": {
+    "query": "帮我清洗数据，只看今年的记录，按地区统计平均销售额，从高到低排，最后给我一个总结",
+    "steps": [
+      {"type": "remove_missing_values"},
+      {"type": "filter_rows", "column": "year", "operator": "=", "value": 2024},
+      {"type": "group_by", "column": "region", "target": "sales", "agg": "mean"},
+      {"type": "sort_values", "column": "sales", "ascending": false},
+      {"type": "generate_summary"}
+    ]
+  },
+  "planning_notes": "Order matters: (1) remove_missing_values first to avoid NaN propagation, (2) filter to the relevant subset, (3) group_by for aggregation, (4) sort_values to rank results, (5) generate_summary always last. Do not put generate_summary before other steps. Adapt column names and filter values to match the actual dataset."
+}

@@ -1,12 +1,19 @@
 {
+  "doc_type": "transformation",
+  "step_type": "generate_summary",
+  "issue_code": null,
+  "source_path": "transformations/generate_summary.json",
   "type": "generate_summary",
-  "description": "Request the explainer to produce a natural-language summary of the final result. Does not modify the data. Should be the last step in a workflow.",
+  "title": "generate_summary: request a natural-language explanation of the result",
+  "description": "Request the result explainer to produce a natural-language summary of the final workflow output. Does not modify the data. Should always be the last step in a workflow. Use this when the user asks for an explanation, insight, or conclusion about the data.",
   "keywords": [
     "summary", "explain", "description", "conclusion", "insight", "report", "narrate",
-    "总结", "解释", "描述", "说明", "结论", "洞察", "报告", "分析结果"
+    "总结", "解释", "描述", "说明", "结论", "洞察", "报告", "分析结果",
+    "告诉我", "什么意思", "分析", "结果如何"
   ],
   "parameters": [],
   "example": {
     "type": "generate_summary"
-  }
+  },
+  "rag_note": "Takes no parameters. Must be the last step in a workflow. The explainer runs after execution and generates a grounded explanation based on the actual execution result, not LLM guessing. Do not place this step before data transformation steps."
 }
