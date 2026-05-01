@@ -1,0 +1,25 @@
+{
+  "doc_type": "correction_case",
+  "step_type": null,
+  "issue_code": "missing_column",
+  "source_path": "rag_docs/correction_cases/missing_column_suggestion.json",
+  "title": "Correction: suggest a similar column name when referenced column is missing",
+  "description": "When a step references a column that does not exist in the dataset, the corrector should suggest the most similar column name from the available columns. Similarity can be measured by string distance (e.g. 'revnue' → 'revenue') or semantic similarity (e.g. 'turnover' → 'sales'). Present the suggested replacement to the user before re-executing the workflow.",
+  "keywords": [
+    "column suggestion", "did you mean", "similar column", "typo correction",
+    "列名建议", "你是否指", "相似列名", "拼写纠正", "column not found suggestion",
+    "closest column", "nearest match"
+  ],
+  "correction_strategy": {
+    "step": "Find available columns from the dataset profile. Compute string similarity between the missing column name and each available column. If similarity > 0.7, suggest the closest match.",
+    "user_facing_message": "Column '{missing}' not found. Did you mean '{suggestion}'? Available columns: {columns}",
+    "example": {
+      "missing_column": "revnue",
+      "available_columns": ["region", "sales", "revenue", "month"],
+      "suggestion": "revenue",
+      "similarity": 0.86
+    }
+  },
+  "planner_guidance": "If the user's query references a concept that does not exactly match a column name, look at the dataset's available columns and use the closest match. For example, if the user says 'revenue' but the dataset has 'sales', use 'sales' in the workflow and note the substitution.",
+  "rag_note": "RAG context provides this correction guidance to help the planner avoid generating workflows with invalid column references. The validator will still reject invalid columns; this guidance helps the planner self-correct before validation."
+}

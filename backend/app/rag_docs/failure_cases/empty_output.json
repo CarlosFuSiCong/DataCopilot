@@ -1,0 +1,24 @@
+{
+  "doc_type": "failure_case",
+  "step_type": "filter_rows",
+  "issue_code": "empty_output",
+  "source_path": "rag_docs/failure_cases/empty_output.json",
+  "title": "Failure: step produces empty output (zero rows)",
+  "description": "A filter_rows step produces zero matching rows, leaving an empty dataset for all subsequent steps. This is a warning-level issue: the workflow is valid and can execute, but the result is meaningless. The executor surfaces this as an 'empty_output' warning and the frontend will ask the user to confirm before proceeding. Common causes: threshold value is too strict, filter column has unexpected values, or data has already been filtered to empty in a previous step.",
+  "keywords": [
+    "empty output", "zero rows", "no results", "no match", "empty result",
+    "空结果", "无数据", "没有行", "过滤后为空", "filter empty",
+    "no_rows_matched", "empty_output", "0 rows"
+  ],
+  "example_warning": {
+    "step": {"type": "filter_rows", "column": "sales", "operator": ">", "value": 999999},
+    "rows_before": 100,
+    "rows_after": 0,
+    "issues": [
+      {"code": "no_rows_matched", "severity": "warning", "message": "Filter matched 0 of 100 rows."},
+      {"code": "empty_output", "severity": "warning", "message": "Output has 0 rows."}
+    ]
+  },
+  "planner_guidance": "When the user specifies a filter threshold, use the value they provided. Do not adjust thresholds preemptively. If the result is empty, the preview will surface the warning and the user can decide whether to confirm or adjust the query.",
+  "rag_note": "Empty output is detected at preview time by risk rules, not by the validator. The workflow JSON may be valid yet still produce an empty result. RAG context cannot predict whether a specific threshold will produce zero rows against the actual data."
+}

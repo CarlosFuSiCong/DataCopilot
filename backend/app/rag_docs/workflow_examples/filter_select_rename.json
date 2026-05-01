@@ -1,0 +1,35 @@
+{
+  "doc_type": "workflow_example",
+  "step_type": null,
+  "issue_code": null,
+  "source_path": "rag_docs/workflow_examples/filter_select_rename.json",
+  "title": "Workflow example: filter rows, select relevant columns, rename for clarity",
+  "description": "A three-step workflow that filters the dataset to a subset of rows, keeps only the relevant columns, and renames them for readability. Use this pattern when the user wants a focused, clean extract of their data: 'show me the high-value transactions with clear labels'.",
+  "keywords": [
+    "filter and select", "subset columns", "rename after filter", "clean extract",
+    "筛选后选列", "过滤并重命名", "数据提取", "高值记录", "focused view",
+    "filter then show", "show only relevant columns"
+  ],
+  "example_query": "筛选销售额超过1000的记录，只显示地区和销售额，并把sales改成总销售额",
+  "example_workflow": {
+    "steps": [
+      {
+        "type": "filter_rows",
+        "column": "sales",
+        "operator": ">",
+        "value": 1000
+      },
+      {
+        "type": "select_columns",
+        "columns": ["region", "sales"]
+      },
+      {
+        "type": "rename_columns",
+        "mapping": {
+          "sales": "总销售额"
+        }
+      }
+    ]
+  },
+  "planning_notes": "Filter first to reduce the dataset, then select columns to drop irrelevant fields, then rename to match the user's preferred labels. Always apply filter before select_columns so that the filter can reference columns that may not be in the final output."
+}
