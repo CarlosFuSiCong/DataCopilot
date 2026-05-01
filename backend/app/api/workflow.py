@@ -18,8 +18,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/workflows", tags=["workflows"])
 
 
-@router.post("/execute", response_model=ExecutionResult)
+@router.post("/execute", response_model=ExecutionResult, deprecated=True)
 async def execute_workflow(request: WorkflowRequest) -> ExecutionResult:
+    """Direct workflow execution without preview or explainer (MVP1 style).
+
+    Deprecated: use POST /preview → user review → POST /confirm instead.
+    Will be removed once the frontend completes the preview-confirm migration.
+    """
     content = dataset_store.load(request.dataset_id)
     column_names = get_column_names(content)
     validator_service.validate(request.steps, column_names)

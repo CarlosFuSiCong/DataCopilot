@@ -4,13 +4,13 @@ Both the LLM planner and the result explainer are mocked so tests run
 without a real API key and produce deterministic results.
 """
 import io
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.models.workflow import GroupByStep, RemoveMissingValuesStep, SortValuesStep
+from app.models.workflow import FilterRowsStep, GroupByStep, RemoveMissingValuesStep, SortValuesStep
 
 client = TestClient(app)
 
@@ -23,10 +23,16 @@ BASE_CSV = (
     b"West,,Feb\n"
 )
 
+# Steps that produce no warnings against BASE_CSV
 MOCK_STEPS_GROUP_BY = [
     RemoveMissingValuesStep(type="remove_missing_values"),
     GroupByStep(type="group_by", column="region", target="sales", agg="sum"),
     SortValuesStep(type="sort_values", column="sales", ascending=False),
+]
+
+# Steps that produce no_rows_matched + empty_output warnings against BASE_CSV
+MOCK_STEPS_ZERO_MATCH = [
+    FilterRowsStep(type="filter_rows", column="sales", operator=">", value=9999),
 ]
 
 _MOCK_EXPLANATION = "Mock explanation for testing."
@@ -41,18 +47,30 @@ def _upload(csv_bytes: bytes = BASE_CSV) -> str:
     return resp.json()["dataset_id"]
 
 
-def _chat(did: str, query: str = "test") -> dict:
-    """Helper: call /api/chat with both planner and explainer mocked."""
+def _chat(did: str, query: str = "test", auto_confirm: bool = True) -> dict:
+    """Call /api/chat with planner mocked to MOCK_STEPS_GROUP_BY (no warnings)."""
     with patch("app.api.chat.workflow_planner.plan", return_value=MOCK_STEPS_GROUP_BY):
         with patch("app.api.chat.result_explainer.explain", return_value=_MOCK_EXPLANATION):
-            return client.post("/api/chat", json={"dataset_id": did, "query": query})
+            return client.post(
+                "/api/chat",
+                json={"dataset_id": did, "query": query, "auto_confirm": auto_confirm},
+            )
+
+
+def _chat_with_warnings(did: str, auto_confirm: bool = True) -> dict:
+    """Call /api/chat with planner mocked to steps that produce warnings."""
+    with patch("app.api.chat.workflow_planner.plan", return_value=MOCK_STEPS_ZERO_MATCH):
+        return client.post(
+            "/api/chat",
+            json={"dataset_id": did, "query": "test", "auto_confirm": auto_confirm},
+        )
 
 
 # ---------------------------------------------------------------------------
-# Successful chat pipeline
+# Response shape — always-present fields
 # ---------------------------------------------------------------------------
 
-def test_chat_returns_200_with_mocked_planner():
+def test_chat_returns_200():
     did = _upload()
     resp = _chat(did, "按地区统计销售额")
     assert resp.status_code == 200
@@ -61,7 +79,7 @@ def test_chat_returns_200_with_mocked_planner():
 def test_chat_response_has_required_fields():
     did = _upload()
     data = _chat(did).json()
-    for field in ("query", "planned_steps", "execution_result", "rag_context", "explanation"):
+    for field in ("query", "planned_steps", "step_results", "has_warnings", "has_errors", "rag_context"):
         assert field in data
 
 
@@ -72,11 +90,10 @@ def test_chat_planned_steps_match_mock():
     assert types == ["remove_missing_values", "group_by", "sort_values"]
 
 
-def test_chat_execution_result_has_correct_groups():
+def test_chat_step_results_count_matches_steps():
     did = _upload()
     data = _chat(did).json()
-    # After remove_missing (drops West row) + group_by region: North and South
-    assert data["execution_result"]["row_count"] == 2
+    assert len(data["step_results"]) == len(MOCK_STEPS_GROUP_BY)
 
 
 def test_chat_rag_context_includes_dataset_summary():
@@ -101,11 +118,100 @@ def test_chat_query_echoed_in_response():
     assert data["query"] == "按地区统计"
 
 
-def test_chat_explanation_is_present():
+# ---------------------------------------------------------------------------
+# auto_confirm=True (default) — no warnings: full result returned
+# ---------------------------------------------------------------------------
+
+def test_chat_auto_confirm_true_no_warnings_returns_explanation():
     did = _upload()
     data = _chat(did).json()
-    assert isinstance(data["explanation"], str)
-    assert len(data["explanation"]) > 0
+    assert data["explanation"] == _MOCK_EXPLANATION
+
+
+def test_chat_auto_confirm_true_no_warnings_returns_execution_result():
+    did = _upload()
+    data = _chat(did).json()
+    assert data["execution_result"] is not None
+    assert data["execution_result"]["row_count"] == 2
+
+
+def test_chat_auto_confirm_true_no_warnings_sets_has_warnings_false():
+    did = _upload()
+    data = _chat(did).json()
+    assert data["has_warnings"] is False
+    assert data["has_errors"] is False
+
+
+# ---------------------------------------------------------------------------
+# auto_confirm=True — with warnings: preview-only returned
+# ---------------------------------------------------------------------------
+
+def test_chat_auto_confirm_true_with_warnings_returns_200():
+    did = _upload()
+    resp = _chat_with_warnings(did, auto_confirm=True)
+    assert resp.status_code == 200
+
+
+def test_chat_auto_confirm_true_with_warnings_sets_has_warnings():
+    did = _upload()
+    data = _chat_with_warnings(did, auto_confirm=True).json()
+    assert data["has_warnings"] is True
+
+
+def test_chat_auto_confirm_true_with_warnings_explanation_is_none():
+    did = _upload()
+    data = _chat_with_warnings(did, auto_confirm=True).json()
+    assert data["explanation"] is None
+
+
+def test_chat_auto_confirm_true_with_warnings_execution_result_is_none():
+    did = _upload()
+    data = _chat_with_warnings(did, auto_confirm=True).json()
+    assert data["execution_result"] is None
+
+
+def test_chat_auto_confirm_true_with_warnings_does_not_call_explainer():
+    did = _upload()
+    with patch("app.api.chat.workflow_planner.plan", return_value=MOCK_STEPS_ZERO_MATCH):
+        with patch("app.api.chat.result_explainer.explain") as mock_explain:
+            client.post("/api/chat", json={"dataset_id": did, "query": "test", "auto_confirm": True})
+    mock_explain.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# auto_confirm=False — always preview-only
+# ---------------------------------------------------------------------------
+
+def test_chat_auto_confirm_false_returns_200():
+    did = _upload()
+    resp = _chat(did, auto_confirm=False)
+    assert resp.status_code == 200
+
+
+def test_chat_auto_confirm_false_explanation_is_none():
+    did = _upload()
+    data = _chat(did, auto_confirm=False).json()
+    assert data["explanation"] is None
+
+
+def test_chat_auto_confirm_false_execution_result_is_none():
+    did = _upload()
+    data = _chat(did, auto_confirm=False).json()
+    assert data["execution_result"] is None
+
+
+def test_chat_auto_confirm_false_still_returns_step_results():
+    did = _upload()
+    data = _chat(did, auto_confirm=False).json()
+    assert len(data["step_results"]) == len(MOCK_STEPS_GROUP_BY)
+
+
+def test_chat_auto_confirm_false_does_not_call_explainer():
+    did = _upload()
+    with patch("app.api.chat.workflow_planner.plan", return_value=MOCK_STEPS_GROUP_BY):
+        with patch("app.api.chat.result_explainer.explain") as mock_explain:
+            client.post("/api/chat", json={"dataset_id": did, "query": "test", "auto_confirm": False})
+    mock_explain.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -129,7 +235,6 @@ def test_chat_planner_error_returns_400():
 
 
 def test_chat_validation_error_returns_400():
-    from app.models.workflow import FilterRowsStep
     bad_steps = [FilterRowsStep(type="filter_rows", column="nonexistent_col", operator=">", value=0)]
     did = _upload()
     with patch("app.api.chat.workflow_planner.plan", return_value=bad_steps):
