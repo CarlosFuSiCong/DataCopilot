@@ -79,16 +79,18 @@ def _format_dataset_profile(ctx: RAGContext) -> str:
 def _format_retrieved_docs(ctx: RAGContext) -> str:
     parts = []
     for doc in ctx.retrieved_docs:
+        label = doc.type or doc.title
         params = ", ".join(
             f"{p['name']} ({'required' if p.get('required') else 'optional'})"
             for p in doc.parameters
         )
-        example = json.dumps(doc.example, ensure_ascii=False)
-        parts.append(
-            f"- {doc.type}: {doc.description}"
-            + (f" | params: {params}" if params else "")
-            + f" | example: {example}"
-        )
+        example = json.dumps(doc.example, ensure_ascii=False) if doc.example else ""
+        line = f"- {label}: {doc.description}"
+        if params:
+            line += f" | params: {params}"
+        if example:
+            line += f" | example: {example}"
+        parts.append(line)
     return "\n".join(parts) if parts else "none"
 
 
