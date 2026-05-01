@@ -4,6 +4,7 @@ Uses FastAPI TestClient. Each test uploads a CSV first to get a dataset_id,
 then POSTs a workflow to /api/workflows/execute.
 """
 import io
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -347,4 +348,117 @@ def test_preview_missing_column_returns_400():
         did,
         [{"type": "filter_rows", "column": "nonexistent", "operator": ">", "value": 0}],
     )
+    assert resp.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# Confirm flow tests
+# ---------------------------------------------------------------------------
+
+_MOCK_EXPLANATION = "North region had the highest sales."
+
+
+def _confirm(dataset_id: str, steps: list, query: str = "test query") -> dict:
+    with patch("app.api.workflow.result_explainer.explain", return_value=_MOCK_EXPLANATION):
+        return client.post(
+            "/api/workflows/confirm",
+            json={"dataset_id": dataset_id, "steps": steps, "query": query},
+        )
+
+
+def test_confirm_returns_200():
+    did = _upload()
+    resp = _confirm(did, [{"type": "remove_missing_values"}])
+    assert resp.status_code == 200
+
+
+def test_confirm_response_has_required_fields():
+    did = _upload()
+    data = _confirm(did, [{"type": "remove_missing_values"}]).json()
+    for field in ("query", "planned_steps", "execution_result", "explanation"):
+        assert field in data
+
+
+def test_confirm_query_is_echoed():
+    did = _upload()
+    data = _confirm(did, [{"type": "remove_missing_values"}], query="按地区统计销售额").json()
+    assert data["query"] == "按地区统计销售额"
+
+
+def test_confirm_returns_planned_steps():
+    did = _upload()
+    steps = [{"type": "remove_missing_values"}]
+    data = _confirm(did, steps).json()
+    assert data["planned_steps"] == steps
+
+
+def test_confirm_execution_result_has_row_count():
+    did = _upload()
+    data = _confirm(did, [{"type": "remove_missing_values"}]).json()
+    assert data["execution_result"]["row_count"] == 4
+
+
+def test_confirm_execution_result_has_step_results():
+    did = _upload()
+    data = _confirm(did, [{"type": "remove_missing_values"}]).json()
+    assert "step_results" in data["execution_result"]
+    assert len(data["execution_result"]["step_results"]) == 1
+
+
+def test_confirm_explanation_is_mock_text():
+    did = _upload()
+    data = _confirm(did, [{"type": "remove_missing_values"}]).json()
+    assert data["explanation"] == _MOCK_EXPLANATION
+
+
+def test_confirm_explanation_is_string():
+    did = _upload()
+    data = _confirm(did, [{"type": "remove_missing_values"}]).json()
+    assert isinstance(data["explanation"], str)
+    assert len(data["explanation"]) > 0
+
+
+def test_confirm_multi_step_workflow():
+    did = _upload()
+    steps = [
+        {"type": "remove_missing_values"},
+        {"type": "group_by", "column": "region", "target": "sales", "agg": "sum"},
+        {"type": "sort_values", "column": "sales", "ascending": False},
+    ]
+    data = _confirm(did, steps).json()
+    assert data["execution_result"]["row_count"] == 2
+    assert len(data["execution_result"]["step_results"]) == 3
+
+
+def test_confirm_unknown_dataset_returns_400():
+    with patch("app.api.workflow.result_explainer.explain", return_value=_MOCK_EXPLANATION):
+        resp = client.post(
+            "/api/workflows/confirm",
+            json={"dataset_id": "no-such-id", "steps": [{"type": "remove_missing_values"}], "query": "test"},
+        )
+    assert resp.status_code == 400
+
+
+def test_confirm_missing_column_returns_400():
+    did = _upload()
+    with patch("app.api.workflow.result_explainer.explain", return_value=_MOCK_EXPLANATION):
+        resp = client.post(
+            "/api/workflows/confirm",
+            json={
+                "dataset_id": did,
+                "steps": [{"type": "filter_rows", "column": "nonexistent", "operator": ">", "value": 0}],
+                "query": "test",
+            },
+        )
+    assert resp.status_code == 400
+
+
+def test_confirm_explainer_error_returns_400():
+    from app.core.exceptions import PlannerError
+    did = _upload()
+    with patch("app.api.workflow.result_explainer.explain", side_effect=PlannerError("LLM down")):
+        resp = client.post(
+            "/api/workflows/confirm",
+            json={"dataset_id": did, "steps": [{"type": "remove_missing_values"}], "query": "test"},
+        )
     assert resp.status_code == 400
