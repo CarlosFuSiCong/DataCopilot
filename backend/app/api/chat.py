@@ -32,7 +32,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
     content = await dataset_store.load(request.dataset_id)
     dataset_profile = profile(content, filename="<cached>")
 
-    rag_ctx = rag_service.build_context(
+    rag_ctx = await rag_service.build_context(
         query=request.query,
         dataset_profile=dataset_profile,
         top_k=request.rag_top_k,
