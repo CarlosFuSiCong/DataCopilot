@@ -1,22 +1,20 @@
 """RAG service for DataCopilot.
 
-Retrieval strategy (MVP): keyword matching.
-- Load all corpus docs from transformations/, rag_docs/failure_cases/,
-  rag_docs/correction_cases/, and rag_docs/workflow_examples/.
-- Tokenise the user query (lowercase, split on whitespace and punctuation).
-- Score each doc by counting how many query tokens appear in the doc's
-  keywords list or description text.
-- Return the top-k docs with the highest score; include all docs when
-  fewer than top_k have a non-zero score.
+Public surface:
+  load_docs()      — load all corpus JSON docs from disk.
+  retrieve()       — synchronous keyword retrieval (used by tests and scripts).
+  build_context()  — async; assembles a full RAGContext using the configured
+                     retrieval method (keyword or pgvector, set by settings).
 
-This can be upgraded to embedding-based retrieval in a later task without
-changing the public interface.
+Retrieval is delegated to the retriever interface in app.services.retriever.
+The active method is controlled by settings.retrieval_method.
 """
 import json
 import logging
 import re
 from pathlib import Path
 
+from app.core.config import settings
 from app.models.dataset import DatasetProfile
 from app.models.rag import (
     DatasetSummary,
@@ -114,20 +112,23 @@ def retrieve(query: str, docs: list[dict], top_k: int = 3) -> tuple[list[Retriev
     return retrieved, debug
 
 
-def build_context(
+async def build_context(
     query: str,
     dataset_profile: DatasetProfile,
     top_k: int = 3,
     docs: list[dict] | None = None,
 ) -> RAGContext:
-    """Assemble a full RAGContext from transformation retrieval + dataset profile.
+    """Assemble a full RAGContext from retrieval + dataset profile.
 
-    Pass `docs` explicitly in tests to avoid filesystem reads.
+    Pass ``docs`` explicitly to force keyword retrieval with a fixed corpus
+    (test mode). In production the retriever is chosen from
+    settings.retrieval_method.
     """
-    if docs is None:
-        docs = load_docs()
+    # Import here to avoid circular import at module load time
+    from app.services.retriever import get_retriever
 
-    retrieved, debug = retrieve(query, docs, top_k=top_k)
+    retriever = get_retriever(docs=docs)
+    retrieved, debug = await retriever.retrieve(query, top_k=top_k)
 
     dataset_summary = DatasetSummary(
         filename=dataset_profile.filename,

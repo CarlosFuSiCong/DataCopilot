@@ -9,7 +9,8 @@ class RetrievedDoc(BaseModel):
     title: str = ""
     description: str
     keywords: list[str]
-    score: int
+    # float to accommodate both keyword (int token-overlap) and pgvector (cosine similarity 0-1)
+    score: float
     # Transformation-specific fields (absent in failure/correction/example docs)
     type: str = ""
     parameters: list[dict] = []
@@ -27,7 +28,9 @@ class DatasetSummary(BaseModel):
 class RetrievalDebug(BaseModel):
     method: str
     query_tokens: list[str]
-    all_scores: dict[str, int]
+    all_scores: dict[str, float]
+    # Populated by pgvector retriever; None for keyword retriever
+    embedding_model: str | None = None
 
 
 class RAGContext(BaseModel):

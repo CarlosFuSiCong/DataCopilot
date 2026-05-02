@@ -1,8 +1,9 @@
-"""Unit tests for app.services.rag_service."""
+"""Unit tests for app.services.rag_service and app.services.retriever."""
 import pytest
 
 from app.models.dataset import ColumnProfile, DatasetProfile
 from app.services.rag_service import build_context, load_docs, retrieve
+from app.services.retriever import KeywordRetriever, get_retriever
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -137,28 +138,64 @@ def test_retrieve_zero_score_when_no_match():
 
 
 # ---------------------------------------------------------------------------
-# build_context
+# build_context (async — docs param forces KeywordRetriever, no DB/OpenAI calls)
 # ---------------------------------------------------------------------------
 
-def test_build_context_includes_query():
-    ctx = build_context("按地区汇总销售", SAMPLE_PROFILE, top_k=2, docs=SAMPLE_DOCS)
+@pytest.mark.asyncio
+async def test_build_context_includes_query():
+    ctx = await build_context("按地区汇总销售", SAMPLE_PROFILE, top_k=2, docs=SAMPLE_DOCS)
     assert ctx.query == "按地区汇总销售"
 
 
-def test_build_context_dataset_summary_matches_profile():
-    ctx = build_context("group by region", SAMPLE_PROFILE, top_k=2, docs=SAMPLE_DOCS)
+@pytest.mark.asyncio
+async def test_build_context_dataset_summary_matches_profile():
+    ctx = await build_context("group by region", SAMPLE_PROFILE, top_k=2, docs=SAMPLE_DOCS)
     assert ctx.dataset_summary.filename == "sales.csv"
     assert ctx.dataset_summary.row_count == 100
     assert ctx.dataset_summary.column_count == 3
     assert len(ctx.dataset_summary.columns) == 3
 
 
-def test_build_context_returns_requested_top_k():
-    ctx = build_context("filter sort group", SAMPLE_PROFILE, top_k=2, docs=SAMPLE_DOCS)
+@pytest.mark.asyncio
+async def test_build_context_returns_requested_top_k():
+    ctx = await build_context("filter sort group", SAMPLE_PROFILE, top_k=2, docs=SAMPLE_DOCS)
     assert len(ctx.retrieved_docs) == 2
 
 
-def test_build_context_debug_included():
-    ctx = build_context("sort ascending", SAMPLE_PROFILE, top_k=1, docs=SAMPLE_DOCS)
+@pytest.mark.asyncio
+async def test_build_context_debug_included():
+    ctx = await build_context("sort ascending", SAMPLE_PROFILE, top_k=1, docs=SAMPLE_DOCS)
     assert ctx.debug.method == "keyword_matching"
     assert len(ctx.debug.all_scores) == len(SAMPLE_DOCS)
+
+
+# ---------------------------------------------------------------------------
+# get_retriever factory
+# ---------------------------------------------------------------------------
+
+def test_get_retriever_with_docs_returns_keyword():
+    r = get_retriever(docs=SAMPLE_DOCS)
+    assert isinstance(r, KeywordRetriever)
+
+
+def test_get_retriever_keyword_method_returns_keyword():
+    r = get_retriever(method="keyword")
+    assert isinstance(r, KeywordRetriever)
+
+
+@pytest.mark.asyncio
+async def test_keyword_retriever_retrieve_returns_correct_type():
+    r = KeywordRetriever(docs=SAMPLE_DOCS)
+    retrieved, debug = await r.retrieve("filter rows condition", top_k=1)
+    assert len(retrieved) == 1
+    assert retrieved[0].type == "filter_rows"
+    assert debug.method == "keyword_matching"
+    assert debug.embedding_model is None
+
+
+@pytest.mark.asyncio
+async def test_keyword_retriever_scores_are_float():
+    r = KeywordRetriever(docs=SAMPLE_DOCS)
+    retrieved, debug = await r.retrieve("group aggregate sum", top_k=1)
+    assert isinstance(retrieved[0].score, float)
+    assert all(isinstance(v, float) for v in debug.all_scores.values())
