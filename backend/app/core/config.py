@@ -22,6 +22,12 @@ class Settings(BaseSettings):
     # Active retrieval method: "keyword" | "pgvector"
     retrieval_method: str = "keyword"
 
+    # Embedding model used by the indexing script and pgvector retriever.
+    # Must produce vectors of dimension matching the rag_documents.embedding column (1536).
+    embedding_model: str = "text-embedding-3-small"
+    # Dimensions produced by the embedding model; must match the vector column size.
+    embedding_dimensions: int = 1536
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 
