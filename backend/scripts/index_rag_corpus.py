@@ -230,7 +230,7 @@ async def run(dry_run: bool = False) -> None:
             "vector",
             encoder=lambda v: "[" + ",".join(str(x) for x in v) + "]",
             decoder=lambda v: [float(x) for x in v.strip("[]").split(",")],
-            schema="pg_catalog",
+            schema="public",   # pgvector installs vector type into public schema
             format="text",
         )
         await upsert_documents(conn, rows)
