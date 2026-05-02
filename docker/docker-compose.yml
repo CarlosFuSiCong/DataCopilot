@@ -31,6 +31,7 @@ services:
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     volumes:
       - ../backend/app:/app/app
+      - ../backend/scripts:/app/scripts
       - ../backend/tests:/app/tests
       - ../backend/pytest.ini:/app/pytest.ini
       - ../backend/storage:/app/storage
@@ -47,6 +48,7 @@ services:
     command: ["python", "-m", "pytest", "-v"]
     volumes:
       - ../backend/app:/app/app
+      - ../backend/scripts:/app/scripts
       - ../backend/tests:/app/tests
       - ../backend/pytest.ini:/app/pytest.ini
       - ../sample_data:/app/sample_data
