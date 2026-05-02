@@ -25,6 +25,23 @@ from app.services.rag_service import load_docs
 logger = logging.getLogger(__name__)
 
 
+async def _register_vector_codec(conn: "asyncpg.Connection") -> None:
+    """Register the pgvector type codec on a connection.
+
+    Must be called before any query that sends or receives vector values.
+    asyncpg has no built-in encoder for the pgvector `vector` type; without
+    this registration it would fail to encode a Python list as a parameter.
+    schema='public' is where CREATE EXTENSION vector installs the type.
+    """
+    await conn.set_type_codec(
+        "vector",
+        encoder=lambda v: "[" + ",".join(str(x) for x in v) + "]",
+        decoder=lambda v: [float(x) for x in v.strip("[]").split(",")],
+        schema="public",
+        format="text",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Protocol
 # ---------------------------------------------------------------------------
@@ -146,8 +163,6 @@ class PgvectorRetriever:
             )
 
         query_embedding = await self._embed(query)
-        # Format as pgvector literal: '[0.1,0.2,...]'
-        vec_literal = "[" + ",".join(str(x) for x in query_embedding) + "]"
 
         sql = """
             SELECT
@@ -156,14 +171,17 @@ class PgvectorRetriever:
                 content,
                 metadata,
                 source_path,
-                1 - (embedding <=> $1::vector) AS similarity
+                1 - (embedding <=> $1) AS similarity
             FROM rag_documents
-            ORDER BY embedding <=> $1::vector
+            ORDER BY embedding <=> $1
             LIMIT $2
         """
 
         async with database.pool.acquire() as conn:
-            rows = await conn.fetch(sql, vec_literal, top_k)
+            # Register codec before the query so asyncpg can encode the list
+            # as a vector parameter and decode vector columns in results.
+            await _register_vector_codec(conn)
+            rows = await conn.fetch(sql, query_embedding, top_k)
 
         retrieved: list[RetrievedDoc] = []
         all_scores: dict[str, float] = {}
