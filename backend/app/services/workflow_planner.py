@@ -42,7 +42,7 @@ Supported step types:
 Dataset profile:
 {dataset_profile}
 
-Relevant transformation docs:
+Relevant docs (transformations, failure cases, correction guidance, workflow examples):
 {retrieved_docs}
 """
 
@@ -79,17 +79,43 @@ def _format_dataset_profile(ctx: RAGContext) -> str:
 def _format_retrieved_docs(ctx: RAGContext) -> str:
     parts = []
     for doc in ctx.retrieved_docs:
-        label = doc.type or doc.title
-        params = ", ".join(
-            f"{p['name']} ({'required' if p.get('required') else 'optional'})"
-            for p in doc.parameters
-        )
-        example = json.dumps(doc.example, ensure_ascii=False) if doc.example else ""
-        line = f"- {label}: {doc.description}"
-        if params:
-            line += f" | params: {params}"
-        if example:
-            line += f" | example: {example}"
+        doc_type = doc.doc_type
+
+        if doc_type == "transformation":
+            label = doc.type or doc.title
+            params = ", ".join(
+                f"{p['name']} ({'required' if p.get('required') else 'optional'})"
+                for p in doc.parameters
+            )
+            example = json.dumps(doc.example, ensure_ascii=False) if doc.example else ""
+            line = f"[STEP] {label}: {doc.description}"
+            if params:
+                line += f" | params: {params}"
+            if example:
+                line += f" | example: {example}"
+
+        elif doc_type == "failure_case":
+            line = f"[WARNING] {doc.title}: {doc.description}"
+            if doc.planner_guidance:
+                line += f" | guidance: {doc.planner_guidance}"
+
+        elif doc_type == "correction_case":
+            line = f"[CORRECTION] {doc.title}: {doc.description}"
+            if doc.planner_guidance:
+                line += f" | guidance: {doc.planner_guidance}"
+
+        elif doc_type == "workflow_example":
+            steps_preview = ""
+            if isinstance(doc.example.get("steps"), list):
+                step_types = [s.get("type", "?") for s in doc.example["steps"]]
+                steps_preview = " → ".join(step_types)
+            line = f"[EXAMPLE] {doc.title}: {doc.description}"
+            if steps_preview:
+                line += f" | steps: {steps_preview}"
+
+        else:
+            line = f"- {doc.title}: {doc.description}"
+
         parts.append(line)
     return "\n".join(parts) if parts else "none"
 

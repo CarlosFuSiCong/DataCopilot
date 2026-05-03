@@ -15,6 +15,8 @@ class RetrievedDoc(BaseModel):
     type: str = ""
     parameters: list[dict] = []
     example: dict = {}
+    # Planner-facing guidance from failure_case and correction_case docs
+    planner_guidance: str = ""
 
 
 class DatasetSummary(BaseModel):

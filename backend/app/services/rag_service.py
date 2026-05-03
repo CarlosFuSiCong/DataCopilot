@@ -92,6 +92,7 @@ def retrieve(query: str, docs: list[dict], top_k: int = 3) -> tuple[list[Retriev
             keywords=doc.get("keywords", []),
             parameters=doc.get("parameters", []),
             example=doc.get("example", {}),
+            planner_guidance=doc.get("planner_guidance", ""),
             score=scores[_doc_key(doc)],
         )
         for doc in selected
