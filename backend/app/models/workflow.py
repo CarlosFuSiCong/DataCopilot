@@ -34,6 +34,9 @@ class FilterRowsStep(BaseModel):
 class GroupByStep(BaseModel):
     type: Literal["group_by"]
     column: str
+    # Multi-column grouping: when non-empty, used instead of the single `column`.
+    # Kept optional so existing single-column workflows remain valid.
+    columns: list[str] = []
     target: str
     agg: Literal["sum", "mean", "count", "min", "max"]
 
@@ -53,6 +56,37 @@ class GenerateSummaryStep(BaseModel):
     type: Literal["generate_summary"]
 
 
+class LimitRowsStep(BaseModel):
+    type: Literal["limit_rows"]
+    n: int
+
+
+_DERIVE_OPS = Literal["+", "-", "*", "/"]
+_DERIVE_OP_ALIASES: dict[str, str] = {"add": "+", "sub": "-", "mul": "*", "div": "/"}
+
+
+class DeriveColumnStep(BaseModel):
+    type: Literal["derive_column"]
+    new_column: str
+    column: str
+    operator: _DERIVE_OPS
+    # Exactly one of value or other_column must be provided.
+    value: float | None = None
+    other_column: str = ""
+
+    @field_validator("operator", mode="before")
+    @classmethod
+    def normalize_derive_op(cls, v: str) -> str:
+        return _DERIVE_OP_ALIASES.get(v, v)
+
+
+class DateExtractStep(BaseModel):
+    type: Literal["date_extract"]
+    column: str
+    part: Literal["year", "month", "quarter", "day", "weekday"]
+    new_column: str
+
+
 # Discriminated union — Pydantic resolves the correct subtype from "type"
 WorkflowStep = Annotated[
     Union[
@@ -63,6 +97,9 @@ WorkflowStep = Annotated[
         SortValuesStep,
         RenameColumnsStep,
         GenerateSummaryStep,
+        LimitRowsStep,
+        DeriveColumnStep,
+        DateExtractStep,
     ],
     Field(discriminator="type"),
 ]

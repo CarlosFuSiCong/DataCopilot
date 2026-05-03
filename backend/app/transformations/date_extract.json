@@ -1,0 +1,41 @@
+{
+  "doc_type": "transformation",
+  "step_type": "date_extract",
+  "issue_code": null,
+  "source_path": "transformations/date_extract.json",
+  "type": "date_extract",
+  "title": "date_extract: extract a date part (year, month, quarter, day, weekday) from a date column",
+  "description": "Parse a date or datetime column and extract a specific time component into a new integer column. Supported parts: year, month, quarter, day, weekday (0=Monday). Use this before group_by when the user wants to analyse trends by year, month, or quarter.",
+  "keywords": [
+    "date", "year", "month", "quarter", "day", "weekday", "time", "extract",
+    "parse", "datetime", "temporal", "trend",
+    "日期", "年份", "月份", "季度", "星期", "时间", "提取", "按年", "按月", "按季度"
+  ],
+  "parameters": [
+    {
+      "name": "column",
+      "type": "str",
+      "required": true,
+      "description": "The date or datetime column to parse. Must exist in the dataset."
+    },
+    {
+      "name": "part",
+      "type": "str",
+      "required": true,
+      "description": "The date component to extract. Allowed values: year, month, quarter, day, weekday."
+    },
+    {
+      "name": "new_column",
+      "type": "str",
+      "required": true,
+      "description": "Name for the new integer column that will hold the extracted date part."
+    }
+  ],
+  "example": {
+    "type": "date_extract",
+    "column": "order_date",
+    "part": "month",
+    "new_column": "order_month"
+  },
+  "rag_note": "date_extract uses pandas to_datetime to parse the column. If the column cannot be parsed as dates, an ExecutionError is raised. Weekday returns 0 for Monday and 6 for Sunday."
+}
