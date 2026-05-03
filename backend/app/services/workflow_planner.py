@@ -55,7 +55,8 @@ Generate the workflow JSON.
 
 _SUPPORTED_STEP_TYPES = (
     "remove_missing_values, select_columns, filter_rows, "
-    "group_by, sort_values, rename_columns, generate_summary"
+    "group_by, sort_values, rename_columns, generate_summary, "
+    "limit_rows, derive_column, date_extract"
 )
 
 
