@@ -1,0 +1,54 @@
+{
+  "doc_type": "transformation",
+  "step_type": "derive_column",
+  "issue_code": null,
+  "source_path": "transformations/derive_column.json",
+  "type": "derive_column",
+  "title": "derive_column: create a new column using arithmetic on an existing column",
+  "description": "Add a new column whose values are computed by applying an arithmetic operator (+, -, *, /) to an existing column and either a constant numeric value or another column. Only the four basic arithmetic operators are supported for safety. Use this when the user wants to compute a ratio, scale a column, or calculate a difference between two columns.",
+  "keywords": [
+    "derive", "calculate", "compute", "new column", "arithmetic", "ratio", "scale",
+    "multiply", "divide", "add", "subtract", "formula", "expression",
+    "新列", "计算列", "衍生列", "加减乘除", "比率", "差值", "比例", "运算"
+  ],
+  "parameters": [
+    {
+      "name": "new_column",
+      "type": "str",
+      "required": true,
+      "description": "Name for the new derived column."
+    },
+    {
+      "name": "column",
+      "type": "str",
+      "required": true,
+      "description": "The existing column to use as the left operand. Must exist in the dataset."
+    },
+    {
+      "name": "operator",
+      "type": "str",
+      "required": true,
+      "description": "Arithmetic operator. Allowed values: + (add), - (subtract), * (multiply), / (divide)."
+    },
+    {
+      "name": "value",
+      "type": "float",
+      "required": false,
+      "description": "A constant numeric value to use as the right operand. Provide either value or other_column, not both."
+    },
+    {
+      "name": "other_column",
+      "type": "str",
+      "required": false,
+      "description": "An existing column to use as the right operand. Provide either other_column or value, not both."
+    }
+  ],
+  "example": {
+    "type": "derive_column",
+    "new_column": "sales_tax",
+    "column": "sales",
+    "operator": "*",
+    "value": 0.1
+  },
+  "rag_note": "Only +, -, *, / are supported. Do not use eval() or string expressions. Always provide exactly one of value or other_column. Division by zero will raise an ExecutionError."
+}

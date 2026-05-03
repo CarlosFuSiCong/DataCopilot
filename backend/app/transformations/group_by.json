@@ -16,7 +16,13 @@
       "name": "column",
       "type": "str",
       "required": true,
-      "description": "The column to group by. Must be a categorical column that exists in the dataset. Example: 'region', 'category', 'month'."
+      "description": "The primary column to group by. For single-column grouping, use this field. Example: 'region'."
+    },
+    {
+      "name": "columns",
+      "type": "list[str]",
+      "required": false,
+      "description": "Optional list of columns for multi-column grouping. When provided, takes precedence over the single 'column' field. Example: ['region', 'category']."
     },
     {
       "name": "target",

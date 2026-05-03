@@ -1,0 +1,26 @@
+{
+  "doc_type": "transformation",
+  "step_type": "limit_rows",
+  "issue_code": null,
+  "source_path": "transformations/limit_rows.json",
+  "type": "limit_rows",
+  "title": "limit_rows: keep only the first N rows",
+  "description": "Keep only the first N rows of the dataset. Use this to show a sample, take the top-N results after sorting, or cap the output size. Always apply sort_values before limit_rows when the user asks for 'top N by column'.",
+  "keywords": [
+    "limit", "top", "first", "head", "sample", "n rows", "take",
+    "前N行", "取前", "最多", "显示前", "top n", "first n", "truncate"
+  ],
+  "parameters": [
+    {
+      "name": "n",
+      "type": "int",
+      "required": true,
+      "description": "Number of rows to keep. Must be a positive integer."
+    }
+  ],
+  "example": {
+    "type": "limit_rows",
+    "n": 10
+  },
+  "rag_note": "limit_rows does not sort — it simply takes the first n rows of the current DataFrame. To get the top-N rows by a column value, use sort_values first, then limit_rows."
+}
