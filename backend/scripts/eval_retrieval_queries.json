@@ -68,5 +68,33 @@
     "expected_source_paths": ["rag_docs/workflow_examples/filter_select_rename.json"],
     "expected_step_types": ["filter_rows", "select_columns", "rename_columns"],
     "notes": "multi-step workflow example combining filter + select + rename"
+  },
+  {
+    "id": "q11",
+    "query": "keep only the first 10 rows of the dataset",
+    "expected_source_paths": ["transformations/limit_rows.json"],
+    "expected_step_types": ["limit_rows"],
+    "notes": "limit_rows transformation"
+  },
+  {
+    "id": "q12",
+    "query": "compute a new column that multiplies sales by 0.1 to get the tax amount",
+    "expected_source_paths": ["transformations/derive_column.json"],
+    "expected_step_types": ["derive_column"],
+    "notes": "derive_column with constant multiply"
+  },
+  {
+    "id": "q13",
+    "query": "extract the month from the order date column into a new column",
+    "expected_source_paths": ["transformations/date_extract.json"],
+    "expected_step_types": ["date_extract"],
+    "notes": "date_extract month"
+  },
+  {
+    "id": "q14",
+    "query": "group by both region and category and sum the sales",
+    "expected_source_paths": ["transformations/group_by.json"],
+    "expected_step_types": ["group_by"],
+    "notes": "group_by multi-column"
   }
 ]
