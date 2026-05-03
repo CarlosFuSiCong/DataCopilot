@@ -204,6 +204,21 @@ def test_derive_column_validator_rejects_no_operand():
         )
 
 
+def test_derive_column_validator_rejects_both_operands():
+    with pytest.raises(WorkflowValidationError, match="exactly one"):
+        validate(
+            [DeriveColumnStep(
+                type="derive_column",
+                new_column="x",
+                column="sales",
+                operator="+",
+                value=10.0,
+                other_column="sales",
+            )],
+            COLUMNS,
+        )
+
+
 # ===========================================================================
 # date_extract
 # ===========================================================================

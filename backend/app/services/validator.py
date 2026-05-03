@@ -63,6 +63,10 @@ def _validate_step(step: WorkflowStep, col_set: set[str], idx: int) -> None:
         _require_columns([step.column], col_set, label)
         if step.other_column:
             _require_columns([step.other_column], col_set, label)
+        if step.value is not None and step.other_column:
+            raise WorkflowValidationError(
+                f"{label}: derive_column requires exactly one of 'value' or 'other_column', not both."
+            )
         if step.value is None and not step.other_column:
             raise WorkflowValidationError(
                 f"{label}: derive_column requires either 'value' or 'other_column'."
