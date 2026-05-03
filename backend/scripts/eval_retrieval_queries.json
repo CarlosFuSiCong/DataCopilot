@@ -1,0 +1,72 @@
+[
+  {
+    "id": "q01",
+    "query": "filter rows where sales is greater than 1000",
+    "expected_source_paths": ["transformations/filter_rows.json"],
+    "expected_step_types": ["filter_rows"],
+    "notes": "直接对应 filter_rows transformation"
+  },
+  {
+    "id": "q02",
+    "query": "group by region and compute the average sales per group",
+    "expected_source_paths": ["transformations/group_by.json"],
+    "expected_step_types": ["group_by"],
+    "notes": "group_by + aggregation"
+  },
+  {
+    "id": "q03",
+    "query": "drop all rows that contain missing values",
+    "expected_source_paths": ["transformations/remove_missing_values.json"],
+    "expected_step_types": ["remove_missing_values"],
+    "notes": "remove_missing_values transformation"
+  },
+  {
+    "id": "q04",
+    "query": "keep only the region and sales columns",
+    "expected_source_paths": ["transformations/select_columns.json"],
+    "expected_step_types": ["select_columns"],
+    "notes": "select_columns transformation"
+  },
+  {
+    "id": "q05",
+    "query": "rename the sales column to total_sales",
+    "expected_source_paths": ["transformations/rename_columns.json"],
+    "expected_step_types": ["rename_columns"],
+    "notes": "rename_columns transformation"
+  },
+  {
+    "id": "q06",
+    "query": "sort the data by sales in descending order",
+    "expected_source_paths": ["transformations/sort_values.json"],
+    "expected_step_types": ["sort_values"],
+    "notes": "sort_values transformation"
+  },
+  {
+    "id": "q07",
+    "query": "generate a descriptive statistics summary of the dataset",
+    "expected_source_paths": ["transformations/generate_summary.json"],
+    "expected_step_types": ["generate_summary"],
+    "notes": "generate_summary transformation"
+  },
+  {
+    "id": "q08",
+    "query": "workflow step referenced a column that does not exist in the dataset",
+    "expected_source_paths": ["rag_docs/failure_cases/missing_column.json"],
+    "expected_step_types": [],
+    "notes": "failure case: missing column validation error"
+  },
+  {
+    "id": "q09",
+    "query": "the filter produced an empty result with no rows remaining",
+    "expected_source_paths": ["rag_docs/failure_cases/empty_output.json"],
+    "expected_step_types": [],
+    "notes": "failure case: empty output after filter"
+  },
+  {
+    "id": "q10",
+    "query": "filter high-value rows, then select only the relevant columns, then rename the column headers",
+    "expected_source_paths": ["rag_docs/workflow_examples/filter_select_rename.json"],
+    "expected_step_types": ["filter_rows", "select_columns", "rename_columns"],
+    "notes": "multi-step workflow example combining filter + select + rename"
+  }
+]
