@@ -36,6 +36,12 @@ Rules:
 - Do not include explanations or comments in the JSON.
 - If the request cannot be represented with the supported steps, return {{"steps": []}}.
 
+STRICT FIELD CONSTRAINTS (must be followed exactly, no synonyms or alternatives):
+- filter_rows "operator": MUST be one of exactly: "=", "!=", ">", ">=", "<", "<="
+  Do NOT use: "equals", "eq", "greater_than", "gt", "lt", "gte", "lte", or any word form.
+- group_by "agg": MUST be one of: "sum", "mean", "count", "min", "max"
+- sort_values "order": MUST be one of: "asc", "desc"
+
 Supported step types:
 {supported_transformations}
 

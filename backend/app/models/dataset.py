@@ -31,6 +31,14 @@ class DatasetRowsResponse(BaseModel):
     limit: int
 
 
+class DiffRowsResponse(BaseModel):
+    rows: list[dict]          # original rows, each has a "_kept" bool field
+    total_original: int
+    total_result: int
+    offset: int
+    limit: int
+
+
 class DatasetRecord(BaseModel):
     """Mirrors the `datasets` table in Postgres.
 

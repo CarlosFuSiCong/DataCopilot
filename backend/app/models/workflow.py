@@ -16,7 +16,29 @@ class SelectColumnsStep(BaseModel):
     columns: list[str]
 
 
-_OPERATOR_ALIASES: dict[str, str] = {"==": "=", "<>": "!="}
+_OPERATOR_ALIASES: dict[str, str] = {
+    # symbol variants
+    "==": "=",
+    "<>": "!=",
+    # english words the LLM commonly generates
+    "equals": "=",
+    "eq": "=",
+    "equal": "=",
+    "not_equal": "!=",
+    "neq": "!=",
+    "ne": "!=",
+    "not_equals": "!=",
+    "greater_than": ">",
+    "gt": ">",
+    "greater_than_or_equal": ">=",
+    "gte": ">=",
+    "ge": ">=",
+    "less_than": "<",
+    "lt": "<",
+    "less_than_or_equal": "<=",
+    "lte": "<=",
+    "le": "<=",
+}
 
 
 class FilterRowsStep(BaseModel):

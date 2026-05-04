@@ -22,7 +22,7 @@
       "name": "operator",
       "type": "str",
       "required": true,
-      "description": "Comparison operator. Allowed values: = (equal), != (not equal), > (greater than), >= (greater than or equal), < (less than), <= (less than or equal)."
+      "description": "Comparison operator. Allowed values (use the symbol exactly, never English words): = (equal), != (not equal), > (greater than), >= (greater than or equal), < (less than), <= (less than or equal). Do NOT use 'equals', 'eq', 'gt', 'gte', 'lt', 'lte', or any other form."
     },
     {
       "name": "value",
