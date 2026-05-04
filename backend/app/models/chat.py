@@ -32,3 +32,5 @@ class ChatResponse(BaseModel):
     # None means the client should show a Confirm button and call /workflows/confirm.
     explanation: str | None = None
     execution_result: ExecutionResult | None = None
+    # UUID of the persisted result run; populated alongside execution_result.
+    run_id: str | None = None

@@ -236,3 +236,6 @@ class ConfirmResponse(BaseModel):
     planned_steps: list[dict]
     execution_result: ExecutionResult
     explanation: str
+    # UUID of the persisted result run; used by the frontend to download the
+    # full result CSV via GET /api/runs/{run_id}/download.
+    run_id: str | None = None

@@ -85,6 +85,12 @@ export function downloadDataset(datasetId: string): void {
   a.click()
 }
 
+export function downloadRun(runId: string): void {
+  const a = document.createElement('a')
+  a.href = `${BASE}/runs/${runId}/download`
+  a.click()
+}
+
 export async function exportResultCsv(
   datasetId: string,
   steps: unknown[],
