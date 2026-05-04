@@ -88,6 +88,7 @@ def execute(steps: list[WorkflowStep], content: bytes) -> ExecutionResult:
                 output_row_count=output_row_count,
                 input_column_count=input_column_count,
                 output_column_count=output_column_count,
+                affected_rows=abs(input_row_count - output_row_count),
                 match_rate=metrics.match_rate,
                 affected_rate=metrics.affected_rate,
                 preview=_to_preview(df),
@@ -164,6 +165,7 @@ def preview(steps: list[WorkflowStep], content: bytes) -> PreviewResponse:
                     output_row_count=0,
                     input_column_count=input_column_count,
                     output_column_count=0,
+                    affected_rows=input_row_count,
                     preview=[],
                     message=str(exc),
                 )
@@ -190,6 +192,7 @@ def preview(steps: list[WorkflowStep], content: bytes) -> PreviewResponse:
                 output_row_count=output_row_count,
                 input_column_count=input_column_count,
                 output_column_count=output_column_count,
+                affected_rows=abs(input_row_count - output_row_count),
                 match_rate=metrics.match_rate,
                 affected_rate=metrics.affected_rate,
                 preview=_to_preview(df),
@@ -291,7 +294,11 @@ def _select_columns(
 ) -> tuple[pd.DataFrame, str, _StepMetrics]:
     missing = [c for c in step.columns if c not in df.columns]
     if missing:
-        raise ExecutionError(f"select_columns: columns not found: {missing}")
+        available = sorted(df.columns.tolist())
+        raise ExecutionError(
+            f"select_columns: column(s) {missing} not found. "
+            f"Available columns: {available}"
+        )
     return (
         df[step.columns].copy(),
         f"Selected columns: {step.columns}.",
@@ -303,7 +310,11 @@ def _filter_rows(
     step: FilterRowsStep, df: pd.DataFrame
 ) -> tuple[pd.DataFrame, str, _StepMetrics]:
     if step.column not in df.columns:
-        raise ExecutionError(f"filter_rows: column '{step.column}' not found.")
+        available = sorted(df.columns.tolist())
+        raise ExecutionError(
+            f"filter_rows: column '{step.column}' not found. "
+            f"Available columns: {available}"
+        )
     op_fn = _FILTER_OPS[step.operator]
     mask = op_fn(df[step.column], step.value)
     result = df[mask].reset_index(drop=True)
@@ -321,9 +332,13 @@ def _group_by(
     step: GroupByStep, df: pd.DataFrame
 ) -> tuple[pd.DataFrame, str, _StepMetrics]:
     group_cols = step.columns if step.columns else [step.column]
+    available = sorted(df.columns.tolist())
     for col in group_cols + [step.target]:
         if col not in df.columns:
-            raise ExecutionError(f"group_by: column '{col}' not found.")
+            raise ExecutionError(
+                f"group_by: column '{col}' not found. "
+                f"Available columns: {available}"
+            )
     result = (
         df.groupby(group_cols, as_index=False)[step.target]
         .agg(step.agg)
@@ -360,13 +375,18 @@ _DERIVE_OPS = {
 def _derive_column(
     step: DeriveColumnStep, df: pd.DataFrame
 ) -> tuple[pd.DataFrame, str, _StepMetrics]:
+    available = sorted(df.columns.tolist())
     if step.column not in df.columns:
-        raise ExecutionError(f"derive_column: column '{step.column}' not found.")
+        raise ExecutionError(
+            f"derive_column: column '{step.column}' not found. "
+            f"Available columns: {available}"
+        )
     op_fn = _DERIVE_OPS[step.operator]
     if step.other_column:
         if step.other_column not in df.columns:
             raise ExecutionError(
-                f"derive_column: other_column '{step.other_column}' not found."
+                f"derive_column: other_column '{step.other_column}' not found. "
+                f"Available columns: {available}"
             )
         operand = df[step.other_column]
         operand_label = f"'{step.other_column}'"
@@ -395,7 +415,11 @@ def _date_extract(
     step: DateExtractStep, df: pd.DataFrame
 ) -> tuple[pd.DataFrame, str, _StepMetrics]:
     if step.column not in df.columns:
-        raise ExecutionError(f"date_extract: column '{step.column}' not found.")
+        available = sorted(df.columns.tolist())
+        raise ExecutionError(
+            f"date_extract: column '{step.column}' not found. "
+            f"Available columns: {available}"
+        )
     try:
         parsed = pd.to_datetime(df[step.column])
     except Exception as exc:
@@ -415,7 +439,11 @@ def _sort_values(
     step: SortValuesStep, df: pd.DataFrame
 ) -> tuple[pd.DataFrame, str, _StepMetrics]:
     if step.column not in df.columns:
-        raise ExecutionError(f"sort_values: column '{step.column}' not found.")
+        available = sorted(df.columns.tolist())
+        raise ExecutionError(
+            f"sort_values: column '{step.column}' not found. "
+            f"Available columns: {available}"
+        )
     result = df.sort_values(by=step.column, ascending=step.ascending).reset_index(drop=True)
     direction = "ascending" if step.ascending else "descending"
     return result, f"Sorted by '{step.column}' {direction}.", _StepMetrics()
@@ -426,7 +454,11 @@ def _rename_columns(
 ) -> tuple[pd.DataFrame, str, _StepMetrics]:
     missing = [c for c in step.mapping if c not in df.columns]
     if missing:
-        raise ExecutionError(f"rename_columns: columns not found: {missing}")
+        available = sorted(df.columns.tolist())
+        raise ExecutionError(
+            f"rename_columns: column(s) {missing} not found. "
+            f"Available columns: {available}"
+        )
     result = df.rename(columns=step.mapping)
     return (
         result,
@@ -440,7 +472,11 @@ def _drop_columns(
 ) -> tuple[pd.DataFrame, str, _StepMetrics]:
     missing = [c for c in step.columns if c not in df.columns]
     if missing:
-        raise ExecutionError(f"drop_columns: columns not found: {missing}")
+        available = sorted(df.columns.tolist())
+        raise ExecutionError(
+            f"drop_columns: column(s) {missing} not found. "
+            f"Available columns: {available}"
+        )
     result = df.drop(columns=step.columns)
     return (
         result,
@@ -456,7 +492,11 @@ def _fill_missing_values(
     step: FillMissingValuesStep, df: pd.DataFrame
 ) -> tuple[pd.DataFrame, str, _StepMetrics]:
     if step.column not in df.columns:
-        raise ExecutionError(f"fill_missing_values: column '{step.column}' not found.")
+        available = sorted(df.columns.tolist())
+        raise ExecutionError(
+            f"fill_missing_values: column '{step.column}' not found. "
+            f"Available columns: {available}"
+        )
     result = df.copy()
     before_missing = int(result[step.column].isna().sum())
     if before_missing == 0:
