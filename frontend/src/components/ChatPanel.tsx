@@ -8,10 +8,11 @@ interface ChatPanelProps {
   isLoading: boolean
   onSubmit: (query: string) => void
   onConfirm: (cell: NotebookCellData) => void
+  onClarify: (cell: NotebookCellData, answer: string) => void
   width: number
 }
 
-export function ChatPanel({ dataset, cells, isLoading, onSubmit, onConfirm, width }: ChatPanelProps) {
+export function ChatPanel({ dataset, cells, isLoading, onSubmit, onConfirm, onClarify, width }: ChatPanelProps) {
   return (
     <div className="flex flex-col shrink-0 overflow-hidden" style={{ width }}>
       {/* Tab bar */}
@@ -60,6 +61,7 @@ export function ChatPanel({ dataset, cells, isLoading, onSubmit, onConfirm, widt
         dataset={dataset}
         onSubmit={onSubmit}
         onConfirm={onConfirm}
+        onClarify={onClarify}
       />
     </div>
   )
