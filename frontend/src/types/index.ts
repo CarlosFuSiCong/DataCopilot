@@ -62,6 +62,7 @@ export interface StepResult {
   output_row_count: number
   input_column_count: number
   output_column_count: number
+  affected_rows: number
   match_rate: number | null
   affected_rate: number | null
   preview: Record<string, unknown>[]
@@ -116,6 +117,9 @@ export interface ChatRequest {
   dataset_id: string
   query: string
   auto_confirm?: boolean
+  // Steps from the last confirmed workflow. When present the new query chains
+  // onto the prior result instead of starting from the raw dataset.
+  previous_steps?: WorkflowStep[]
 }
 
 export interface ChatResponse {
@@ -149,4 +153,19 @@ export interface ConfirmResponse {
 export interface ApiError {
   error: string
   detail?: string
+  error_code?: string
+  context?: ApiErrorContext
+}
+
+export interface ApiErrorContext {
+  available_columns?: string[]
+  supported_steps?: string[]
+  example_queries?: string[]
+  failed_step_index?: number
+  failed_step_type?: string
+  suggestion?: string
+  retrieval_method?: string
+  query?: string
+  size_bytes?: number
+  limit_bytes?: number
 }

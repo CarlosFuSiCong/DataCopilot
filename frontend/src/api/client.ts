@@ -1,4 +1,4 @@
-import type { UploadResponse, DatasetProfile, DatasetRowsResponse, ChatRequest, ChatResponse, ConfirmRequest, ConfirmResponse, ApiError } from '../types'
+import type { ApiErrorContext, UploadResponse, DatasetProfile, DatasetRowsResponse, ChatRequest, ChatResponse, ConfirmRequest, ConfirmResponse, ApiError } from '../types'
 
 export interface DiffRowsResponse {
   rows: (Record<string, unknown> & { _kept: boolean })[]
@@ -8,12 +8,30 @@ export interface DiffRowsResponse {
   limit: number
 }
 
+/** Thrown when the backend returns a non-OK status. Carries the machine-readable
+ *  error_code and context from the backend for structured error UI rendering. */
+export class ApiCallError extends Error {
+  readonly errorCode: string | undefined
+  readonly errorContext: ApiErrorContext | undefined
+
+  constructor(message: string, errorCode?: string, errorContext?: ApiErrorContext) {
+    super(message)
+    this.name = 'ApiCallError'
+    this.errorCode = errorCode
+    this.errorContext = errorContext
+  }
+}
+
 const BASE = '/api'
 
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: res.statusText })) as ApiError
-    throw new Error(body.error ?? res.statusText)
+    throw new ApiCallError(
+      body.error ?? res.statusText,
+      body.error_code,
+      body.context,
+    )
   }
   return res.json() as Promise<T>
 }
@@ -78,8 +96,8 @@ export async function exportResultCsv(
     body: JSON.stringify({ steps, filename }),
   })
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ error: res.statusText }))
-    throw new Error((body as { error?: string }).error ?? res.statusText)
+    const body = await res.json().catch(() => ({ error: res.statusText })) as ApiError
+    throw new ApiCallError(body.error ?? res.statusText, body.error_code, body.context)
   }
   const blob = await res.blob()
   const url = URL.createObjectURL(blob)
