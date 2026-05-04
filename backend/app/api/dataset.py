@@ -1,5 +1,6 @@
 import io
 import logging
+import math
 import uuid
 
 import pandas as pd
@@ -71,7 +72,10 @@ async def execute_rows(dataset_id: str, body: ExecuteRowsRequest) -> DatasetRows
     df = executor.execute_to_df(request.steps, content)
     total = len(df)
     page = df.iloc[body.offset: body.offset + body.limit]
-    rows = page.where(pd.notna(page), None).to_dict(orient="records")
+    rows = [
+        {k: (None if isinstance(v, float) and math.isnan(v) else v) for k, v in row.items()}
+        for row in page.to_dict(orient="records")
+    ]
     return DatasetRowsResponse(rows=rows, total_rows=total, offset=body.offset, limit=body.limit)
 
 
