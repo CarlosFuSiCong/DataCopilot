@@ -2,6 +2,11 @@
 
 Validates a list of WorkflowStep against the dataset's column names before
 any execution takes place. Raises WorkflowValidationError on the first issue.
+
+Column state is tracked across steps: each step is validated against the
+columns that exist *after* all previous steps have run, not the original
+column set. This ensures chained workflows (e.g. select_columns followed by
+filter_rows) are validated correctly.
 """
 import logging
 
@@ -24,7 +29,11 @@ logger = logging.getLogger(__name__)
 
 
 def validate(steps: list[WorkflowStep], column_names: list[str]) -> None:
-    """Raise WorkflowValidationError if any step is invalid."""
+    """Raise WorkflowValidationError if any step is invalid.
+
+    Column state is propagated between steps so that each step is checked
+    against the columns that actually exist at that point in the workflow.
+    """
     if not steps:
         raise WorkflowValidationError("Workflow must contain at least one step.")
 
@@ -32,8 +41,55 @@ def validate(steps: list[WorkflowStep], column_names: list[str]) -> None:
 
     for idx, step in enumerate(steps):
         _validate_step(step, col_set, idx)
+        col_set = _advance_columns(step, col_set)
 
     logger.info("Workflow validated: %d steps against columns %s", len(steps), column_names)
+
+
+def simulate_columns(steps: list[WorkflowStep], initial_column_names: list[str]) -> list[str]:
+    """Return the column names that would exist after running all steps.
+
+    Used externally (e.g. chat endpoint) to compute the intermediate column
+    state for chained workflow validation and error context.
+    """
+    col_set = set(initial_column_names)
+    for step in steps:
+        col_set = _advance_columns(step, col_set)
+    return sorted(col_set)
+
+
+def _advance_columns(step: WorkflowStep, col_set: set[str]) -> set[str]:
+    """Return the updated column set after this step executes.
+
+    Only steps that structurally change columns (add, remove, rename) need
+    explicit handling; all others leave the column set unchanged.
+    """
+    if isinstance(step, SelectColumnsStep):
+        # Only the requested columns survive.
+        return set(step.columns)
+
+    if isinstance(step, DropColumnsStep):
+        return col_set - set(step.columns)
+
+    if isinstance(step, RenameColumnsStep):
+        return {step.mapping.get(c, c) for c in col_set}
+
+    if isinstance(step, DeriveColumnStep):
+        # Adds new_column; existing columns are preserved.
+        return col_set | {step.new_column}
+
+    if isinstance(step, DateExtractStep):
+        return col_set | {step.new_column}
+
+    if isinstance(step, GroupByStep):
+        # The aggregation collapses all other columns; result contains only
+        # the grouping keys and the aggregated target column.
+        group_cols = set(step.columns) if step.columns else {step.column}
+        return group_cols | {step.target}
+
+    # filter_rows, sort_values, limit_rows, remove_missing_values,
+    # fill_missing_values, generate_summary — no structural column change.
+    return col_set
 
 
 def _validate_step(step: WorkflowStep, col_set: set[str], idx: int) -> None:
@@ -93,6 +149,8 @@ def _validate_step(step: WorkflowStep, col_set: set[str], idx: int) -> None:
 def _require_columns(cols: list[str], col_set: set[str], label: str) -> None:
     for col in cols:
         if col not in col_set:
+            available = sorted(col_set)
             raise WorkflowValidationError(
-                f"{label}: column '{col}' does not exist in the dataset."
+                f"{label}: column '{col}' does not exist in the dataset. "
+                f"Available columns: {available}"
             )
