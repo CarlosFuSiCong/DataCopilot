@@ -1,0 +1,41 @@
+{
+  "doc_type": "transformation",
+  "step_type": "fill_missing_values",
+  "issue_code": null,
+  "source_path": "transformations/fill_missing_values.json",
+  "type": "fill_missing_values",
+  "title": "fill_missing_values: fill NaN / null values in a column",
+  "description": "Fill missing (NaN/null) values in a single column using a chosen strategy. Supported strategies: 'constant' (fill with a fixed value), 'mean' (fill with the column average), 'median' (fill with the column median), 'mode' (fill with the most frequent value), 'ffill' (forward-fill from the previous non-null value), 'bfill' (backward-fill from the next non-null value). Use remove_missing_values when the user wants to drop rows instead of filling them.",
+  "keywords": [
+    "fill", "impute", "replace null", "replace nan", "missing values", "fill missing",
+    "填充缺失", "补充缺失值", "填充空值", "均值填充", "中位数填充", "众数填充",
+    "fill null", "fill na", "fillna", "impute missing", "handle missing",
+    "mean imputation", "median imputation", "forward fill", "backward fill"
+  ],
+  "parameters": [
+    {
+      "name": "column",
+      "type": "str",
+      "required": true,
+      "description": "Name of the column to fill. Must exist in the dataset."
+    },
+    {
+      "name": "strategy",
+      "type": "str",
+      "required": true,
+      "description": "Fill strategy: 'constant', 'mean', 'median', 'mode', 'ffill', or 'bfill'."
+    },
+    {
+      "name": "value",
+      "type": "float | str | null",
+      "required": false,
+      "description": "Fill value used only when strategy is 'constant'. Ignored for all other strategies."
+    }
+  ],
+  "example": {
+    "type": "fill_missing_values",
+    "column": "amount",
+    "strategy": "mean"
+  },
+  "rag_note": "fill_missing_values operates on one column at a time. Chain multiple steps to fill different columns with different strategies. For numeric columns prefer 'mean' or 'median'; for categorical columns prefer 'mode' or 'constant'. Use remove_missing_values to drop rows instead of filling them."
+}
