@@ -120,6 +120,8 @@ export interface ChatRequest {
   // Steps from the last confirmed workflow. When present the new query chains
   // onto the prior result instead of starting from the raw dataset.
   previous_steps?: WorkflowStep[]
+  // User's answer to a clarification question, merged into the planner query.
+  clarification_context?: string
 }
 
 export interface ChatResponse {
@@ -135,6 +137,9 @@ export interface ChatResponse {
   execution_result: ExecutionResult | null
   // UUID for the persisted run; used to download the result via GET /api/runs/{id}/download.
   run_id?: string | null
+  // True when the planner needs clarification before producing a workflow.
+  needs_clarification?: boolean
+  clarification_question?: string | null
 }
 
 export interface ConfirmRequest {
