@@ -1,148 +1,69 @@
 import { useEffect, useRef } from 'react'
 import type { UploadResponse } from '../types'
 import type { NotebookCellData } from '../types/notebook'
-import { sendChat, confirmWorkflow } from '../api/client'
 import { NotebookIcon, Spinner } from './ui/Icons'
 import { Gutter } from './ui/OutputBlock'
 import { NotebookCell } from './NotebookCell'
 import { InputCell } from './InputCell'
 
-let _seq = 0
-function nextId() { return `cell-${++_seq}` }
-
-// ─── Notebook container ───────────────────────────────────────────────────────
-
 interface NotebookProps {
   cells: NotebookCellData[]
-  onAppendCell: (cell: NotebookCellData) => void
+  isLoading: boolean
   dataset: UploadResponse | null
+  onSubmit: (query: string) => void
+  onConfirm: (cell: NotebookCellData) => void
 }
 
-export function Notebook({ cells, onAppendCell, dataset }: NotebookProps) {
-  const scrollRef = useRef<HTMLDivElement>(null)
+export function Notebook({ cells, isLoading, dataset, onSubmit, onConfirm }: NotebookProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
+  const displayCells = cells.filter(c => c.status !== 'loading')
 
-  // Auto-scroll to bottom when cells list changes (new cell added or status updated)
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [cells.length, cells.at(-1)?.status])
-  async function handleSubmit(query: string) {
-    if (!dataset || !query.trim()) return
-
-    const id = nextId()
-    onAppendCell({ id, query, status: 'loading' })
-
-    try {
-      const result = await sendChat({ dataset_id: dataset.dataset_id, query })
-      if (result.execution_result !== null) {
-        onAppendCell({ id, query, status: 'ok', result })
-      } else {
-        onAppendCell({ id, query, status: 'preview', result })
-      }
-    } catch (err) {
-      onAppendCell({ id, query, status: 'error', error: err instanceof Error ? err.message : 'Unknown error' })
-    }
-  }
-
-  async function handleConfirm(cell: NotebookCellData) {
-    if (!dataset || !cell.result) return
-
-    onAppendCell({ ...cell, status: 'confirming' })
-
-    try {
-      const confirmResult = await confirmWorkflow({
-        dataset_id: dataset.dataset_id,
-        steps: cell.result.planned_steps,
-        query: cell.result.query,
-      })
-      onAppendCell({ ...cell, status: 'ok', confirmResult })
-    } catch (err) {
-      onAppendCell({
-        ...cell,
-        status: 'error',
-        error: err instanceof Error ? err.message : 'Confirm failed',
-      })
-    }
-  }
-
-  const displayCells = cells.filter(c => c.status !== 'loading')
-  const isLoading = cells.some(c => c.status === 'loading')
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
-      {/* Tab bar */}
-      <div
-        className="flex items-center shrink-0"
-        style={{ background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)', height: 36, paddingLeft: 8 }}
-      >
-        <div
-          className="flex items-center gap-1.5 px-3 h-full"
-          style={{
-            borderRight: '1px solid var(--color-border)',
-            borderBottom: '2px solid var(--color-accent)',
-            background: 'var(--color-surface-1)',
-            fontFamily: 'var(--font-mono)', fontSize: '0.82rem',
-            color: 'var(--color-accent)',
-          }}
-        >
-          <NotebookIcon size={11} />
-          <span>notebook.dc</span>
+    <div className="flex-1 overflow-y-auto" style={{ background: 'var(--color-bg)' }}>
+
+      {/* Empty states */}
+      {!dataset && displayCells.length === 0 && !isLoading && <NotebookEmpty />}
+
+      {dataset && displayCells.length === 0 && !isLoading && (
+        <div className="flex flex-col items-center justify-center gap-2 py-20" style={{ color: 'var(--color-text-muted)' }}>
+          <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: '0.82rem', textAlign: 'center', lineHeight: 1.8 }}>
+            Dataset loaded. Type a query below<br />to start the pipeline.
+          </p>
         </div>
-      </div>
+      )}
 
-      {/* Toolbar */}
-      <div
-        className="flex items-center gap-2 px-4 shrink-0"
-        style={{ height: 34, background: 'var(--color-surface-1)', borderBottom: '1px solid var(--color-border-subtle)' }}
-      >
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-          {displayCells.length} cell{displayCells.length !== 1 ? 's' : ''}
-        </span>
-        <div className="flex-1" />
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-          {dataset ? `${dataset.filename} · ${dataset.row_count.toLocaleString()} rows` : 'no dataset'}
-        </span>
-      </div>
-
-      {/* Cell scroll area */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto" style={{ background: 'var(--color-bg)' }}>
-        {!dataset && displayCells.length === 0 && !isLoading && <EmptyNotebook />}
-
-        {dataset && displayCells.length === 0 && !isLoading && (
-          <div className="flex flex-col items-center justify-center gap-2 py-20" style={{ color: 'var(--color-text-muted)' }}>
-            <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: '0.82rem', textAlign: 'center', lineHeight: 1.8 }}>
-              Dataset loaded. Type a query below<br />to start the pipeline.
-            </p>
-          </div>
-        )}
-
-        {displayCells.length > 0 && (
-          <div style={{ padding: '16px 0' }}>
-            {displayCells.map((cell, i) => (
-              <NotebookCell key={cell.id} index={i + 1} cell={cell} onConfirm={handleConfirm} />
-            ))}
-          </div>
-        )}
-
-        {isLoading && (
-          <div style={{ padding: displayCells.length === 0 ? '16px 0' : '0' }}>
-            <LoadingCell index={displayCells.length + 1} />
-          </div>
-        )}
-
-        <div style={{ padding: '0 0 16px' }}>
-          <InputCell disabled={!dataset || isLoading} onSubmit={handleSubmit} />
+      {/* Cell list */}
+      {displayCells.length > 0 && (
+        <div style={{ padding: '16px 0' }}>
+          {displayCells.map((cell, i) => (
+            <NotebookCell key={cell.id} index={i + 1} cell={cell} onConfirm={onConfirm} />
+          ))}
         </div>
-        {/* Scroll anchor */}
-        <div ref={bottomRef} style={{ height: 1 }} />
+      )}
+
+      {/* Loading placeholder */}
+      {isLoading && (
+        <div style={{ padding: displayCells.length === 0 ? '16px 0' : '0' }}>
+          <LoadingCell index={displayCells.length + 1} />
+        </div>
+      )}
+
+      {/* Input */}
+      <div style={{ padding: '0 0 16px' }}>
+        <InputCell disabled={!dataset || isLoading} onSubmit={onSubmit} />
       </div>
+
+      {/* Scroll anchor */}
+      <div ref={bottomRef} style={{ height: 1 }} />
     </div>
   )
 }
 
-// ─── Empty state ──────────────────────────────────────────────────────────────
-
-function EmptyNotebook() {
+function NotebookEmpty() {
   return (
     <div className="flex flex-col items-center justify-center gap-3 py-20" style={{ color: 'var(--color-text-muted)' }}>
       <NotebookIcon size={32} />
@@ -153,7 +74,6 @@ function EmptyNotebook() {
     </div>
   )
 }
-// ─── Loading cell ─────────────────────────────────────────────────────────────
 
 function LoadingCell({ index }: { index: number }) {
   return (
