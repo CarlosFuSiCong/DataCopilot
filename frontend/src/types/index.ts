@@ -133,6 +133,8 @@ export interface ChatResponse {
   // The client should show a Confirm button and call POST /api/workflows/confirm.
   explanation: string | null
   execution_result: ExecutionResult | null
+  // UUID for the persisted run; used to download the result via GET /api/runs/{id}/download.
+  run_id?: string | null
 }
 
 export interface ConfirmRequest {
@@ -146,6 +148,7 @@ export interface ConfirmResponse {
   planned_steps: WorkflowStep[]
   execution_result: ExecutionResult
   explanation: string
+  run_id?: string | null
 }
 
 // ─── API errors ───────────────────────────────────────────────────────────────

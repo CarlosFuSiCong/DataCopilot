@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { ExecutionResult, UploadResponse, WorkflowStep } from '../types'
-import { exportResultCsv } from '../api/client'
+import { downloadDataset, downloadRun, exportResultCsv } from '../api/client'
 import { DataPreview } from './DataPreview'
 import { DataPanelEmpty } from './dataPanel/DataPanelEmpty'
 import { ResultView } from './dataPanel/ResultView'
@@ -12,9 +12,10 @@ interface DataPanelProps {
   dataset: UploadResponse | null
   lastExecutionResult: ExecutionResult | null
   lastConfirmedSteps: WorkflowStep[] | null
+  lastRunId: string | null
 }
 
-export function DataPanel({ dataset, lastExecutionResult, lastConfirmedSteps }: DataPanelProps) {
+export function DataPanel({ dataset, lastExecutionResult, lastConfirmedSteps, lastRunId }: DataPanelProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('original')
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
@@ -32,12 +33,21 @@ export function DataPanel({ dataset, lastExecutionResult, lastConfirmedSteps }: 
     setViewMode('original')
   }, [dataset?.dataset_id])
 
-  async function handleDownload() {
+  function handleDownloadOriginal() {
+    if (!dataset) return
+    downloadDataset(dataset.dataset_id)
+  }
+
+  async function handleDownloadResult() {
     if (!dataset || !lastConfirmedSteps) return
     setExporting(true)
     setExportError(null)
     try {
-      await exportResultCsv(dataset.dataset_id, lastConfirmedSteps, dataset.filename)
+      if (lastRunId) {
+        downloadRun(lastRunId)
+      } else {
+        await exportResultCsv(dataset.dataset_id, lastConfirmedSteps, dataset.filename)
+      }
     } catch (err) {
       setExportError(err instanceof Error ? err.message : 'Export failed')
     } finally {
@@ -75,24 +85,41 @@ export function DataPanel({ dataset, lastExecutionResult, lastConfirmedSteps }: 
             {tabLabel}
           </span>
         </div>
-        {dataset && lastConfirmedSteps && hasResult && (
-          <button
-            type="button"
-            onClick={handleDownload}
-            disabled={exporting}
-            title="Download full transformed result as CSV"
-            style={{
-              marginLeft: 'auto', marginRight: 8,
-              padding: '3px 10px', background: 'transparent',
-              border: '1px solid var(--color-border)', borderRadius: 4,
-              color: exporting ? 'var(--color-text-muted)' : 'var(--color-text-soft)',
-              fontFamily: 'var(--font-mono)', fontSize: '0.72rem',
-              cursor: exporting ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap',
-            }}
-          >
-            {exporting ? '…' : '↓ Download CSV'}
-          </button>
-        )}
+        <div style={{ marginLeft: 'auto', marginRight: 8, display: 'flex', gap: 4 }}>
+          {dataset && (
+            <button
+              type="button"
+              onClick={handleDownloadOriginal}
+              title="Download original uploaded CSV"
+              style={{
+                padding: '3px 10px', background: 'transparent',
+                border: '1px solid var(--color-border)', borderRadius: 4,
+                color: 'var(--color-text-muted)',
+                fontFamily: 'var(--font-mono)', fontSize: '0.72rem',
+                cursor: 'pointer', whiteSpace: 'nowrap',
+              }}
+            >
+              ↓ Original
+            </button>
+          )}
+          {dataset && lastConfirmedSteps && hasResult && (
+            <button
+              type="button"
+              onClick={handleDownloadResult}
+              disabled={exporting}
+              title="Download full transformed result as CSV"
+              style={{
+                padding: '3px 10px', background: 'transparent',
+                border: '1px solid var(--color-border)', borderRadius: 4,
+                color: exporting ? 'var(--color-text-muted)' : 'var(--color-text-soft)',
+                fontFamily: 'var(--font-mono)', fontSize: '0.72rem',
+                cursor: exporting ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap',
+              }}
+            >
+              {exporting ? '…' : '↓ Result CSV'}
+            </button>
+          )}
+        </div>
       </div>
 
       <div ref={panelMeasureRef} className="flex flex-col flex-1 min-h-0 overflow-hidden">

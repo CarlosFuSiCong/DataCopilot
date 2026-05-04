@@ -36,6 +36,11 @@ export default function App() {
     lastConfirmedCell?.confirmResult?.execution_result
     ?? lastConfirmedCell?.result?.execution_result
     ?? null
+  // run_id for the persisted result CSV; used by DataPanel's download button.
+  const lastRunId: string | null =
+    lastConfirmedCell?.confirmResult?.run_id
+    ?? lastConfirmedCell?.result?.run_id
+    ?? null
 
   return (
     <div
@@ -52,6 +57,7 @@ export default function App() {
           dataset={dataset}
           lastExecutionResult={lastExecutionResult}
           lastConfirmedSteps={lastConfirmedSteps}
+          lastRunId={lastRunId}
         />
         <ResizeDivider onMouseDown={onRightDividerMouseDown} />
         <ChatPanel
