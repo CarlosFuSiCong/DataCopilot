@@ -87,6 +87,11 @@ export function WorkflowViewer({ steps, stepResults }: WorkflowViewerProps) {
                         <span style={{ color: 'var(--color-orange)' }}>{JSON.stringify(v)}</span>
                       </span>
                     ))}
+                  {sr?.message && (
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--color-text-muted)', marginTop: 1 }}>
+                      ↳ {sr.message}
+                    </span>
+                  )}
                 </div>
               </div>
 
