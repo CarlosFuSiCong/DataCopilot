@@ -1,0 +1,27 @@
+{
+  "doc_type": "transformation",
+  "step_type": "drop_columns",
+  "issue_code": null,
+  "source_path": "transformations/drop_columns.json",
+  "type": "drop_columns",
+  "title": "drop_columns: remove unwanted columns from the dataset",
+  "description": "Remove one or more columns from the dataset by name. Use this when the user wants to delete, drop, or remove columns they no longer need. Unlike select_columns (which keeps only the listed columns), drop_columns removes only the named columns and keeps everything else.",
+  "keywords": [
+    "drop", "remove", "delete", "eliminate", "exclude", "columns",
+    "删除列", "去掉列", "移除列", "不需要的列", "删除字段",
+    "drop columns", "remove columns", "delete columns", "exclude columns"
+  ],
+  "parameters": [
+    {
+      "name": "columns",
+      "type": "list[str]",
+      "required": true,
+      "description": "List of column names to remove. All columns must exist in the dataset."
+    }
+  ],
+  "example": {
+    "type": "drop_columns",
+    "columns": ["order_id", "quantity"]
+  },
+  "rag_note": "Use drop_columns when the user mentions dropping, removing, or deleting specific columns. Use select_columns instead when the user says 'keep only these columns' or lists the columns to retain."
+}

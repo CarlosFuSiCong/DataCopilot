@@ -96,5 +96,33 @@
     "expected_source_paths": ["transformations/group_by.json"],
     "expected_step_types": ["group_by"],
     "notes": "group_by multi-column"
+  },
+  {
+    "id": "q15",
+    "query": "drop the order_id and quantity columns from the dataset",
+    "expected_source_paths": ["transformations/drop_columns.json"],
+    "expected_step_types": ["drop_columns"],
+    "notes": "drop_columns transformation"
+  },
+  {
+    "id": "q16",
+    "query": "删除不需要的列 order_id",
+    "expected_source_paths": ["transformations/drop_columns.json"],
+    "expected_step_types": ["drop_columns"],
+    "notes": "drop_columns Chinese query"
+  },
+  {
+    "id": "q17",
+    "query": "fill missing values in the amount column with the mean",
+    "expected_source_paths": ["transformations/fill_missing_values.json"],
+    "expected_step_types": ["fill_missing_values"],
+    "notes": "fill_missing_values with mean strategy"
+  },
+  {
+    "id": "q18",
+    "query": "用常量 0 填充 score 列的空值",
+    "expected_source_paths": ["transformations/fill_missing_values.json"],
+    "expected_step_types": ["fill_missing_values"],
+    "notes": "fill_missing_values Chinese query with constant strategy"
   }
 ]

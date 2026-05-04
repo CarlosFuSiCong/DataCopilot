@@ -9,6 +9,8 @@ from app.core.exceptions import WorkflowValidationError
 from app.models.workflow import (
     DateExtractStep,
     DeriveColumnStep,
+    DropColumnsStep,
+    FillMissingValuesStep,
     FilterRowsStep,
     GroupByStep,
     LimitRowsStep,
@@ -74,6 +76,18 @@ def _validate_step(step: WorkflowStep, col_set: set[str], idx: int) -> None:
 
     elif isinstance(step, DateExtractStep):
         _require_columns([step.column], col_set, label)
+
+    elif isinstance(step, DropColumnsStep):
+        if not step.columns:
+            raise WorkflowValidationError(f"{label}: columns list must not be empty.")
+        _require_columns(step.columns, col_set, label)
+
+    elif isinstance(step, FillMissingValuesStep):
+        _require_columns([step.column], col_set, label)
+        if step.strategy == "constant" and step.value is None:
+            raise WorkflowValidationError(
+                f"{label}: fill_missing_values with strategy 'constant' requires a 'value'."
+            )
 
 
 def _require_columns(cols: list[str], col_set: set[str], label: str) -> None:
