@@ -1,4 +1,4 @@
-import type { UploadResponse, DatasetProfile, ChatRequest, ChatResponse, ConfirmRequest, ConfirmResponse, ApiError } from '../types'
+import type { UploadResponse, DatasetProfile, DatasetRowsResponse, ChatRequest, ChatResponse, ConfirmRequest, ConfirmResponse, ApiError } from '../types'
 
 const BASE = '/api'
 
@@ -41,4 +41,20 @@ export async function confirmWorkflow(req: ConfirmRequest): Promise<ConfirmRespo
     body: JSON.stringify(req),
   })
   return handleResponse<ConfirmResponse>(res)
+}
+
+export async function fetchDatasetRows(
+  datasetId: string,
+  offset: number,
+  limit: number,
+): Promise<DatasetRowsResponse> {
+  const params = new URLSearchParams({ offset: String(offset), limit: String(limit) })
+  const res = await fetch(`${BASE}/datasets/${datasetId}/rows?${params}`)
+  return handleResponse<DatasetRowsResponse>(res)
+}
+
+export function downloadDataset(datasetId: string): void {
+  const a = document.createElement('a')
+  a.href = `${BASE}/datasets/${datasetId}/download`
+  a.click()
 }
