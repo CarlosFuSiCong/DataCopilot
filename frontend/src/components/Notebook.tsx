@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import type { UploadResponse } from '../types'
 import type { NotebookCellData } from '../types/notebook'
 import { sendChat, confirmWorkflow } from '../api/client'
@@ -19,6 +20,13 @@ interface NotebookProps {
 }
 
 export function Notebook({ cells, onAppendCell, dataset }: NotebookProps) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const bottomRef = useRef<HTMLDivElement>(null)
+
+  // Auto-scroll to bottom when cells list changes (new cell added or status updated)
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+  }, [cells.length, cells.at(-1)?.status])
   async function handleSubmit(query: string) {
     if (!dataset || !query.trim()) return
 
@@ -98,7 +106,7 @@ export function Notebook({ cells, onAppendCell, dataset }: NotebookProps) {
       </div>
 
       {/* Cell scroll area */}
-      <div className="flex-1 overflow-y-auto" style={{ background: 'var(--color-bg)' }}>
+      <div ref={scrollRef} className="flex-1 overflow-y-auto" style={{ background: 'var(--color-bg)' }}>
         {!dataset && displayCells.length === 0 && !isLoading && <EmptyNotebook />}
 
         {dataset && displayCells.length === 0 && !isLoading && <DataPreview dataset={dataset} />}
@@ -120,6 +128,8 @@ export function Notebook({ cells, onAppendCell, dataset }: NotebookProps) {
         <div style={{ padding: '0 0 16px' }}>
           <InputCell disabled={!dataset || isLoading} onSubmit={handleSubmit} />
         </div>
+        {/* Scroll anchor */}
+        <div ref={bottomRef} style={{ height: 1 }} />
       </div>
     </div>
   )
