@@ -81,8 +81,19 @@ async def chat(request: ChatRequest) -> ChatResponse:
 
     try:
         new_steps = workflow_planner.plan(query=request.query, ctx=rag_ctx)
-    except PlannerError:
-        raise
+    except PlannerError as exc:
+        # Planner returned empty steps or unparseable output — surface as
+        # empty_workflow so the frontend shows the structured error panel with
+        # example queries instead of a raw technical message.
+        raise WorkflowValidationError(
+            "The planner could not build a workflow for this query. "
+            "The request may be outside the supported transformation scope.",
+            error_code="empty_workflow",
+            context={
+                "supported_steps": _SUPPORTED_STEPS,
+                "example_queries": _EXAMPLE_QUERIES,
+            },
+        ) from exc
 
     # Chain: prepend steps from the previous confirmed workflow so the new
     # query operates on the result of prior transformations, not the raw CSV.
