@@ -24,6 +24,13 @@ class UploadResponse(BaseModel):
     profile: DatasetProfile
 
 
+class DatasetRowsResponse(BaseModel):
+    rows: list[dict]
+    total_rows: int
+    offset: int
+    limit: int
+
+
 class DatasetRecord(BaseModel):
     """Mirrors the `datasets` table in Postgres.
 
