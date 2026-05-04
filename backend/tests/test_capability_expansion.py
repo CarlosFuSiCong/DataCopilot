@@ -5,6 +5,8 @@ Covers:
   - group_by multi-column
   - derive_column
   - date_extract
+  - drop_columns
+  - fill_missing_values
   - validator rules for each new step type
 """
 import pytest
@@ -13,6 +15,8 @@ from app.core.exceptions import ExecutionError, WorkflowValidationError
 from app.models.workflow import (
     DateExtractStep,
     DeriveColumnStep,
+    DropColumnsStep,
+    FillMissingValuesStep,
     GroupByStep,
     LimitRowsStep,
     SortValuesStep,
@@ -294,3 +298,192 @@ def test_date_extract_unparseable_column_raises():
             )],
             csv,
         )
+
+
+# ===========================================================================
+# drop_columns
+# ===========================================================================
+
+def test_drop_columns_removes_listed_columns():
+    result = execute(
+        [DropColumnsStep(type="drop_columns", columns=["region", "category"])],
+        BASE_CSV,
+    )
+    assert "region" not in result.columns
+    assert "category" not in result.columns
+    assert result.column_count == 2  # sales, date remain
+
+
+def test_drop_columns_single_column():
+    result = execute(
+        [DropColumnsStep(type="drop_columns", columns=["date"])],
+        BASE_CSV,
+    )
+    assert "date" not in result.columns
+    assert result.column_count == 3
+    assert result.row_count == 5
+
+
+def test_drop_columns_preserves_row_count():
+    result = execute(
+        [DropColumnsStep(type="drop_columns", columns=["sales"])],
+        BASE_CSV,
+    )
+    assert result.row_count == 5
+
+
+def test_drop_columns_validator_rejects_missing_column():
+    with pytest.raises(WorkflowValidationError, match="does not exist"):
+        validate(
+            [DropColumnsStep(type="drop_columns", columns=["nonexistent"])],
+            COLUMNS,
+        )
+
+
+def test_drop_columns_validator_rejects_empty_list():
+    with pytest.raises(WorkflowValidationError, match="must not be empty"):
+        validate(
+            [DropColumnsStep(type="drop_columns", columns=[])],
+            COLUMNS,
+        )
+
+
+# ===========================================================================
+# fill_missing_values
+# ===========================================================================
+
+MISSING_CSV = (
+    b"name,score,region\n"
+    b"Alice,90,North\n"
+    b"Bob,,South\n"
+    b"Carol,80,\n"
+    b"Dave,,North\n"
+    b"Eve,70,South\n"
+)
+
+MISSING_COLUMNS = ["name", "score", "region"]
+
+
+def test_fill_missing_values_constant_numeric():
+    result = execute(
+        [FillMissingValuesStep(
+            type="fill_missing_values",
+            column="score",
+            strategy="constant",
+            value=0,
+        )],
+        MISSING_CSV,
+    )
+    scores = [row["score"] for row in result.preview]
+    assert scores[1] == 0
+    assert scores[3] == 0
+
+
+def test_fill_missing_values_mean():
+    result = execute(
+        [FillMissingValuesStep(
+            type="fill_missing_values",
+            column="score",
+            strategy="mean",
+        )],
+        MISSING_CSV,
+    )
+    # mean of [90, 80, 70] = 80.0
+    scores = [row["score"] for row in result.preview]
+    assert scores[1] == 80.0
+    assert scores[3] == 80.0
+
+
+def test_fill_missing_values_median():
+    result = execute(
+        [FillMissingValuesStep(
+            type="fill_missing_values",
+            column="score",
+            strategy="median",
+        )],
+        MISSING_CSV,
+    )
+    # median of [90, 80, 70] = 80.0
+    scores = [row["score"] for row in result.preview]
+    assert scores[1] == 80.0
+
+
+def test_fill_missing_values_mode_categorical():
+    result = execute(
+        [FillMissingValuesStep(
+            type="fill_missing_values",
+            column="region",
+            strategy="mode",
+        )],
+        MISSING_CSV,
+    )
+    # mode of [North, South, North, South] → North or South (both 2); fillna uses first mode
+    regions = [row["region"] for row in result.preview]
+    assert regions[2] is not None
+
+
+def test_fill_missing_values_constant_string():
+    result = execute(
+        [FillMissingValuesStep(
+            type="fill_missing_values",
+            column="region",
+            strategy="constant",
+            value="Unknown",
+        )],
+        MISSING_CSV,
+    )
+    regions = [row["region"] for row in result.preview]
+    assert regions[2] == "Unknown"
+
+
+def test_fill_missing_values_ffill():
+    result = execute(
+        [FillMissingValuesStep(
+            type="fill_missing_values",
+            column="score",
+            strategy="ffill",
+        )],
+        MISSING_CSV,
+    )
+    # row 1 (Bob): ffill from Alice=90
+    scores = [row["score"] for row in result.preview]
+    assert scores[1] == 90.0
+
+
+def test_fill_missing_values_no_op_when_no_missing():
+    csv = b"a,b\n1,2\n3,4\n"
+    result = execute(
+        [FillMissingValuesStep(
+            type="fill_missing_values",
+            column="a",
+            strategy="mean",
+        )],
+        csv,
+    )
+    assert result.row_count == 2
+    assert "nothing to fill" in result.step_results[0].message
+
+
+def test_fill_missing_values_validator_rejects_missing_column():
+    with pytest.raises(WorkflowValidationError, match="does not exist"):
+        validate(
+            [FillMissingValuesStep(
+                type="fill_missing_values",
+                column="nonexistent",
+                strategy="mean",
+            )],
+            MISSING_COLUMNS,
+        )
+
+
+def test_fill_missing_values_validator_rejects_constant_without_value():
+    with pytest.raises(WorkflowValidationError, match="requires a 'value'"):
+        validate(
+            [FillMissingValuesStep(
+                type="fill_missing_values",
+                column="score",
+                strategy="constant",
+            )],
+            MISSING_COLUMNS,
+        )
+
