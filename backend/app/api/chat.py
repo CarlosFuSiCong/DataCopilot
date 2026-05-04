@@ -104,16 +104,22 @@ async def chat(request: ChatRequest) -> ChatResponse:
             clarification_question=exc.question,
         )
     except PlannerError as exc:
-        # Planner returned empty steps or unparseable output — surface as
-        # empty_workflow so the frontend shows the structured error panel with
-        # example queries instead of a raw technical message.
+        # Build context from what RAG actually retrieved — only show the
+        # operations that were relevant to this query, not the full list.
+        relevant = [
+            {"step_type": doc.type, "description": doc.description, "example": doc.example}
+            for doc in rag_ctx.retrieved_docs
+            if doc.doc_type == "transformation" and doc.type
+        ]
         raise WorkflowValidationError(
             "The planner could not build a workflow for this query. "
             "The request may be outside the supported transformation scope.",
             error_code="empty_workflow",
             context={
-                "supported_steps": _SUPPORTED_STEPS,
-                "example_queries": _EXAMPLE_QUERIES,
+                "relevant_steps": relevant or None,
+                # Fall back to generic list only when RAG returned nothing useful.
+                "supported_steps": _SUPPORTED_STEPS if not relevant else None,
+                "example_queries": _EXAMPLE_QUERIES if not relevant else None,
             },
         ) from exc
 
@@ -128,13 +134,19 @@ async def chat(request: ChatRequest) -> ChatResponse:
         msg = str(exc)
         # Empty workflow: planner produced no steps.
         if "at least one step" in msg:
+            relevant = [
+                {"step_type": doc.type, "description": doc.description, "example": doc.example}
+                for doc in rag_ctx.retrieved_docs
+                if doc.doc_type == "transformation" and doc.type
+            ]
             raise WorkflowValidationError(
                 "The planner could not build a workflow for this query. "
                 "The request may be outside the supported transformation scope.",
                 error_code="empty_workflow",
                 context={
-                    "supported_steps": _SUPPORTED_STEPS,
-                    "example_queries": _EXAMPLE_QUERIES,
+                    "relevant_steps": relevant or None,
+                    "supported_steps": _SUPPORTED_STEPS if not relevant else None,
+                    "example_queries": _EXAMPLE_QUERIES if not relevant else None,
                 },
             ) from exc
         # Missing column: planner referenced a column that doesn't exist.

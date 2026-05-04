@@ -165,8 +165,17 @@ export interface ApiError {
   context?: ApiErrorContext
 }
 
+export interface RelevantStepHint {
+  step_type: string
+  description: string
+  example: Record<string, unknown>
+}
+
 export interface ApiErrorContext {
   available_columns?: string[]
+  // RAG-retrieved operations relevant to this specific query (preferred over supported_steps).
+  relevant_steps?: RelevantStepHint[]
+  // Generic fallback when RAG returned nothing useful.
   supported_steps?: string[]
   example_queries?: string[]
   failed_step_index?: number
