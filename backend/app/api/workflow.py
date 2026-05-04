@@ -10,7 +10,7 @@ from app.models.workflow import (
     WorkflowRequest,
 )
 from app.services import dataset_store, executor as executor_service
-from app.services import result_explainer, validator as validator_service
+from app.services import result_explainer, run_store, validator as validator_service
 from app.services.profiler import get_column_names, profile
 
 logger = logging.getLogger(__name__)
@@ -68,11 +68,29 @@ async def confirm_workflow(request: ConfirmRequest) -> ConfirmResponse:
         dataset_summary=dataset_profile.model_dump(),
     )
 
+    # Persist the result CSV so the frontend can download it via GET /api/runs/{id}/download.
+    # execute_to_df re-runs the workflow to get a full (un-previewed) DataFrame.
+    run_id: str | None = None
+    try:
+        result_df = executor_service.execute_to_df(request.steps, content)
+        result_name = request.query[:40].strip().replace(" ", "_") + "_result.csv"
+        csv_bytes = result_df.to_csv(index=False).encode("utf-8")
+        run_id = await run_store.save(
+            dataset_id=request.dataset_id,
+            csv_bytes=csv_bytes,
+            filename=result_name,
+            planned_steps=planned_steps,
+            row_count=execution_result.row_count,
+        )
+    except Exception:
+        logger.warning("Failed to persist run artifact for dataset %s", request.dataset_id, exc_info=True)
+
     logger.info(
-        "Confirm complete: query=%r steps=%d rows=%d",
+        "Confirm complete: query=%r steps=%d rows=%d run_id=%s",
         request.query,
         len(request.steps),
         execution_result.row_count,
+        run_id,
     )
 
     return ConfirmResponse(
@@ -80,4 +98,5 @@ async def confirm_workflow(request: ConfirmRequest) -> ConfirmResponse:
         planned_steps=planned_steps,
         execution_result=execution_result,
         explanation=explanation,
+        run_id=run_id,
     )

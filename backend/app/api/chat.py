@@ -25,7 +25,7 @@ from app.core.exceptions import ExecutionError, PlannerError, WorkflowValidation
 from app.models.chat import ChatRequest, ChatResponse
 from app.models.workflow import ExecutionResult
 from app.services import dataset_store, executor as executor_service
-from app.services import rag_service, result_explainer, validator as validator_service
+from app.services import rag_service, result_explainer, run_store, validator as validator_service
 from app.services import workflow_planner
 from app.services.profiler import profile
 from app.services.validator import simulate_columns
@@ -147,6 +147,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
 
     explanation: str | None = None
     execution_result: ExecutionResult | None = None
+    run_id: str | None = None
 
     if (
         request.auto_confirm
@@ -160,11 +161,27 @@ async def chat(request: ChatRequest) -> ChatResponse:
             execution_result=execution_result,
             dataset_summary=rag_ctx.dataset_summary.model_dump(),
         )
+        # Persist result CSV so the frontend can offer a download link.
+        try:
+            result_df = executor_service.execute_to_df(steps, content)
+            result_name = request.query[:40].strip().replace(" ", "_") + "_result.csv"
+            csv_bytes = result_df.to_csv(index=False).encode("utf-8")
+            run_id = await run_store.save(
+                dataset_id=request.dataset_id,
+                csv_bytes=csv_bytes,
+                filename=result_name,
+                planned_steps=planned_steps,
+                row_count=execution_result.row_count,
+            )
+        except Exception:
+            logger.warning("Failed to persist run artifact for dataset %s", request.dataset_id, exc_info=True)
+
         logger.info(
-            "Chat auto-confirm complete: query=%r steps=%d rows=%d",
+            "Chat auto-confirm complete: query=%r steps=%d rows=%d run_id=%s",
             request.query,
             len(steps),
             execution_result.row_count,
+            run_id,
         )
     else:
         logger.info(
@@ -184,4 +201,5 @@ async def chat(request: ChatRequest) -> ChatResponse:
         rag_context=rag_ctx,
         explanation=explanation,
         execution_result=execution_result,
+        run_id=run_id,
     )

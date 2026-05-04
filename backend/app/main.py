@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from app.api import chat as chat_router
 from app.api import dataset as dataset_router
 from app.api import rag as rag_router
+from app.api import runs as runs_router
 from app.api import workflow as workflow_router
 from app.core import database
 from app.core.exceptions import DataCopilotError, datacoppilot_error_handler
@@ -31,6 +32,7 @@ app.include_router(dataset_router.router, prefix="/api")
 app.include_router(workflow_router.router, prefix="/api")
 app.include_router(rag_router.router, prefix="/api")
 app.include_router(chat_router.router, prefix="/api")
+app.include_router(runs_router.router, prefix="/api")
 
 
 @app.get("/health")
