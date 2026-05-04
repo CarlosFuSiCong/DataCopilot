@@ -83,8 +83,8 @@ export function ResultView({
       fetchDiffPage(0)
       return
     }
-    if (rows === result.preview) fetchPage(0)
-  }, [mode, showDiff]) // eslint-disable-line react-hooks/exhaustive-deps
+    fetchPage(0)
+  }, [mode, showDiff, fetchPage, fetchDiffPage])
 
   useEffect(() => {
     const el = headerToolbarRef.current
