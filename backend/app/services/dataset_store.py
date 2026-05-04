@@ -1,17 +1,22 @@
 """Persistent dataset store backed by local file storage and Postgres.
 
-save():  writes raw CSV to {storage_root}/datasets/{id}/raw.csv and inserts
-         metadata into the datasets table.
-load():  queries storage_uri from Postgres, then reads the file from local storage.
-exists(): checks Postgres for the dataset record.
+save():     writes raw CSV to {storage_root}/datasets/{id}/raw.csv and inserts
+            metadata into the datasets table.
+load():     queries storage_uri from Postgres, then reads the file from local storage.
+load_rows(): reads a paginated slice of rows from the raw CSV.
+exists():   checks Postgres for the dataset record.
 
 The service boundary is preserved: routers call this module; no router touches
 the database or file system directly.
 All three functions are async because they perform database I/O.
 """
+import io
 import json
 import logging
+import math
 from pathlib import Path
+
+import pandas as pd
 
 from app.core import database
 from app.core.config import settings
@@ -83,6 +88,26 @@ async def load(dataset_id: str) -> bytes:
         )
 
     return path.read_bytes()
+
+
+async def load_rows(
+    dataset_id: str,
+    offset: int,
+    limit: int,
+) -> tuple[list[dict], int]:
+    """Return a paginated slice of rows from the raw CSV plus the total row count."""
+    content = await load(dataset_id)
+    df = pd.read_csv(io.BytesIO(content))
+    total = len(df)
+    sliced = df.iloc[offset : offset + limit]
+    rows = [
+        {
+            k: (None if isinstance(v, float) and math.isnan(v) else v)
+            for k, v in row.items()
+        }
+        for row in sliced.to_dict(orient="records")
+    ]
+    return rows, total
 
 
 async def exists(dataset_id: str) -> bool:

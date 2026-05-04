@@ -224,6 +224,17 @@ def preview(steps: list[WorkflowStep], content: bytes) -> PreviewResponse:
 # Step handlers
 # ---------------------------------------------------------------------------
 
+def execute_to_df(steps: list[WorkflowStep], content: bytes) -> pd.DataFrame:
+    """Execute steps and return the full resulting DataFrame (no preview limit)."""
+    try:
+        df = pd.read_csv(io.BytesIO(content))
+    except Exception as exc:
+        raise ExecutionError(f"Failed to load dataset: {exc}") from exc
+    for idx, step in enumerate(steps):
+        df, _, _ = _apply_step(step, df, idx)
+    return df
+
+
 def _apply_step(
     step: WorkflowStep, df: pd.DataFrame, idx: int
 ) -> tuple[pd.DataFrame, str, _StepMetrics]:

@@ -6,9 +6,10 @@ import { ChevronIcon } from './ui/Icons'
 interface SidebarProps {
   dataset: UploadResponse | null
   onDatasetChange: (d: UploadResponse | null) => void
+  width: number
 }
 
-export function Sidebar({ dataset, onDatasetChange }: SidebarProps) {
+export function Sidebar({ dataset, onDatasetChange, width }: SidebarProps) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
@@ -32,7 +33,7 @@ export function Sidebar({ dataset, onDatasetChange }: SidebarProps) {
   return (
     <div
       className="flex flex-col shrink-0 overflow-y-auto"
-      style={{ width: 220, background: 'var(--color-surface)', borderRight: '1px solid var(--color-border)' }}
+      style={{ width, background: 'var(--color-surface)', borderRight: '1px solid var(--color-border)' }}
     >
       <div
         className="flex items-center gap-2 px-3 py-2 uppercase tracking-widest"

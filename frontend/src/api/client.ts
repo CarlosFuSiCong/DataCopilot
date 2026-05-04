@@ -1,4 +1,12 @@
-import type { UploadResponse, DatasetProfile, ChatRequest, ChatResponse, ConfirmRequest, ConfirmResponse, ApiError } from '../types'
+import type { UploadResponse, DatasetProfile, DatasetRowsResponse, ChatRequest, ChatResponse, ConfirmRequest, ConfirmResponse, ApiError } from '../types'
+
+export interface DiffRowsResponse {
+  rows: (Record<string, unknown> & { _kept: boolean })[]
+  total_original: number
+  total_result: number
+  offset: number
+  limit: number
+}
 
 const BASE = '/api'
 
@@ -41,4 +49,73 @@ export async function confirmWorkflow(req: ConfirmRequest): Promise<ConfirmRespo
     body: JSON.stringify(req),
   })
   return handleResponse<ConfirmResponse>(res)
+}
+
+export async function fetchDatasetRows(
+  datasetId: string,
+  offset: number,
+  limit: number,
+): Promise<DatasetRowsResponse> {
+  const params = new URLSearchParams({ offset: String(offset), limit: String(limit) })
+  const res = await fetch(`${BASE}/datasets/${datasetId}/rows?${params}`)
+  return handleResponse<DatasetRowsResponse>(res)
+}
+
+export function downloadDataset(datasetId: string): void {
+  const a = document.createElement('a')
+  a.href = `${BASE}/datasets/${datasetId}/download`
+  a.click()
+}
+
+export async function exportResultCsv(
+  datasetId: string,
+  steps: unknown[],
+  filename: string,
+): Promise<void> {
+  const res = await fetch(`${BASE}/datasets/${datasetId}/export`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ steps, filename }),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: res.statusText }))
+    throw new Error((body as { error?: string }).error ?? res.statusText)
+  }
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  const disposition = res.headers.get('Content-Disposition') ?? ''
+  const match = disposition.match(/filename="([^"]+)"/)
+  a.download = match ? match[1] : 'result.csv'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+export async function fetchResultRows(
+  datasetId: string,
+  steps: unknown[],
+  offset: number,
+  limit: number,
+): Promise<DatasetRowsResponse> {
+  const res = await fetch(`${BASE}/datasets/${datasetId}/execute-rows`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ steps, offset, limit }),
+  })
+  return handleResponse<DatasetRowsResponse>(res)
+}
+
+export async function fetchDiffRows(
+  datasetId: string,
+  steps: unknown[],
+  offset: number,
+  limit: number,
+): Promise<DiffRowsResponse> {
+  const res = await fetch(`${BASE}/datasets/${datasetId}/execute-diff`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ steps, offset, limit }),
+  })
+  return handleResponse<DiffRowsResponse>(res)
 }

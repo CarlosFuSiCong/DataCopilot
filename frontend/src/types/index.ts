@@ -25,6 +25,13 @@ export interface UploadResponse {
   preview: Record<string, unknown>[]
 }
 
+export interface DatasetRowsResponse {
+  rows: Record<string, unknown>[]
+  total_rows: number
+  offset: number
+  limit: number
+}
+
 // ─── Workflow ─────────────────────────────────────────────────────────────────
 
 export interface WorkflowStep {

@@ -1,30 +1,41 @@
 import { useState } from 'react'
-import type { UploadResponse } from './types'
-import type { NotebookCellData } from './types/notebook'
+import type { ExecutionResult, UploadResponse, WorkflowStep } from './types'
+import { useNotebook } from './hooks/useNotebook'
+import { useThreePanelSplit } from './hooks/useThreePanelSplit'
 import { ActivityBar } from './components/ActivityBar'
 import { Sidebar } from './components/Sidebar'
-import { Notebook } from './components/Notebook'
-
+import { DataPanel } from './components/DataPanel'
+import { ResizeDivider } from './components/ResizeDivider'
+import { ChatPanel } from './components/ChatPanel'
 
 export default function App() {
   const [dataset, setDataset] = useState<UploadResponse | null>(null)
-  const [cells, setCells] = useState<NotebookCellData[]>([])
+  const { cells, isLoading, handleSubmit, handleConfirm } = useNotebook(dataset)
+  const {
+    containerRef,
+    sidebarWidth,
+    chatWidth,
+    onLeftDividerMouseDown,
+    onRightDividerMouseDown,
+  } = useThreePanelSplit({
+    defaultSidebar: 220,
+    defaultChat: 380,
+    minSidebar: 120,
+    maxSidebar: 400,
+    minData: 260,
+    minChat: 240,
+    maxChat: 640,
+  })
 
-  function appendCell(cell: NotebookCellData) {
-    setCells(prev => {
-      // When a result arrives (ok/error), replace the matching loading cell by id
-      if (cell.status !== 'loading') {
-        const idx = [...prev].reverse().findIndex(c => c.id === cell.id)
-        if (idx !== -1) {
-          const realIdx = prev.length - 1 - idx
-          const next = [...prev]
-          next[realIdx] = cell
-          return next
-        }
-      }
-      return [...prev, cell]
-    })
-  }
+  // Last confirmed cell — drives the result tab in DataPanel
+  const lastConfirmedCell = [...cells].reverse().find(c => c.status === 'ok')
+  const lastConfirmedSteps: WorkflowStep[] | null =
+    lastConfirmedCell?.result?.planned_steps ?? null
+  // execution_result lives in confirmResult (manual confirm) or result (auto-confirm)
+  const lastExecutionResult: ExecutionResult | null =
+    lastConfirmedCell?.confirmResult?.execution_result
+    ?? lastConfirmedCell?.result?.execution_result
+    ?? null
 
   return (
     <div
@@ -32,8 +43,26 @@ export default function App() {
       style={{ background: 'var(--color-bg)', fontFamily: 'var(--font-ui)' }}
     >
       <ActivityBar />
-      <Sidebar dataset={dataset} onDatasetChange={setDataset} />
-      <Notebook cells={cells} onAppendCell={appendCell} dataset={dataset} />
+
+      {/* Three-panel area: sidebar | DataPanel (flex-1) | ChatPanel */}
+      <div ref={containerRef} className="flex flex-1 overflow-hidden">
+        <Sidebar dataset={dataset} onDatasetChange={setDataset} width={sidebarWidth} />
+        <ResizeDivider onMouseDown={onLeftDividerMouseDown} />
+        <DataPanel
+          dataset={dataset}
+          lastExecutionResult={lastExecutionResult}
+          lastConfirmedSteps={lastConfirmedSteps}
+        />
+        <ResizeDivider onMouseDown={onRightDividerMouseDown} />
+        <ChatPanel
+          dataset={dataset}
+          cells={cells}
+          isLoading={isLoading}
+          onSubmit={handleSubmit}
+          onConfirm={handleConfirm}
+          width={chatWidth}
+        />
+      </div>
     </div>
   )
 }
