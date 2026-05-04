@@ -10,27 +10,52 @@ complete result in one round-trip.
 If auto_confirm=False, or if the preview detects warnings/errors, only the
 preview result is returned so the frontend can surface issues and ask the
 user to confirm before calling POST /api/workflows/confirm.
+
+Error states returned as 400 with error_code + context:
+  - rag_no_hits: RAG retrieved no matching docs for the query
+  - empty_workflow: planner returned no steps (query out of scope)
+  - missing_column: workflow references a column not in the dataset
+  - execution_error: a step failed at pandas runtime
 """
 import logging
 
 from fastapi import APIRouter
 
+from app.core.exceptions import ExecutionError, PlannerError, WorkflowValidationError
 from app.models.chat import ChatRequest, ChatResponse
 from app.models.workflow import ExecutionResult
 from app.services import dataset_store, executor as executor_service
 from app.services import rag_service, result_explainer, validator as validator_service
 from app.services import workflow_planner
 from app.services.profiler import profile
+from app.services.validator import simulate_columns
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/chat", tags=["chat"])
+
+# Shown when the planner returns no steps for the query.
+_SUPPORTED_STEPS = [
+    "filter_rows", "select_columns", "group_by", "sort_values",
+    "rename_columns", "remove_missing_values", "fill_missing_values",
+    "drop_columns", "derive_column", "date_extract", "limit_rows",
+    "generate_summary",
+]
+_EXAMPLE_QUERIES = [
+    "Filter rows where amount > 1000",
+    "Group by region and sum the amount",
+    "Show the top 10 rows sorted by quantity descending",
+    "Remove rows with missing values",
+    "Extract the month from the order_date column",
+    "Add a new column total = amount * quantity",
+]
 
 
 @router.post("", response_model=ChatResponse)
 async def chat(request: ChatRequest) -> ChatResponse:
     content = await dataset_store.load(request.dataset_id)
     dataset_profile = profile(content, filename="<cached>")
+    column_names = [col.name for col in dataset_profile.columns]
 
     rag_ctx = await rag_service.build_context(
         query=request.query,
@@ -38,13 +63,87 @@ async def chat(request: ChatRequest) -> ChatResponse:
         top_k=request.rag_top_k,
     )
 
-    steps = workflow_planner.plan(query=request.query, ctx=rag_ctx)
+    # RAG no hits: surface retrieval info so the user can rephrase.
+    if not rag_ctx.retrieved_docs:
+        raise WorkflowValidationError(
+            "No matching workflow documentation found for your query. "
+            "Try rephrasing using keywords like 'filter', 'group by', 'sort', or 'select'.",
+            error_code="rag_no_hits",
+            context={
+                "retrieval_method": rag_ctx.debug.method,
+                "query": request.query,
+                "suggestion": (
+                    "Try describing the operation more explicitly, e.g. "
+                    "'filter rows where status = completed'."
+                ),
+            },
+        )
+
+    try:
+        new_steps = workflow_planner.plan(query=request.query, ctx=rag_ctx)
+    except PlannerError:
+        raise
+
+    # Chain: prepend steps from the previous confirmed workflow so the new
+    # query operates on the result of prior transformations, not the raw CSV.
+    steps = list(request.previous_steps) + new_steps
     planned_steps = [step.model_dump() for step in steps]
 
-    column_names = [col.name for col in dataset_profile.columns]
-    validator_service.validate(steps, column_names)
+    try:
+        validator_service.validate(steps, column_names)
+    except WorkflowValidationError as exc:
+        msg = str(exc)
+        # Empty workflow: planner produced no steps.
+        if "at least one step" in msg:
+            raise WorkflowValidationError(
+                "The planner could not build a workflow for this query. "
+                "The request may be outside the supported transformation scope.",
+                error_code="empty_workflow",
+                context={
+                    "supported_steps": _SUPPORTED_STEPS,
+                    "example_queries": _EXAMPLE_QUERIES,
+                },
+            ) from exc
+        # Missing column: planner referenced a column that doesn't exist.
+        # For chained workflows, show the columns available *after* previous
+        # steps ran, not the original dataset columns.
+        if "does not exist in the dataset" in msg or "not found" in msg.lower():
+            intermediate_cols = simulate_columns(request.previous_steps, column_names)
+            raise WorkflowValidationError(
+                msg,
+                error_code="missing_column",
+                context={"available_columns": intermediate_cols},
+            ) from exc
+        raise
 
     preview_result = executor_service.preview(steps, content)
+
+    # If preview captured a step-level execution error, surface it with context.
+    if preview_result.blocked_at_step is not None and preview_result.has_errors:
+        blocked = preview_result.step_results[preview_result.blocked_at_step]
+        issue_msg = blocked.issues[0].message if blocked.issues else blocked.message
+        # Columns available just before the failing step — accounts for any
+        # structural changes made by preceding steps (select, drop, rename, etc.).
+        cols_at_failure = simulate_columns(steps[:preview_result.blocked_at_step], column_names)
+        if "not found" in issue_msg.lower():
+            raise ExecutionError(
+                issue_msg,
+                error_code="missing_column",
+                context={"available_columns": cols_at_failure},
+            )
+        raise ExecutionError(
+            issue_msg,
+            error_code="execution_error",
+            context={
+                "failed_step_index": preview_result.blocked_at_step,
+                "failed_step_type": blocked.step_type,
+                "available_columns": cols_at_failure,
+                "suggestion": (
+                    "Check that the column names and parameter values match your dataset. "
+                    "Use 'select columns' or 'show schema' to inspect available columns."
+                ),
+            },
+        )
 
     explanation: str | None = None
     execution_result: ExecutionResult | None = None

@@ -1,3 +1,4 @@
+import type { ApiErrorContext } from '../types'
 import type { NotebookCellData } from '../types/notebook'
 import { OutputBlock } from './ui/OutputBlock'
 import { Spinner } from './ui/Icons'
@@ -9,6 +10,232 @@ import { RAGPanel } from './RAGPanel'
 interface NotebookCellProps {
   cell: NotebookCellData
   onConfirm: (cell: NotebookCellData) => void
+}
+
+// ---------------------------------------------------------------------------
+// Structured error panels per error_code
+// ---------------------------------------------------------------------------
+
+function ErrorMissingColumn({ message, context }: { message: string; context?: ApiErrorContext }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div className="flex items-start gap-2">
+        <span style={{ color: 'var(--color-red)', fontSize: '1rem', lineHeight: 1 }}>✗</span>
+        <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: 'var(--color-red)', lineHeight: 1.5 }}>
+          {message}
+        </p>
+      </div>
+      {context?.available_columns && context.available_columns.length > 0 && (
+        <div style={{
+          background: 'var(--color-surface-1)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 6,
+          padding: '8px 12px',
+        }}>
+          <p style={{ margin: '0 0 6px', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+            Available columns:
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {context.available_columns.map(col => (
+              <span key={col} style={{
+                background: 'var(--color-surface-2)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 4,
+                padding: '2px 8px',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.75rem',
+                color: 'var(--color-accent)',
+              }}>{col}</span>
+            ))}
+          </div>
+          <p style={{ margin: '8px 0 0', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+            Rewrite your query using one of the columns listed above.
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ErrorEmptyWorkflow({ message, context }: { message: string; context?: ApiErrorContext }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div className="flex items-start gap-2">
+        <span style={{ color: 'var(--color-yellow)', fontSize: '1rem', lineHeight: 1 }}>⚠</span>
+        <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: 'var(--color-yellow)', lineHeight: 1.5 }}>
+          {message}
+        </p>
+      </div>
+      {context?.example_queries && context.example_queries.length > 0 && (
+        <div style={{
+          background: 'var(--color-surface-1)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 6,
+          padding: '8px 12px',
+        }}>
+          <p style={{ margin: '0 0 6px', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+            Example queries you can try:
+          </p>
+          <ul style={{ margin: 0, paddingLeft: 16 }}>
+            {context.example_queries.map(q => (
+              <li key={q} style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.8rem',
+                color: 'var(--color-text-soft)',
+                lineHeight: 1.8,
+              }}>{q}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {context?.supported_steps && context.supported_steps.length > 0 && (
+        <div style={{
+          background: 'var(--color-surface-1)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 6,
+          padding: '8px 12px',
+        }}>
+          <p style={{ margin: '0 0 6px', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+            Supported operations:
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {context.supported_steps.map(s => (
+              <span key={s} style={{
+                background: 'var(--color-surface-2)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 4,
+                padding: '2px 8px',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.72rem',
+                color: 'var(--color-text-muted)',
+              }}>{s}</span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ErrorExecutionStep({ message, context }: { message: string; context?: ApiErrorContext }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div className="flex items-start gap-2">
+        <span style={{ color: 'var(--color-red)', fontSize: '1rem', lineHeight: 1 }}>✗</span>
+        <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: 'var(--color-red)', lineHeight: 1.5 }}>
+          {message}
+        </p>
+      </div>
+      {(context?.failed_step_type != null || context?.suggestion) && (
+        <div style={{
+          background: 'var(--color-surface-1)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 6,
+          padding: '8px 12px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 4,
+        }}>
+          {context?.failed_step_type != null && (
+            <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>
+              Failed at step {(context.failed_step_index ?? 0) + 1}: <span style={{ color: 'var(--color-accent)' }}>{context.failed_step_type}</span>
+            </p>
+          )}
+          {context?.suggestion && (
+            <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--color-text-soft)', lineHeight: 1.5 }}>
+              {context.suggestion}
+            </p>
+          )}
+        </div>
+      )}
+      {context?.available_columns && context.available_columns.length > 0 && (
+        <div style={{
+          background: 'var(--color-surface-1)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 6,
+          padding: '8px 12px',
+        }}>
+          <p style={{ margin: '0 0 6px', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+            Columns available at the failing step:
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {context.available_columns.map(col => (
+              <span key={col} style={{
+                background: 'var(--color-surface-2)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 4,
+                padding: '2px 8px',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.75rem',
+                color: 'var(--color-accent)',
+              }}>{col}</span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ErrorRagNoHits({ message, context }: { message: string; context?: ApiErrorContext }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div className="flex items-start gap-2">
+        <span style={{ color: 'var(--color-yellow)', fontSize: '1rem', lineHeight: 1 }}>⚠</span>
+        <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: 'var(--color-yellow)', lineHeight: 1.5 }}>
+          {message}
+        </p>
+      </div>
+      <div style={{
+        background: 'var(--color-surface-1)',
+        border: '1px solid var(--color-border)',
+        borderRadius: 6,
+        padding: '8px 12px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 4,
+      }}>
+        {context?.retrieval_method && (
+          <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+            Retrieval method: <span style={{ color: 'var(--color-accent)' }}>{context.retrieval_method}</span>
+          </p>
+        )}
+        {context?.suggestion && (
+          <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--color-text-soft)', lineHeight: 1.5 }}>
+            {context.suggestion}
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ErrorGeneric({ message }: { message: string }) {
+  return (
+    <div className="flex items-start gap-2">
+      <span style={{ color: 'var(--color-red)', fontSize: '1rem', lineHeight: 1 }}>✗</span>
+      <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: 'var(--color-red)', lineHeight: 1.5 }}>
+        {message}
+      </p>
+    </div>
+  )
+}
+
+function ErrorContent({ cell }: { cell: NotebookCellData }) {
+  const msg = cell.error ?? 'Unknown error'
+  const ctx = cell.errorContext
+  switch (cell.errorCode) {
+    case 'missing_column':
+      return <ErrorMissingColumn message={msg} context={ctx} />
+    case 'empty_workflow':
+      return <ErrorEmptyWorkflow message={msg} context={ctx} />
+    case 'execution_error':
+      return <ErrorExecutionStep message={msg} context={ctx} />
+    case 'rag_no_hits':
+      return <ErrorRagNoHits message={msg} context={ctx} />
+    default:
+      return <ErrorGeneric message={msg} />
+  }
 }
 
 export function NotebookCell({ cell, onConfirm }: NotebookCellProps) {
@@ -88,13 +315,11 @@ export function NotebookCell({ cell, onConfirm }: NotebookCellProps) {
 
         {/* Error state */}
         {cell.status === 'error' && (
-          <OutputBlock label="error" accent="var(--color-red)">
-            <div className="flex items-start gap-2">
-              <span style={{ color: 'var(--color-red)', fontSize: '1rem', lineHeight: 1 }}>✗</span>
-              <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: 'var(--color-red)', lineHeight: 1.5 }}>
-                {cell.error}
-              </p>
-            </div>
+          <OutputBlock
+            label={cell.errorCode ?? 'error'}
+            accent={cell.errorCode === 'empty_workflow' || cell.errorCode === 'rag_no_hits' ? 'var(--color-yellow)' : 'var(--color-red)'}
+          >
+            <ErrorContent cell={cell} />
           </OutputBlock>
         )}
 

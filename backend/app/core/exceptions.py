@@ -8,9 +8,18 @@ logger = logging.getLogger(__name__)
 class DataCopilotError(Exception):
     """Base error for all application-level failures."""
 
-    def __init__(self, message: str) -> None:
+    def __init__(
+        self,
+        message: str,
+        error_code: str | None = None,
+        context: dict | None = None,
+    ) -> None:
         super().__init__(message)
         self.message = message
+        # Machine-readable error code for frontend to render specific UI.
+        self.error_code = error_code
+        # Optional structured context (e.g. available_columns, example_queries).
+        self.context: dict = context or {}
 
 
 class InvalidDatasetError(DataCopilotError):
@@ -41,4 +50,9 @@ async def datacoppilot_error_handler(
     request: Request, exc: DataCopilotError
 ) -> JSONResponse:
     logger.warning("Application error on %s: %s", request.url.path, exc.message)
-    return JSONResponse(status_code=400, content={"error": exc.message})
+    payload: dict = {"error": exc.message}
+    if exc.error_code:
+        payload["error_code"] = exc.error_code
+    if exc.context:
+        payload["context"] = exc.context
+    return JSONResponse(status_code=400, content=payload)

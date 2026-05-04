@@ -166,6 +166,8 @@ class StepResult(BaseModel):
     output_row_count: int
     input_column_count: int
     output_column_count: int
+    # Absolute number of rows removed or added by this step.
+    affected_rows: int = 0
     match_rate: float | None = None
     affected_rate: float | None = None
     preview: list[dict] = Field(default_factory=list)

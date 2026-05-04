@@ -2,7 +2,7 @@
 from pydantic import BaseModel
 
 from app.models.rag import RAGContext
-from app.models.workflow import ExecutionResult, StepResult
+from app.models.workflow import ExecutionResult, StepResult, WorkflowStep
 
 
 class ChatRequest(BaseModel):
@@ -13,6 +13,10 @@ class ChatRequest(BaseModel):
     # automatically runs execute() + explain() and returns the full result.
     # When False, always returns preview-only so the UI can show the Confirm button.
     auto_confirm: bool = True
+    # Steps from the previous confirmed workflow. When non-empty, the planner's
+    # new steps are appended after these so that the second query operates on the
+    # result of the first, enabling multi-turn chaining within one dataset session.
+    previous_steps: list[WorkflowStep] = []
 
 
 class ChatResponse(BaseModel):

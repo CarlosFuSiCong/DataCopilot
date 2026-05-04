@@ -9,10 +9,13 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from app.core import database
-from app.core.exceptions import InvalidDatasetError
+from app.core.exceptions import DatasetNotFoundError, ExecutionError, InvalidDatasetError
 from app.models.dataset import DatasetRowsResponse, DiffRowsResponse, UploadResponse
 from app.models.workflow import WorkflowRequest
 from app.services import dataset_store, executor, profiler as profiler_service
+
+# 50 MB limit for export to protect against very large results in the browser.
+_EXPORT_SIZE_LIMIT_BYTES = 50 * 1024 * 1024
 
 logger = logging.getLogger(__name__)
 
@@ -118,8 +121,23 @@ async def export_result(dataset_id: str, body: ExportRequest) -> Response:
     """Re-execute workflow steps on the full dataset and return complete CSV."""
     content = await dataset_store.load(dataset_id)
     request = WorkflowRequest(dataset_id=dataset_id, steps=body.steps)
-    df = executor.execute_to_df(request.steps, content)
+    try:
+        df = executor.execute_to_df(request.steps, content)
+    except Exception as exc:
+        raise ExecutionError(
+            f"Export failed: could not execute workflow steps. {exc}",
+            error_code="execution_error",
+            context={"suggestion": "Check that all step parameters are valid before exporting."},
+        ) from exc
     csv_bytes = df.to_csv(index=False).encode("utf-8")
+    if len(csv_bytes) > _EXPORT_SIZE_LIMIT_BYTES:
+        raise InvalidDatasetError(
+            f"Export result is too large ({len(csv_bytes) // (1024 * 1024)} MB). "
+            f"Limit is {_EXPORT_SIZE_LIMIT_BYTES // (1024 * 1024)} MB. "
+            "Apply additional filters or column selection to reduce the result size.",
+            error_code="export_too_large",
+            context={"size_bytes": len(csv_bytes), "limit_bytes": _EXPORT_SIZE_LIMIT_BYTES},
+        )
     safe_name = body.filename.rsplit(".", 1)[0] + "_result.csv"
     return Response(
         content=csv_bytes,
@@ -130,7 +148,20 @@ async def export_result(dataset_id: str, body: ExportRequest) -> Response:
 
 @router.get("/{dataset_id}/download")
 async def download_dataset(dataset_id: str) -> Response:
-    content = await dataset_store.load(dataset_id)
+    """Download the original raw CSV for the given dataset."""
+    try:
+        content = await dataset_store.load(dataset_id)
+    except DatasetNotFoundError as exc:
+        raise DatasetNotFoundError(
+            str(exc),
+            error_code="download_not_found",
+            context={
+                "suggestion": (
+                    "The file may have been removed from storage. "
+                    "Try re-uploading the CSV."
+                )
+            },
+        ) from exc
     async with database.pool.acquire() as conn:
         row = await conn.fetchrow(
             "SELECT filename FROM datasets WHERE id = $1", dataset_id

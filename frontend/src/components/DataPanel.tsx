@@ -138,6 +138,7 @@ export function DataPanel({ dataset, lastExecutionResult, lastConfirmedSteps }: 
           {dataset && viewMode === 'original' && <DataPreview dataset={dataset} />}
           {dataset && viewMode === 'result' && lastExecutionResult && lastConfirmedSteps && (
             <ResultView
+              key={`${lastExecutionResult.row_count}-${lastExecutionResult.columns.join(',')}`}
               result={lastExecutionResult}
               dataset={dataset}
               datasetId={dataset.dataset_id}

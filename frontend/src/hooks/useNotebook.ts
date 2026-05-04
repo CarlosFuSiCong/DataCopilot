@@ -1,10 +1,27 @@
 import { useState } from 'react'
 import type { UploadResponse } from '../types'
 import type { NotebookCellData } from '../types/notebook'
-import { sendChat, confirmWorkflow } from '../api/client'
+import { ApiCallError, sendChat, confirmWorkflow } from '../api/client'
 
 let _seq = 0
 function nextId() { return `cell-${++_seq}` }
+
+function errorCell(base: Pick<NotebookCellData, 'id' | 'query'>, err: unknown): NotebookCellData {
+  if (err instanceof ApiCallError) {
+    return {
+      ...base,
+      status: 'error',
+      error: err.message,
+      errorCode: err.errorCode,
+      errorContext: err.errorContext,
+    }
+  }
+  return {
+    ...base,
+    status: 'error',
+    error: err instanceof Error ? err.message : 'Unknown error',
+  }
+}
 
 export function useNotebook(dataset: UploadResponse | null) {
   const [cells, setCells] = useState<NotebookCellData[]>([])
@@ -30,15 +47,27 @@ export function useNotebook(dataset: UploadResponse | null) {
     const id = nextId()
     appendCell({ id, query, status: 'loading' })
 
+    // Chain from the last successfully executed cell so follow-up queries
+    // operate on the prior result rather than the original dataset.
+    const lastOkCell = [...cells].reverse().find(c => c.status === 'ok')
+    const previousSteps =
+      lastOkCell?.confirmResult?.planned_steps ??
+      lastOkCell?.result?.planned_steps ??
+      []
+
     try {
-      const result = await sendChat({ dataset_id: dataset.dataset_id, query })
+      const result = await sendChat({
+        dataset_id: dataset.dataset_id,
+        query,
+        previous_steps: previousSteps.length > 0 ? previousSteps : undefined,
+      })
       if (result.execution_result !== null) {
         appendCell({ id, query, status: 'ok', result })
       } else {
         appendCell({ id, query, status: 'preview', result })
       }
     } catch (err) {
-      appendCell({ id, query, status: 'error', error: err instanceof Error ? err.message : 'Unknown error' })
+      appendCell(errorCell({ id, query }, err))
     }
   }
 
@@ -55,11 +84,7 @@ export function useNotebook(dataset: UploadResponse | null) {
       })
       appendCell({ ...cell, status: 'ok', confirmResult })
     } catch (err) {
-      appendCell({
-        ...cell,
-        status: 'error',
-        error: err instanceof Error ? err.message : 'Confirm failed',
-      })
+      appendCell(errorCell({ id: cell.id, query: cell.query }, err))
     }
   }
 

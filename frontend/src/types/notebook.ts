@@ -1,4 +1,4 @@
-import type { ChatResponse, ConfirmResponse } from './index'
+import type { ApiErrorContext, ChatResponse, ConfirmResponse } from './index'
 
 export interface NotebookCellData {
   id: string
@@ -7,4 +7,7 @@ export interface NotebookCellData {
   result?: ChatResponse
   confirmResult?: ConfirmResponse
   error?: string
+  // Machine-readable error code from the backend for structured error UI.
+  errorCode?: string
+  errorContext?: ApiErrorContext
 }
