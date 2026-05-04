@@ -21,7 +21,7 @@ import logging
 
 from fastapi import APIRouter
 
-from app.core.exceptions import ExecutionError, PlannerError, WorkflowValidationError
+from app.core.exceptions import ClarificationNeeded, ExecutionError, PlannerError, WorkflowValidationError
 from app.models.chat import ChatRequest, ChatResponse
 from app.models.workflow import ExecutionResult
 from app.services import dataset_store, executor as executor_service
@@ -57,8 +57,16 @@ async def chat(request: ChatRequest) -> ChatResponse:
     dataset_profile = profile(content, filename="<cached>")
     column_names = [col.name for col in dataset_profile.columns]
 
+    # When the user answers a clarification question, merge the answer into the
+    # query so the planner has full context.
+    planner_query = request.query
+    if request.clarification_context:
+        planner_query = (
+            f"{request.query}\nUser clarification: {request.clarification_context}"
+        )
+
     rag_ctx = await rag_service.build_context(
-        query=request.query,
+        query=planner_query,
         dataset_profile=dataset_profile,
         top_k=request.rag_top_k,
     )
@@ -80,7 +88,21 @@ async def chat(request: ChatRequest) -> ChatResponse:
         )
 
     try:
-        new_steps = workflow_planner.plan(query=request.query, ctx=rag_ctx)
+        new_steps = workflow_planner.plan(query=planner_query, ctx=rag_ctx)
+    except ClarificationNeeded as exc:
+        # Planner decided it needs more information — return 200 with a
+        # clarification question; the frontend will ask the user and resend.
+        logger.info("Clarification needed for query=%r: %s", request.query, exc.question)
+        return ChatResponse(
+            query=request.query,
+            planned_steps=[],
+            step_results=[],
+            has_warnings=False,
+            has_errors=False,
+            rag_context=rag_ctx,
+            needs_clarification=True,
+            clarification_question=exc.question,
+        )
     except PlannerError as exc:
         # Planner returned empty steps or unparseable output — surface as
         # empty_workflow so the frontend shows the structured error panel with
@@ -213,4 +235,5 @@ async def chat(request: ChatRequest) -> ChatResponse:
         explanation=explanation,
         execution_result=execution_result,
         run_id=run_id,
+        needs_clarification=False,
     )

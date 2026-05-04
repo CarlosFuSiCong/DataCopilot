@@ -17,7 +17,7 @@ import logging
 from openai import OpenAI
 
 from app.core.config import settings
-from app.core.exceptions import PlannerError
+from app.core.exceptions import ClarificationNeeded, PlannerError
 from app.models.rag import RAGContext
 from app.models.workflow import WorkflowRequest, WorkflowStep
 
@@ -41,6 +41,18 @@ STRICT FIELD CONSTRAINTS (must be followed exactly, no synonyms or alternatives)
   Do NOT use: "equals", "eq", "greater_than", "gt", "lt", "gte", "lte", or any word form.
 - group_by "agg": MUST be one of: "sum", "mean", "count", "min", "max"
 - sort_values "ascending": MUST be a boolean — true (ascending) or false (descending). Do NOT use "order", "asc", "desc", or any string.
+
+CLARIFICATION (use sparingly — only when genuinely required):
+- If a critical parameter is missing AND cannot be reasonably inferred, you may request clarification instead of generating steps.
+- To request clarification output EXACTLY: {{"needs_clarification": true, "question": "Your concise question here"}}
+- Only request clarification when ALL of these are true:
+  1. A specific column, numeric threshold, or operation target is required but not mentioned.
+  2. It cannot be inferred from the request or dataset profile.
+  3. Different answers would lead to materially different workflows.
+- Do NOT request clarification for minor phrasing ambiguities or when a reasonable default exists.
+- When asking, reference only column names from the dataset profile. Be concise and specific.
+- Examples that warrant clarification: "group the data" (missing: group-by column and aggregation target), "filter the big orders" (missing: threshold value and column).
+- Examples that do NOT warrant clarification: "show top rows" (use limit_rows with default 10), "remove bad data" (use remove_missing_values).
 
 Supported step types:
 {supported_transformations}
@@ -142,16 +154,26 @@ def _build_messages(query: str, ctx: RAGContext) -> list[dict]:
 
 
 def _parse_steps(raw_json: str) -> list[WorkflowStep]:
-    """Parse LLM output into a list of WorkflowStep, raising PlannerError on failure."""
+    """Parse LLM output into a list of WorkflowStep.
+
+    Raises ClarificationNeeded when the LLM requests more information.
+    Raises PlannerError when the output is invalid or empty.
+    """
     try:
         data = json.loads(raw_json)
     except json.JSONDecodeError as exc:
         raise PlannerError(f"LLM returned invalid JSON: {exc}") from exc
 
-    if not isinstance(data, dict) or "steps" not in data:
-        raise PlannerError(
-            "LLM response must be a JSON object with a 'steps' key."
-        )
+    if not isinstance(data, dict):
+        raise PlannerError("LLM response must be a JSON object.")
+
+    # Clarification path: LLM decided it needs more information.
+    if data.get("needs_clarification"):
+        question = data.get("question", "Could you provide more details about your request?")
+        raise ClarificationNeeded(question)
+
+    if "steps" not in data:
+        raise PlannerError("LLM response must be a JSON object with a 'steps' key.")
 
     steps_raw = data["steps"]
     if not isinstance(steps_raw, list):
