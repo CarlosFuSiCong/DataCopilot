@@ -6,7 +6,6 @@ import { NotebookIcon, Spinner } from './ui/Icons'
 import { Gutter } from './ui/OutputBlock'
 import { NotebookCell } from './NotebookCell'
 import { InputCell } from './InputCell'
-import { DataPreview } from './DataPreview'
 
 let _seq = 0
 function nextId() { return `cell-${++_seq}` }
@@ -109,7 +108,13 @@ export function Notebook({ cells, onAppendCell, dataset }: NotebookProps) {
       <div ref={scrollRef} className="flex-1 overflow-y-auto" style={{ background: 'var(--color-bg)' }}>
         {!dataset && displayCells.length === 0 && !isLoading && <EmptyNotebook />}
 
-        {dataset && displayCells.length === 0 && !isLoading && <DataPreview dataset={dataset} />}
+        {dataset && displayCells.length === 0 && !isLoading && (
+          <div className="flex flex-col items-center justify-center gap-2 py-20" style={{ color: 'var(--color-text-muted)' }}>
+            <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: '0.82rem', textAlign: 'center', lineHeight: 1.8 }}>
+              Dataset loaded. Type a query below<br />to start the pipeline.
+            </p>
+          </div>
+        )}
 
         {displayCells.length > 0 && (
           <div style={{ padding: '16px 0' }}>
@@ -148,7 +153,6 @@ function EmptyNotebook() {
     </div>
   )
 }
-
 // ─── Loading cell ─────────────────────────────────────────────────────────────
 
 function LoadingCell({ index }: { index: number }) {
