@@ -9,13 +9,14 @@ interface ChatPanelProps {
   isLoading: boolean
   onSubmit: (query: string) => void
   onConfirm: (cell: NotebookCellData) => void
+  width: number
 }
 
-export function ChatPanel({ dataset, cells, isLoading, onSubmit, onConfirm }: ChatPanelProps) {
+export function ChatPanel({ dataset, cells, isLoading, onSubmit, onConfirm, width }: ChatPanelProps) {
   const displayCells = cells.filter(c => c.status !== 'loading')
 
   return (
-    <div className="flex flex-col flex-1 overflow-hidden">
+    <div className="flex flex-col shrink-0 overflow-hidden" style={{ width }}>
       {/* Tab bar */}
       <div
         className="flex items-center shrink-0"

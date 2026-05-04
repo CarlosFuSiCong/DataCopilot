@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { UploadResponse } from './types'
 import { useNotebook } from './hooks/useNotebook'
-import { useResizableSplit } from './hooks/useResizableSplit'
+import { useThreePanelSplit } from './hooks/useThreePanelSplit'
 import { ActivityBar } from './components/ActivityBar'
 import { Sidebar } from './components/Sidebar'
 import { DataPanel } from './components/DataPanel'
@@ -11,12 +11,21 @@ import { ChatPanel } from './components/ChatPanel'
 export default function App() {
   const [dataset, setDataset] = useState<UploadResponse | null>(null)
   const { cells, isLoading, handleSubmit, handleConfirm } = useNotebook(dataset)
-
-  // Sidebar ↔ main area split
-  const sidebarSplit = useResizableSplit({ defaultWidth: 220, minLeft: 140, minRight: 580 })
-
-  // DataPanel ↔ ChatPanel split (within main area)
-  const dataSplit = useResizableSplit({ defaultWidth: 620, minLeft: 300, minRight: 280 })
+  const {
+    containerRef,
+    sidebarWidth,
+    chatWidth,
+    onLeftDividerMouseDown,
+    onRightDividerMouseDown,
+  } = useThreePanelSplit({
+    defaultSidebar: 220,
+    defaultChat: 380,
+    minSidebar: 120,
+    maxSidebar: 400,
+    minData: 260,
+    minChat: 240,
+    maxChat: 640,
+  })
 
   return (
     <div
@@ -25,27 +34,20 @@ export default function App() {
     >
       <ActivityBar />
 
-      {/* Sidebar + main, sharing the sidebar resize container */}
-      <div ref={sidebarSplit.containerRef} className="flex flex-1 overflow-hidden">
-        <Sidebar
+      {/* Three-panel area: sidebar | DataPanel (flex-1) | ChatPanel */}
+      <div ref={containerRef} className="flex flex-1 overflow-hidden">
+        <Sidebar dataset={dataset} onDatasetChange={setDataset} width={sidebarWidth} />
+        <ResizeDivider onMouseDown={onLeftDividerMouseDown} />
+        <DataPanel dataset={dataset} />
+        <ResizeDivider onMouseDown={onRightDividerMouseDown} />
+        <ChatPanel
           dataset={dataset}
-          onDatasetChange={setDataset}
-          width={sidebarSplit.leftWidth}
+          cells={cells}
+          isLoading={isLoading}
+          onSubmit={handleSubmit}
+          onConfirm={handleConfirm}
+          width={chatWidth}
         />
-        <ResizeDivider onMouseDown={sidebarSplit.onDividerMouseDown} />
-
-        {/* DataPanel + ChatPanel, sharing the data resize container */}
-        <div ref={dataSplit.containerRef} className="flex flex-1 overflow-hidden">
-          <DataPanel dataset={dataset} width={dataSplit.leftWidth} />
-          <ResizeDivider onMouseDown={dataSplit.onDividerMouseDown} />
-          <ChatPanel
-            dataset={dataset}
-            cells={cells}
-            isLoading={isLoading}
-            onSubmit={handleSubmit}
-            onConfirm={handleConfirm}
-          />
-        </div>
       </div>
     </div>
   )

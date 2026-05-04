@@ -4,17 +4,15 @@ import { NotebookIcon } from './ui/Icons'
 
 interface DataPanelProps {
   dataset: UploadResponse | null
-  width: number
 }
 
-export function DataPanel({ dataset, width }: DataPanelProps) {
+export function DataPanel({ dataset }: DataPanelProps) {
   const tabLabel = dataset?.filename ?? 'data.csv'
 
   return (
     <div
-      className="flex flex-col overflow-hidden shrink-0"
+      className="flex flex-col flex-1 overflow-hidden"
       style={{
-        width,
         borderRight: '1px solid var(--color-border)',
         background: 'var(--color-bg)',
       }}
