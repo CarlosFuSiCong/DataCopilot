@@ -1,6 +1,5 @@
 import type { UploadResponse } from '../types'
 import type { NotebookCellData } from '../types/notebook'
-import { NotebookIcon } from './ui/Icons'
 import { Notebook } from './Notebook'
 
 interface ChatPanelProps {
@@ -13,8 +12,6 @@ interface ChatPanelProps {
 }
 
 export function ChatPanel({ dataset, cells, isLoading, onSubmit, onConfirm, width }: ChatPanelProps) {
-  const displayCells = cells.filter(c => c.status !== 'loading')
-
   return (
     <div className="flex flex-col shrink-0 overflow-hidden" style={{ width }}>
       {/* Tab bar */}
@@ -28,7 +25,7 @@ export function ChatPanel({ dataset, cells, isLoading, onSubmit, onConfirm, widt
         }}
       >
         <div
-          className="flex items-center gap-1.5 px-3 h-full"
+          className="flex items-center gap-2 px-3 h-full"
           style={{
             borderRight: '1px solid var(--color-border)',
             borderBottom: '2px solid var(--color-accent)',
@@ -38,30 +35,25 @@ export function ChatPanel({ dataset, cells, isLoading, onSubmit, onConfirm, widt
             color: 'var(--color-accent)',
           }}
         >
-          <NotebookIcon size={11} />
-          <span>notebook.dc</span>
+          <span style={{ fontSize: '0.75rem' }}>◉</span>
+          <span>Chat</span>
         </div>
+        {dataset && (
+          <span
+            style={{
+              marginLeft: 'auto',
+              paddingRight: 12,
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.72rem',
+              color: 'var(--color-text-muted)',
+            }}
+          >
+            {dataset.filename} · {dataset.row_count.toLocaleString()} rows
+          </span>
+        )}
       </div>
 
-      {/* Toolbar */}
-      <div
-        className="flex items-center gap-2 px-4 shrink-0"
-        style={{
-          height: 34,
-          background: 'var(--color-surface-1)',
-          borderBottom: '1px solid var(--color-border-subtle)',
-        }}
-      >
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-          {displayCells.length} cell{displayCells.length !== 1 ? 's' : ''}
-        </span>
-        <div className="flex-1" />
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-          {dataset ? `${dataset.filename} · ${dataset.row_count.toLocaleString()} rows` : 'no dataset'}
-        </span>
-      </div>
-
-      {/* Cell area */}
+      {/* Chat area */}
       <Notebook
         cells={cells}
         isLoading={isLoading}

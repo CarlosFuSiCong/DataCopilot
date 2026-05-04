@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { UploadResponse } from './types'
+import type { ExecutionResult, UploadResponse, WorkflowStep } from './types'
 import { useNotebook } from './hooks/useNotebook'
 import { useThreePanelSplit } from './hooks/useThreePanelSplit'
 import { ActivityBar } from './components/ActivityBar'
@@ -27,6 +27,16 @@ export default function App() {
     maxChat: 640,
   })
 
+  // Last confirmed cell — drives the result tab in DataPanel
+  const lastConfirmedCell = [...cells].reverse().find(c => c.status === 'ok')
+  const lastConfirmedSteps: WorkflowStep[] | null =
+    lastConfirmedCell?.result?.planned_steps ?? null
+  // execution_result lives in confirmResult (manual confirm) or result (auto-confirm)
+  const lastExecutionResult: ExecutionResult | null =
+    lastConfirmedCell?.confirmResult?.execution_result
+    ?? lastConfirmedCell?.result?.execution_result
+    ?? null
+
   return (
     <div
       className="flex h-screen overflow-hidden"
@@ -38,7 +48,11 @@ export default function App() {
       <div ref={containerRef} className="flex flex-1 overflow-hidden">
         <Sidebar dataset={dataset} onDatasetChange={setDataset} width={sidebarWidth} />
         <ResizeDivider onMouseDown={onLeftDividerMouseDown} />
-        <DataPanel dataset={dataset} />
+        <DataPanel
+          dataset={dataset}
+          lastExecutionResult={lastExecutionResult}
+          lastConfirmedSteps={lastConfirmedSteps}
+        />
         <ResizeDivider onMouseDown={onRightDividerMouseDown} />
         <ChatPanel
           dataset={dataset}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { UploadResponse } from '../types'
-import { fetchDatasetRows, downloadDataset } from '../api/client'
+import { fetchDatasetRows } from '../api/client'
 
 interface DataPreviewProps {
   dataset: UploadResponse
@@ -66,49 +66,27 @@ export function DataPreview({ dataset }: DataPreviewProps) {
   const rowIndexBase = mode === 'preview' ? previewPage * PREVIEW_PAGE_SIZE : fullOffset
 
   return (
-    <div className="flex flex-col gap-3 p-6 flex-1 overflow-y-auto">
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-3">
-          <span
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: '0.85rem',
-              color: 'var(--color-accent)',
-              fontWeight: 600,
-            }}
-          >
-            {filename}
-          </span>
-          <span
-            className="px-2 py-0.5 rounded"
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: '0.72rem',
-              background: 'var(--color-surface-2)',
-              color: 'var(--color-text-muted)',
-              border: '1px solid var(--color-border-subtle)',
-            }}
-          >
-            {row_count.toLocaleString()} rows · {column_count} cols
-          </span>
-        </div>
+    <div className="flex flex-col h-full overflow-hidden" style={{ padding: '16px 20px 0' }}>
+      {/* ── Header (shrink-0) ── */}
+      <div className="flex items-center justify-between flex-wrap gap-2 shrink-0" style={{ paddingBottom: 8 }}>
+        <span
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: '0.85rem',
+            color: 'var(--color-accent)',
+            fontWeight: 600,
+            maxWidth: 'min(280px, 55vw)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+          title={filename}
+        >
+          {filename}
+        </span>
 
-        {/* Download + mode toggle */}
+        {/* Mode toggle */}
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => downloadDataset(dataset_id)}
-            style={{
-              padding: '3px 10px', borderRadius: 3,
-              background: 'transparent',
-              border: '1px solid var(--color-border)',
-              color: 'var(--color-text-soft)',
-              fontFamily: 'var(--font-mono)', fontSize: '0.72rem',
-              cursor: 'pointer',
-            }}
-          >
-            ↓ Download CSV
-          </button>
           {mode === 'preview' ? (
             <button
               onClick={() => setMode('full')}
@@ -141,12 +119,14 @@ export function DataPreview({ dataset }: DataPreviewProps) {
         </div>
       </div>
 
-      {/* ── Mode label ── */}
+      {/* ── Mode label (shrink-0) ── */}
       <span
+        className="shrink-0"
         style={{
           fontFamily: 'var(--font-mono)',
           fontSize: '0.72rem',
           color: 'var(--color-text-muted)',
+          paddingBottom: 8,
         }}
       >
         {mode === 'preview'
@@ -156,18 +136,21 @@ export function DataPreview({ dataset }: DataPreviewProps) {
             : `Rows ${fullOffset + 1}–${Math.min(fullOffset + FULL_PAGE_SIZE, fullTotal).toLocaleString()} of ${fullTotal.toLocaleString()}`}
       </span>
 
-      {/* ── Error banner ── */}
+      {/* ── Error banner (shrink-0) ── */}
       {fetchError && (
-        <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--color-red)', fontFamily: 'var(--font-mono)' }}>
+        <p className="shrink-0" style={{ margin: '0 0 6px', fontSize: '0.78rem', color: 'var(--color-red)', fontFamily: 'var(--font-mono)' }}>
           ✕ {fetchError}
         </p>
       )}
 
-      {/* ── Table ── */}
-      <div className="rounded overflow-hidden" style={{ border: '1px solid var(--color-border)', opacity: loading ? 0.5 : 1 }}>
-        <div style={{ overflowX: 'auto' }}>
+      {/* ── Table (flex-1, scrolls vertically) ── */}
+      <div
+        className="flex flex-col flex-1 rounded overflow-hidden"
+        style={{ border: '1px solid var(--color-border)', opacity: loading ? 0.5 : 1, minHeight: 0 }}
+      >
+        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto' }}>
           <table style={{ borderCollapse: 'collapse', width: '100%', fontFamily: 'var(--font-mono)', fontSize: '0.82rem' }}>
-            <thead>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
               <tr style={{ background: 'var(--color-surface-2)' }}>
                 <th
                   style={{
@@ -247,9 +230,9 @@ export function DataPreview({ dataset }: DataPreviewProps) {
           </table>
         </div>
 
-        {/* ── Pagination footer ── */}
+        {/* ── Pagination footer (shrink-0, always visible) ── */}
         <div
-          className="flex items-center justify-between px-3 py-2"
+          className="flex items-center justify-between px-3 py-2 shrink-0"
           style={{ borderTop: '1px solid var(--color-border)', background: 'var(--color-surface-2)' }}
         >
           {mode === 'preview' ? (
@@ -283,20 +266,6 @@ export function DataPreview({ dataset }: DataPreviewProps) {
           )}
         </div>
       </div>
-
-      {/* ── Prompt hint ── */}
-      {mode === 'preview' && (
-        <p
-          style={{
-            margin: 0,
-            fontFamily: 'var(--font-mono)',
-            fontSize: '0.78rem',
-            color: 'var(--color-text-muted)',
-          }}
-        >
-          ↓ Enter a query below to run the pipeline
-        </p>
-      )}
     </div>
   )
 }

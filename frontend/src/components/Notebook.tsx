@@ -1,8 +1,7 @@
 import { useEffect, useRef } from 'react'
 import type { UploadResponse } from '../types'
 import type { NotebookCellData } from '../types/notebook'
-import { NotebookIcon, Spinner } from './ui/Icons'
-import { Gutter } from './ui/OutputBlock'
+import { NotebookIcon } from './ui/Icons'
 import { NotebookCell } from './NotebookCell'
 import { InputCell } from './InputCell'
 
@@ -14,80 +13,104 @@ interface NotebookProps {
   onConfirm: (cell: NotebookCellData) => void
 }
 
-export function Notebook({ cells, isLoading, dataset, onSubmit, onConfirm }: NotebookProps) {
+export function Notebook({ cells, dataset, onSubmit, onConfirm }: NotebookProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
-  const displayCells = cells.filter(c => c.status !== 'loading')
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [cells.length, cells.at(-1)?.status])
 
+  const isEmpty = cells.length === 0
+
   return (
-    <div className="flex-1 overflow-y-auto" style={{ background: 'var(--color-bg)' }}>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        overflow: 'hidden',
+        background: 'var(--color-bg)',
+      }}
+    >
+      {/* Message list */}
+      <div
+        style={{
+          flex: 1,
+          overflowY: 'auto',
+          padding: isEmpty ? 0 : '16px 0 8px',
+        }}
+      >
+        {/* Empty: no dataset */}
+        {!dataset && isEmpty && <NotebookEmpty />}
 
-      {/* Empty states */}
-      {!dataset && displayCells.length === 0 && !isLoading && <NotebookEmpty />}
+        {/* Empty: dataset loaded, no messages */}
+        {dataset && isEmpty && (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '100%',
+              gap: 8,
+              color: 'var(--color-text-muted)',
+            }}
+          >
+            <span style={{ color: 'var(--color-accent)', fontSize: '1.2rem' }}>◉</span>
+            <p
+              style={{
+                margin: 0,
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.82rem',
+                textAlign: 'center',
+                lineHeight: 1.8,
+                color: 'var(--color-text-muted)',
+              }}
+            >
+              Dataset ready. Ask a question about your data.
+            </p>
+          </div>
+        )}
 
-      {dataset && displayCells.length === 0 && !isLoading && (
-        <div className="flex flex-col items-center justify-center gap-2 py-20" style={{ color: 'var(--color-text-muted)' }}>
-          <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: '0.82rem', textAlign: 'center', lineHeight: 1.8 }}>
-            Dataset loaded. Type a query below<br />to start the pipeline.
-          </p>
-        </div>
-      )}
+        {/* All cells, including loading ones */}
+        {cells.map(cell => (
+          <NotebookCell key={cell.id} cell={cell} onConfirm={onConfirm} />
+        ))}
 
-      {/* Cell list */}
-      {displayCells.length > 0 && (
-        <div style={{ padding: '16px 0' }}>
-          {displayCells.map((cell, i) => (
-            <NotebookCell key={cell.id} index={i + 1} cell={cell} onConfirm={onConfirm} />
-          ))}
-        </div>
-      )}
-
-      {/* Loading placeholder */}
-      {isLoading && (
-        <div style={{ padding: displayCells.length === 0 ? '16px 0' : '0' }}>
-          <LoadingCell index={displayCells.length + 1} />
-        </div>
-      )}
-
-      {/* Input */}
-      <div style={{ padding: '0 0 16px' }}>
-        <InputCell disabled={!dataset || isLoading} onSubmit={onSubmit} />
+        <div ref={bottomRef} style={{ height: 4 }} />
       </div>
 
-      {/* Scroll anchor */}
-      <div ref={bottomRef} style={{ height: 1 }} />
+      {/* Chat input bar — always at the bottom */}
+      <InputCell disabled={!dataset || cells.some(c => c.status === 'loading' || c.status === 'confirming')} onSubmit={onSubmit} />
     </div>
   )
 }
 
 function NotebookEmpty() {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 py-20" style={{ color: 'var(--color-text-muted)' }}>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '100%',
+        gap: 12,
+        color: 'var(--color-text-muted)',
+      }}
+    >
       <NotebookIcon size={32} />
-      <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: '0.85rem', textAlign: 'center', lineHeight: 1.8 }}>
-        Upload a CSV, then type a query below.<br />
-        Each exchange becomes a notebook cell.
-      </p>
-    </div>
-  )
-}
-
-function LoadingCell({ index }: { index: number }) {
-  return (
-    <div className="flex" style={{ padding: '4px 0' }}>
-      <Gutter label={`In [${index}]:`} color="var(--color-blue)" />
-      <div
-        className="flex-1 mr-4 flex items-center gap-2 rounded px-3 py-2"
-        style={{ background: 'var(--color-cell-in)', border: '1px solid var(--color-border)' }}
+      <p
+        style={{
+          margin: 0,
+          fontFamily: 'var(--font-mono)',
+          fontSize: '0.85rem',
+          textAlign: 'center',
+          lineHeight: 1.8,
+        }}
       >
-        <Spinner />
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>
-          Running pipeline…
-        </span>
-      </div>
+        Upload a CSV in the sidebar,<br />then ask a question.
+      </p>
     </div>
   )
 }
