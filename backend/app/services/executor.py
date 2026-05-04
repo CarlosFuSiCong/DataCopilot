@@ -14,7 +14,9 @@ from app.core.exceptions import ExecutionError
 from app.models.workflow import (
     DateExtractStep,
     DeriveColumnStep,
+    DropColumnsStep,
     ExecutionResult,
+    FillMissingValuesStep,
     FilterRowsStep,
     GenerateSummaryStep,
     GroupByStep,
@@ -250,6 +252,10 @@ def _apply_step(
             return _derive_column(step, df)
         if isinstance(step, DateExtractStep):
             return _date_extract(step, df)
+        if isinstance(step, DropColumnsStep):
+            return _drop_columns(step, df)
+        if isinstance(step, FillMissingValuesStep):
+            return _fill_missing_values(step, df)
     except ExecutionError:
         raise
     except Exception as exc:
@@ -415,6 +421,70 @@ def _rename_columns(
         result,
         f"Renamed columns: {step.mapping}.",
         _StepMetrics(),
+    )
+
+
+def _drop_columns(
+    step: DropColumnsStep, df: pd.DataFrame
+) -> tuple[pd.DataFrame, str, _StepMetrics]:
+    missing = [c for c in step.columns if c not in df.columns]
+    if missing:
+        raise ExecutionError(f"drop_columns: columns not found: {missing}")
+    result = df.drop(columns=step.columns)
+    return (
+        result,
+        f"Dropped columns: {step.columns}.",
+        _StepMetrics(),
+    )
+
+
+_FILL_STRATEGIES = ("constant", "mean", "median", "mode", "ffill", "bfill")
+
+
+def _fill_missing_values(
+    step: FillMissingValuesStep, df: pd.DataFrame
+) -> tuple[pd.DataFrame, str, _StepMetrics]:
+    if step.column not in df.columns:
+        raise ExecutionError(f"fill_missing_values: column '{step.column}' not found.")
+    result = df.copy()
+    before_missing = int(result[step.column].isna().sum())
+    if before_missing == 0:
+        return (
+            result,
+            f"No missing values in '{step.column}'; nothing to fill.",
+            _StepMetrics(affected_rate=0.0),
+        )
+    if step.strategy == "constant":
+        if step.value is None:
+            raise ExecutionError(
+                "fill_missing_values: strategy 'constant' requires a 'value'."
+            )
+        result[step.column] = result[step.column].fillna(step.value)
+    elif step.strategy == "mean":
+        fill_val = result[step.column].mean()
+        result[step.column] = result[step.column].fillna(fill_val)
+    elif step.strategy == "median":
+        fill_val = result[step.column].median()
+        result[step.column] = result[step.column].fillna(fill_val)
+    elif step.strategy == "mode":
+        mode_series = result[step.column].mode()
+        if mode_series.empty:
+            raise ExecutionError(
+                f"fill_missing_values: could not compute mode for '{step.column}'."
+            )
+        result[step.column] = result[step.column].fillna(mode_series.iloc[0])
+    elif step.strategy == "ffill":
+        result[step.column] = result[step.column].ffill()
+    elif step.strategy == "bfill":
+        result[step.column] = result[step.column].bfill()
+    else:
+        raise ExecutionError(f"fill_missing_values: unknown strategy '{step.strategy}'.")
+    after_missing = int(result[step.column].isna().sum())
+    filled = before_missing - after_missing
+    return (
+        result,
+        f"Filled {filled} missing value(s) in '{step.column}' using strategy '{step.strategy}'.",
+        _StepMetrics(affected_rate=_safe_rate(filled, len(df))),
     )
 
 

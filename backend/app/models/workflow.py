@@ -87,6 +87,19 @@ class DateExtractStep(BaseModel):
     new_column: str
 
 
+class DropColumnsStep(BaseModel):
+    type: Literal["drop_columns"]
+    columns: list[str]
+
+
+class FillMissingValuesStep(BaseModel):
+    type: Literal["fill_missing_values"]
+    column: str
+    strategy: Literal["constant", "mean", "median", "mode", "ffill", "bfill"]
+    # Required when strategy is "constant"; ignored otherwise.
+    value: Union[float, str, None] = None
+
+
 # Discriminated union — Pydantic resolves the correct subtype from "type"
 WorkflowStep = Annotated[
     Union[
@@ -100,6 +113,8 @@ WorkflowStep = Annotated[
         LimitRowsStep,
         DeriveColumnStep,
         DateExtractStep,
+        DropColumnsStep,
+        FillMissingValuesStep,
     ],
     Field(discriminator="type"),
 ]
