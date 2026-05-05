@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import type { UploadResponse } from '../types'
 import type { NotebookCellData } from '../types/notebook'
 import { ApiCallError, sendChat, confirmWorkflow } from '../api/client'
@@ -35,6 +35,9 @@ function getPreviousSteps(cells: NotebookCellData[]) {
 
 export function useNotebook(dataset: UploadResponse | null) {
   const [cells, setCells] = useState<NotebookCellData[]>([])
+  // Ref always holds the latest cells so async functions never read stale closure state.
+  const cellsRef = useRef<NotebookCellData[]>(cells)
+  cellsRef.current = cells
 
   function appendCell(cell: NotebookCellData) {
     setCells(prev => {
@@ -54,10 +57,12 @@ export function useNotebook(dataset: UploadResponse | null) {
   async function handleSubmit(query: string) {
     if (!dataset || !query.trim()) return
 
+    // Read latest cells via ref before any appendCell calls so we never see
+    // stale closure state caused by pending React state updates.
+    const previousSteps = getPreviousSteps(cellsRef.current)
+
     const id = nextId()
     appendCell({ id, query, status: 'loading' })
-
-    const previousSteps = getPreviousSteps(cells)
 
     try {
       const result = await sendChat({
@@ -80,13 +85,14 @@ export function useNotebook(dataset: UploadResponse | null) {
   async function handleClarify(cell: NotebookCellData, answer: string) {
     if (!dataset || !cell.clarificationQuestion) return
 
+    // Read latest cells via ref before any appendCell calls.
+    const previousSteps = getPreviousSteps(cellsRef.current)
+
     // Freeze the clarifying cell to show the submitted answer.
     appendCell({ ...cell, clarificationAnswer: answer })
 
     const id = nextId()
     appendCell({ id, query: cell.query, status: 'loading' })
-
-    const previousSteps = getPreviousSteps(cells)
 
     try {
       const result = await sendChat({
