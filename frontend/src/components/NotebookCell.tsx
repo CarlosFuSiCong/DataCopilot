@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react'
 import type { ApiErrorContext } from '../types'
 import type { NotebookCellData } from '../types/notebook'
 import { OutputBlock } from './ui/OutputBlock'
@@ -10,6 +11,8 @@ import { RAGPanel } from './RAGPanel'
 interface NotebookCellProps {
   cell: NotebookCellData
   onConfirm: (cell: NotebookCellData) => void
+  onClarify: (cell: NotebookCellData, answer: string) => void
+  onSuggest: (query: string) => void
 }
 
 // ---------------------------------------------------------------------------
@@ -57,16 +60,112 @@ function ErrorMissingColumn({ message, context }: { message: string; context?: A
   )
 }
 
-function ErrorEmptyWorkflow({ message, context }: { message: string; context?: ApiErrorContext }) {
+function ErrorEmptyWorkflow({
+  message,
+  context,
+  onSuggest,
+}: {
+  message: string
+  context?: ApiErrorContext
+  onSuggest: (q: string) => void
+}) {
+  const hasRelevant = context?.relevant_steps && context.relevant_steps.length > 0
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div className="flex items-start gap-2">
         <span style={{ color: 'var(--color-yellow)', fontSize: '1rem', lineHeight: 1 }}>⚠</span>
         <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: 'var(--color-yellow)', lineHeight: 1.5 }}>
           {message}
         </p>
       </div>
-      {context?.example_queries && context.example_queries.length > 0 && (
+
+      {/* RAG-relevant operation cards — primary path */}
+      {hasRelevant && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+            Based on your query, you may have meant one of these:
+          </p>
+          {context!.relevant_steps!.map(hint => {
+            // Extract a representative example query string from the example dict.
+            const exampleQuery: string = (() => {
+              const ex = hint.example
+              if (!ex || typeof ex !== 'object') return ''
+              // Most step examples follow the format used in the corpus docs.
+              const stepType = hint.step_type
+              const col = (ex['column'] ?? ex['columns']) as string | string[] | undefined
+              const val = ex['value'] as unknown
+              const op = ex['operator'] as string | undefined
+              if (stepType === 'filter_rows' && col && op && val !== undefined)
+                return `Filter rows where ${Array.isArray(col) ? col[0] : col} ${op} ${val}`
+              if (stepType === 'group_by') {
+                const target = ex['target'] as string | undefined
+                const agg = ex['agg'] as string | undefined
+                return `Group by ${Array.isArray(col) ? col.join(', ') : col ?? '...'} and ${agg ?? 'sum'} the ${target ?? '...'}`
+              }
+              if (stepType === 'sort_values')
+                return `Sort by ${Array.isArray(col) ? col[0] : col ?? '...'}`
+              if (stepType === 'select_columns')
+                return `Select columns ${Array.isArray(col) ? col.join(', ') : col ?? '...'}`
+              if (stepType === 'drop_columns')
+                return `Drop columns ${Array.isArray(col) ? col.join(', ') : col ?? '...'}`
+              return ''
+            })()
+
+            return (
+              <div
+                key={hint.step_type}
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 10,
+                  background: 'var(--color-surface-1)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 8,
+                  padding: '10px 12px',
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: '0 0 2px', fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--color-accent)', fontWeight: 600 }}>
+                    {hint.step_type}
+                  </p>
+                  <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
+                    {hint.description}
+                  </p>
+                  {exampleQuery && (
+                    <p style={{ margin: '4px 0 0', fontFamily: 'var(--font-mono)', fontSize: '0.74rem', color: 'var(--color-text-soft)', fontStyle: 'italic' }}>
+                      e.g. "{exampleQuery}"
+                    </p>
+                  )}
+                </div>
+                {exampleQuery && (
+                  <button
+                    type="button"
+                    onClick={() => onSuggest(exampleQuery)}
+                    style={{
+                      flexShrink: 0,
+                      padding: '4px 10px',
+                      background: 'transparent',
+                      border: '1px solid var(--color-accent)',
+                      borderRadius: 5,
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '0.72rem',
+                      color: 'var(--color-accent)',
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Use this ↗
+                  </button>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Fallback: generic lists when RAG returned nothing relevant */}
+      {!hasRelevant && context?.example_queries && context.example_queries.length > 0 && (
         <div style={{
           background: 'var(--color-surface-1)',
           border: '1px solid var(--color-border)',
@@ -78,17 +177,19 @@ function ErrorEmptyWorkflow({ message, context }: { message: string; context?: A
           </p>
           <ul style={{ margin: 0, paddingLeft: 16 }}>
             {context.example_queries.map(q => (
-              <li key={q} style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: '0.8rem',
-                color: 'var(--color-text-soft)',
-                lineHeight: 1.8,
-              }}>{q}</li>
+              <li key={q} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--color-text-soft)', lineHeight: 1.8 }}>
+                <span
+                  style={{ cursor: 'pointer', textDecoration: 'underline dotted', textUnderlineOffset: 3 }}
+                  onClick={() => onSuggest(q)}
+                >
+                  {q}
+                </span>
+              </li>
             ))}
           </ul>
         </div>
       )}
-      {context?.supported_steps && context.supported_steps.length > 0 && (
+      {!hasRelevant && context?.supported_steps && context.supported_steps.length > 0 && (
         <div style={{
           background: 'var(--color-surface-1)',
           border: '1px solid var(--color-border)',
@@ -221,14 +322,14 @@ function ErrorGeneric({ message }: { message: string }) {
   )
 }
 
-function ErrorContent({ cell }: { cell: NotebookCellData }) {
+function ErrorContent({ cell, onSuggest }: { cell: NotebookCellData; onSuggest: (q: string) => void }) {
   const msg = cell.error ?? 'Unknown error'
   const ctx = cell.errorContext
   switch (cell.errorCode) {
     case 'missing_column':
       return <ErrorMissingColumn message={msg} context={ctx} />
     case 'empty_workflow':
-      return <ErrorEmptyWorkflow message={msg} context={ctx} />
+      return <ErrorEmptyWorkflow message={msg} context={ctx} onSuggest={onSuggest} />
     case 'execution_error':
       return <ErrorExecutionStep message={msg} context={ctx} />
     case 'rag_no_hits':
@@ -238,7 +339,102 @@ function ErrorContent({ cell }: { cell: NotebookCellData }) {
   }
 }
 
-export function NotebookCell({ cell, onConfirm }: NotebookCellProps) {
+// ---------------------------------------------------------------------------
+// Clarification panel
+// ---------------------------------------------------------------------------
+
+function ClarificationPanel({
+  cell,
+  onSubmit,
+}: {
+  cell: NotebookCellData
+  onSubmit: (answer: string) => void
+}) {
+  const [draft, setDraft] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+  const answered = !!cell.clarificationAnswer
+
+  function handleSubmit() {
+    const trimmed = draft.trim()
+    if (!trimmed) return
+    onSubmit(trimmed)
+    setDraft('')
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+        <span style={{ color: 'var(--color-blue)', fontSize: '1rem', lineHeight: 1, flexShrink: 0 }}>?</span>
+        <p style={{
+          margin: 0,
+          fontFamily: 'var(--font-mono)',
+          fontSize: '0.85rem',
+          color: 'var(--color-text)',
+          lineHeight: 1.6,
+        }}>
+          {cell.clarificationQuestion}
+        </p>
+      </div>
+
+      {answered ? (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '5px 10px',
+          background: 'var(--color-surface-1)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 6,
+        }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Answer:</span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: 'var(--color-accent)' }}>
+            {cell.clarificationAnswer}
+          </span>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: 6 }}>
+          <input
+            ref={inputRef}
+            autoFocus
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleSubmit() }}
+            placeholder="Type your answer…"
+            style={{
+              flex: 1,
+              background: 'var(--color-surface-1)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 6,
+              padding: '5px 10px',
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.82rem',
+              color: 'var(--color-text)',
+              outline: 'none',
+            }}
+          />
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={!draft.trim()}
+            style={{
+              padding: '5px 14px',
+              background: draft.trim() ? 'var(--color-blue)' : 'var(--color-surface-2)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 6,
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.78rem',
+              color: draft.trim() ? '#fff' : 'var(--color-text-muted)',
+              cursor: draft.trim() ? 'pointer' : 'not-allowed',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Send
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function NotebookCell({ cell, onConfirm, onClarify, onSuggest }: NotebookCellProps) {
   const execResult = cell.confirmResult?.execution_result ?? cell.result?.execution_result ?? null
   const explanation = cell.confirmResult?.explanation ?? cell.result?.explanation ?? null
   const stepResults = cell.confirmResult?.execution_result?.step_results ?? cell.result?.step_results
@@ -313,13 +509,20 @@ export function NotebookCell({ cell, onConfirm }: NotebookCellProps) {
           </div>
         )}
 
+        {/* Clarification state */}
+        {cell.status === 'clarifying' && (
+          <OutputBlock label="clarification" accent="var(--color-blue)">
+            <ClarificationPanel cell={cell} onSubmit={answer => onClarify(cell, answer)} />
+          </OutputBlock>
+        )}
+
         {/* Error state */}
         {cell.status === 'error' && (
           <OutputBlock
             label={cell.errorCode ?? 'error'}
             accent={cell.errorCode === 'empty_workflow' || cell.errorCode === 'rag_no_hits' ? 'var(--color-yellow)' : 'var(--color-red)'}
           >
-            <ErrorContent cell={cell} />
+            <ErrorContent cell={cell} onSuggest={onSuggest} />
           </OutputBlock>
         )}
 

@@ -1,13 +1,29 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 
 interface InputCellProps {
   disabled: boolean
   onSubmit: (query: string) => void
+  // When set by a parent (e.g. "Use this" button), pre-fills and focuses the input.
+  suggestedQuery?: string
+  onSuggestedQueryConsumed?: () => void
 }
 
-export function InputCell({ disabled, onSubmit }: InputCellProps) {
+export function InputCell({ disabled, onSubmit, suggestedQuery, onSuggestedQueryConsumed }: InputCellProps) {
   const [query, setQuery] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // When a "Use this" suggestion arrives, fill the textarea and focus it.
+  useEffect(() => {
+    if (suggestedQuery) {
+      setQuery(suggestedQuery)
+      onSuggestedQueryConsumed?.()
+      setTimeout(() => {
+        textareaRef.current?.focus()
+        autoResize()
+      }, 0)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suggestedQuery])
 
   function autoResize() {
     const el = textareaRef.current

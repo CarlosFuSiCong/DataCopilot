@@ -120,6 +120,8 @@ export interface ChatRequest {
   // Steps from the last confirmed workflow. When present the new query chains
   // onto the prior result instead of starting from the raw dataset.
   previous_steps?: WorkflowStep[]
+  // User's answer to a clarification question, merged into the planner query.
+  clarification_context?: string
 }
 
 export interface ChatResponse {
@@ -135,6 +137,9 @@ export interface ChatResponse {
   execution_result: ExecutionResult | null
   // UUID for the persisted run; used to download the result via GET /api/runs/{id}/download.
   run_id?: string | null
+  // True when the planner needs clarification before producing a workflow.
+  needs_clarification?: boolean
+  clarification_question?: string | null
 }
 
 export interface ConfirmRequest {
@@ -160,8 +165,17 @@ export interface ApiError {
   context?: ApiErrorContext
 }
 
+export interface RelevantStepHint {
+  step_type: string
+  description: string
+  example: Record<string, unknown>
+}
+
 export interface ApiErrorContext {
   available_columns?: string[]
+  // RAG-retrieved operations relevant to this specific query (preferred over supported_steps).
+  relevant_steps?: RelevantStepHint[]
+  // Generic fallback when RAG returned nothing useful.
   supported_steps?: string[]
   example_queries?: string[]
   failed_step_index?: number

@@ -11,9 +11,13 @@ interface NotebookProps {
   dataset: UploadResponse | null
   onSubmit: (query: string) => void
   onConfirm: (cell: NotebookCellData) => void
+  onClarify: (cell: NotebookCellData, answer: string) => void
+  onSuggest: (query: string) => void
+  suggestedQuery?: string
+  onSuggestedQueryConsumed?: () => void
 }
 
-export function Notebook({ cells, dataset, onSubmit, onConfirm }: NotebookProps) {
+export function Notebook({ cells, dataset, onSubmit, onConfirm, onClarify, onSuggest, suggestedQuery, onSuggestedQueryConsumed }: NotebookProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -74,14 +78,19 @@ export function Notebook({ cells, dataset, onSubmit, onConfirm }: NotebookProps)
 
         {/* All cells, including loading ones */}
         {cells.map(cell => (
-          <NotebookCell key={cell.id} cell={cell} onConfirm={onConfirm} />
+          <NotebookCell key={cell.id} cell={cell} onConfirm={onConfirm} onClarify={onClarify} onSuggest={onSuggest} />
         ))}
 
         <div ref={bottomRef} style={{ height: 4 }} />
       </div>
 
       {/* Chat input bar — always at the bottom */}
-      <InputCell disabled={!dataset || cells.some(c => c.status === 'loading' || c.status === 'confirming')} onSubmit={onSubmit} />
+      <InputCell
+        disabled={!dataset || cells.some(c => c.status === 'loading' || c.status === 'confirming' || (c.status === 'clarifying' && !c.clarificationAnswer))}
+        onSubmit={onSubmit}
+        suggestedQuery={suggestedQuery}
+        onSuggestedQueryConsumed={onSuggestedQueryConsumed}
+      />
     </div>
   )
 }

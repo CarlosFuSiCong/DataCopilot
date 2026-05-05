@@ -17,6 +17,9 @@ class ChatRequest(BaseModel):
     # new steps are appended after these so that the second query operates on the
     # result of the first, enabling multi-turn chaining within one dataset session.
     previous_steps: list[WorkflowStep] = []
+    # User's answer to a clarification question. When present, the planner
+    # receives the original query plus this context to resolve ambiguity.
+    clarification_context: str | None = None
 
 
 class ChatResponse(BaseModel):
@@ -34,3 +37,7 @@ class ChatResponse(BaseModel):
     execution_result: ExecutionResult | None = None
     # UUID of the persisted result run; populated alongside execution_result.
     run_id: str | None = None
+    # Set to True when the planner needs more information before planning.
+    # The frontend should show clarification_question and await the user's answer.
+    needs_clarification: bool = False
+    clarification_question: str | None = None

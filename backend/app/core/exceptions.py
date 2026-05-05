@@ -46,6 +46,19 @@ class PlannerError(DataCopilotError):
     """Raised when the LLM planner fails to produce a valid workflow JSON."""
 
 
+class ClarificationNeeded(Exception):
+    """Raised by the planner when the user query is too ambiguous to plan.
+
+    This is NOT a DataCopilotError — it is a valid application state, not a
+    failure.  chat.py catches it and returns a 200 ChatResponse with
+    needs_clarification=True rather than a 400 error.
+    """
+
+    def __init__(self, question: str) -> None:
+        super().__init__(question)
+        self.question = question
+
+
 async def datacoppilot_error_handler(
     request: Request, exc: DataCopilotError
 ) -> JSONResponse:

@@ -10,7 +10,8 @@ import { ChatPanel } from './components/ChatPanel'
 
 export default function App() {
   const [dataset, setDataset] = useState<UploadResponse | null>(null)
-  const { cells, isLoading, handleSubmit, handleConfirm } = useNotebook(dataset)
+  const [suggestedQuery, setSuggestedQuery] = useState<string | undefined>(undefined)
+  const { cells, isLoading, handleSubmit, handleConfirm, handleClarify } = useNotebook(dataset)
   const {
     containerRef,
     sidebarWidth,
@@ -66,6 +67,10 @@ export default function App() {
           isLoading={isLoading}
           onSubmit={handleSubmit}
           onConfirm={handleConfirm}
+          onClarify={handleClarify}
+          onSuggest={setSuggestedQuery}
+          suggestedQuery={suggestedQuery}
+          onSuggestedQueryConsumed={() => setSuggestedQuery(undefined)}
           width={chatWidth}
         />
       </div>
