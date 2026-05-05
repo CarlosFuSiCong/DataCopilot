@@ -18,5 +18,5 @@ node_modules/
 dist/
 build/
 
-# Object storage - raw user data must not be committed
-backend/storage/datasets/*/
+# Object storage - raw user data and run artifacts must not be committed
+backend/storage/
