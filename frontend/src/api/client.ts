@@ -1,4 +1,9 @@
-import type { ApiErrorContext, UploadResponse, DatasetProfile, DatasetRowsResponse, ChatRequest, ChatResponse, ConfirmRequest, ConfirmResponse, ApiError } from '../types'
+import type { ApiErrorContext, UploadResponse, DatasetProfile, DatasetRowsResponse, ChatRequest, ChatResponse, ConfirmRequest, ConfirmResponse, ApiError, PreviewResponse, RunRecord, WorkflowStep } from '../types'
+
+export interface RunListResponse {
+  runs: RunRecord[]
+  total: number
+}
 
 export interface DiffRowsResponse {
   rows: (Record<string, unknown> & { _kept: boolean })[]
@@ -128,6 +133,43 @@ export async function fetchResultRows(
     body: JSON.stringify({ steps, offset, limit }),
   })
   return handleResponse<DatasetRowsResponse>(res)
+}
+
+export async function listRuns(datasetId: string, limit = 20): Promise<RunListResponse> {
+  const params = new URLSearchParams({ dataset_id: datasetId, limit: String(limit) })
+  const res = await fetch(`${BASE}/runs?${params}`)
+  return handleResponse<RunListResponse>(res)
+}
+
+export async function getRun(runId: string): Promise<RunRecord> {
+  const res = await fetch(`${BASE}/runs/${runId}`)
+  return handleResponse<RunRecord>(res)
+}
+
+export async function rerunWorkflow(
+  runId: string,
+  datasetId: string,
+  steps: WorkflowStep[],
+  query?: string,
+): Promise<PreviewResponse> {
+  const res = await fetch(`${BASE}/runs/${runId}/rerun`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dataset_id: datasetId, steps, query }),
+  })
+  return handleResponse<PreviewResponse>(res)
+}
+
+export async function previewWorkflow(
+  datasetId: string,
+  steps: WorkflowStep[],
+): Promise<PreviewResponse> {
+  const res = await fetch(`${BASE}/workflows/preview`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dataset_id: datasetId, steps }),
+  })
+  return handleResponse<PreviewResponse>(res)
 }
 
 export async function fetchDiffRows(
