@@ -1,15 +1,17 @@
-import { useRef, useState } from 'react'
-import type { UploadResponse } from '../types'
-import { uploadDataset } from '../api/client'
+import { useRef, useState, useEffect } from 'react'
+import type { UploadResponse, WorkflowStep, RunRecord } from '../types'
+import { uploadDataset, listRuns, getRun } from '../api/client'
 import { ChevronIcon } from './ui/Icons'
 
 interface SidebarProps {
   dataset: UploadResponse | null
   onDatasetChange: (d: UploadResponse | null) => void
+  onRerun: (steps: WorkflowStep[], query: string, runId?: string | null) => void
+  historyRefreshKey?: number
   width: number
 }
 
-export function Sidebar({ dataset, onDatasetChange, width }: SidebarProps) {
+export function Sidebar({ dataset, onDatasetChange, onRerun, historyRefreshKey, width }: SidebarProps) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
@@ -144,7 +146,162 @@ export function Sidebar({ dataset, onDatasetChange, width }: SidebarProps) {
           </span>
         </div>
       </SidebarSection>
+
+      {dataset && (
+        <RunHistorySection
+          datasetId={dataset.dataset_id}
+          onRerun={onRerun}
+          refreshKey={historyRefreshKey ?? 0}
+        />
+      )}
     </div>
+  )
+}
+
+function timeAgo(iso: string): string {
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000
+  if (diff < 60) return 'just now'
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
+  return `${Math.floor(diff / 86400)}d ago`
+}
+
+function statusColor(status: string) {
+  if (status === 'success') return 'var(--color-green)'
+  if (status === 'error') return 'var(--color-red)'
+  return 'var(--color-yellow)'
+}
+
+interface RunHistorySectionProps {
+  datasetId: string
+  onRerun: (steps: WorkflowStep[], query: string, runId?: string | null) => void
+  refreshKey: number
+}
+
+function RunHistorySection({ datasetId, onRerun, refreshKey }: RunHistorySectionProps) {
+  const [runs, setRuns] = useState<RunRecord[]>([])
+  const [loading, setLoading] = useState(true)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [loadingRerun, setLoadingRerun] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    listRuns(datasetId, 20).then(resp => {
+      if (!cancelled) { setRuns(resp.runs); setLoading(false) }
+    }).catch(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [datasetId, refreshKey])
+
+  async function handleRerun(run: RunRecord) {
+    setLoadingRerun(run.run_id)
+    try {
+      let steps = run.planned_steps
+      if (!steps) {
+        const full = await getRun(run.run_id)
+        steps = full.planned_steps ?? []
+      }
+      onRerun(steps ?? [], run.query ?? '', run.run_id)
+    } finally {
+      setLoadingRerun(null)
+    }
+  }
+
+  return (
+    <SidebarSection label="HISTORY">
+      <div className="flex flex-col px-2 py-1.5 gap-0.5">
+        {!loading && runs.length === 0 && (
+          <span style={{
+            fontFamily: 'var(--font-mono)', fontSize: '0.7rem',
+            color: 'var(--color-text-muted)', padding: '2px 4px',
+          }}>
+            no runs yet
+          </span>
+        )}
+        {runs.map(run => {
+          const isExpanded = expandedId === run.run_id
+          return (
+            <div key={run.run_id}>
+              <button
+                onClick={() => setExpandedId(isExpanded ? null : run.run_id)}
+                style={{
+                  width: '100%', textAlign: 'left', background: 'transparent',
+                  border: 'none', cursor: 'pointer', padding: '3px 4px',
+                  borderRadius: 3,
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-surface-2)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              >
+                <div className="flex items-center gap-1.5">
+                  <span style={{ fontSize: '0.6rem', color: statusColor(run.status) }}>●</span>
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-mono)', fontSize: '0.75rem',
+                      color: 'var(--color-text)', flex: 1,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {run.query ? run.query.slice(0, 30) + (run.query.length > 30 ? '…' : '') : '(no query)'}
+                  </span>
+                </div>
+                <div
+                  style={{
+                    fontFamily: 'var(--font-mono)', fontSize: '0.67rem',
+                    color: 'var(--color-text-muted)', paddingLeft: 16, marginTop: 1,
+                  }}
+                >
+                  {timeAgo(run.created_at)}
+                  {run.row_count != null ? ` · ${run.row_count.toLocaleString()} rows` : ''}
+                  {run.step_count != null ? ` · ${run.step_count} steps` : ''}
+                </div>
+              </button>
+
+              {isExpanded && (
+                <div
+                  style={{
+                    marginTop: 3, marginLeft: 8, marginBottom: 4, padding: '6px 8px',
+                    background: 'var(--color-surface-2)',
+                    border: '1px solid var(--color-border-subtle)',
+                    borderRadius: 4,
+                  }}
+                >
+                  {run.explanation && (
+                    <p
+                      style={{
+                        margin: '0 0 6px', fontFamily: 'var(--font-mono)',
+                        fontSize: '0.72rem', color: 'var(--color-text-soft)',
+                        lineHeight: 1.5,
+                        display: '-webkit-box',
+                        WebkitLineClamp: 3,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {run.explanation}
+                    </p>
+                  )}
+                  <button
+                    onClick={() => handleRerun(run)}
+                    disabled={loadingRerun === run.run_id}
+                    style={{
+                      padding: '3px 10px', borderRadius: 3,
+                      background: 'transparent',
+                      border: '1px solid var(--color-accent-dim)',
+                      color: 'var(--color-accent)',
+                      fontFamily: 'var(--font-mono)', fontSize: '0.72rem',
+                      cursor: loadingRerun === run.run_id ? 'not-allowed' : 'pointer',
+                      opacity: loadingRerun === run.run_id ? 0.6 : 1,
+                    }}
+                  >
+                    {loadingRerun === run.run_id ? '⟳ Loading…' : '▶ Rerun'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </SidebarSection>
   )
 }
 

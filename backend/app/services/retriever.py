@@ -60,8 +60,25 @@ class Retriever(Protocol):
 # ---------------------------------------------------------------------------
 
 def _tokenise(text: str) -> list[str]:
-    tokens = re.split(r"[\s\W]+", text.lower())
-    return [t for t in tokens if t]
+    """Tokenise text for keyword overlap scoring.
+
+    For ASCII text: split on whitespace and non-word characters.
+    For CJK text: also emit each Chinese character individually so that
+    Chinese keywords ("均值填充") can overlap with Chinese queries
+    ("用均值填充amount列的缺失值") even without a word segmenter.
+    """
+    result = []
+    for raw in re.split(r"[\s\W]+", text.lower()):
+        if not raw:
+            continue
+        if any('\u4e00' <= c <= '\u9fff' for c in raw):
+            # Emit individual CJK characters and any embedded ASCII runs.
+            for part in re.findall(r'[\u4e00-\u9fff]|[a-z0-9_]+', raw):
+                if part:
+                    result.append(part)
+        else:
+            result.append(raw)
+    return [t for t in result if t]
 
 
 def _doc_key(doc: dict) -> str:

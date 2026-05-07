@@ -8,8 +8,8 @@
   "description": "Delete all rows that contain at least one missing (null or NaN) value in any column. Use this to clean the dataset before aggregation or analysis so that missing values do not skew results. Should typically be one of the first steps in a workflow.",
   "keywords": [
     "missing", "null", "nan", "empty", "clean", "drop", "remove",
-    "缺失", "空值", "清洗", "删除", "去除", "补全", "invalid", "incomplete",
-    "不完整", "空白", "缺少"
+    "缺失", "空值", "清洗", "删除", "去除", "invalid", "incomplete",
+    "不完整", "空白", "缺少", "删除缺失", "去除空值", "删除空行"
   ],
   "parameters": [],
   "example": {

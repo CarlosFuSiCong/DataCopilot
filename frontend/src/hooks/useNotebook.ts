@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
-import type { UploadResponse } from '../types'
+import type { UploadResponse, WorkflowStep } from '../types'
 import type { NotebookCellData } from '../types/notebook'
-import { ApiCallError, sendChat, confirmWorkflow } from '../api/client'
+import { ApiCallError, sendChat, confirmWorkflow, rerunWorkflow, previewWorkflow } from '../api/client'
 
 let _seq = 0
 function nextId() { return `cell-${++_seq}` }
@@ -124,6 +124,7 @@ export function useNotebook(dataset: UploadResponse | null) {
         dataset_id: dataset.dataset_id,
         steps: cell.result.planned_steps,
         query: cell.result.query,
+        parent_run_id: cell.parentRunId ?? undefined,
       })
       appendCell({ ...cell, status: 'ok', confirmResult })
     } catch (err) {
@@ -131,7 +132,39 @@ export function useNotebook(dataset: UploadResponse | null) {
     }
   }
 
+  // Rerun a workflow with (possibly edited) steps — always goes through
+  // preview first; user must still confirm before results are persisted.
+  async function handleRerun(steps: WorkflowStep[], query: string, runId?: string | null) {
+    if (!dataset) return
+
+    const id = nextId()
+    appendCell({ id, query, status: 'loading' })
+
+    try {
+      const preview = runId
+        ? await rerunWorkflow(runId, dataset.dataset_id, steps, query)
+        : await previewWorkflow(dataset.dataset_id, steps)
+
+      const syntheticResult = {
+        query,
+        planned_steps: steps,
+        step_results: preview.step_results,
+        has_warnings: preview.has_warnings,
+        has_errors: preview.has_errors,
+        rag_context: null,
+        explanation: null,
+        execution_result: null,
+        run_id: null,
+        needs_clarification: false,
+      }
+
+      appendCell({ id, query, status: 'preview', result: syntheticResult, parentRunId: runId ?? null })
+    } catch (err) {
+      appendCell(errorCell({ id, query }, err))
+    }
+  }
+
   const isLoading = cells.some(c => c.status === 'loading')
 
-  return { cells, isLoading, handleSubmit, handleConfirm, handleClarify }
+  return { cells, isLoading, handleSubmit, handleConfirm, handleClarify, handleRerun }
 }

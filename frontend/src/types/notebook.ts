@@ -13,4 +13,7 @@ export interface NotebookCellData {
   // Clarification flow: question from the planner, answer from the user.
   clarificationQuestion?: string
   clarificationAnswer?: string
+  // Set when this cell was created by a rerun so the confirm call can
+  // write parent_run_id into the new run record.
+  parentRunId?: string | null
 }

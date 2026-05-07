@@ -81,6 +81,10 @@ async def confirm_workflow(request: ConfirmRequest) -> ConfirmResponse:
             filename=result_name,
             planned_steps=planned_steps,
             row_count=execution_result.row_count,
+            query=request.query,
+            status="success",
+            explanation=explanation,
+            parent_run_id=request.parent_run_id,
         )
     except Exception:
         logger.warning("Failed to persist run artifact for dataset %s", request.dataset_id, exc_info=True)

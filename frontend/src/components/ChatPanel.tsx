@@ -1,4 +1,4 @@
-import type { UploadResponse } from '../types'
+import type { UploadResponse, WorkflowStep } from '../types'
 import type { NotebookCellData } from '../types/notebook'
 import { Notebook } from './Notebook'
 
@@ -10,12 +10,13 @@ interface ChatPanelProps {
   onConfirm: (cell: NotebookCellData) => void
   onClarify: (cell: NotebookCellData, answer: string) => void
   onSuggest: (query: string) => void
+  onRerun: (steps: WorkflowStep[], query: string, runId?: string | null) => void
   suggestedQuery?: string
   onSuggestedQueryConsumed?: () => void
   width: number
 }
 
-export function ChatPanel({ dataset, cells, isLoading, onSubmit, onConfirm, onClarify, onSuggest, suggestedQuery, onSuggestedQueryConsumed, width }: ChatPanelProps) {
+export function ChatPanel({ dataset, cells, isLoading, onSubmit, onConfirm, onClarify, onSuggest, onRerun, suggestedQuery, onSuggestedQueryConsumed, width }: ChatPanelProps) {
   return (
     <div className="flex flex-col shrink-0 overflow-hidden" style={{ width }}>
       {/* Tab bar */}
@@ -66,6 +67,7 @@ export function ChatPanel({ dataset, cells, isLoading, onSubmit, onConfirm, onCl
         onConfirm={onConfirm}
         onClarify={onClarify}
         onSuggest={onSuggest}
+        onRerun={onRerun}
         suggestedQuery={suggestedQuery}
         onSuggestedQueryConsumed={onSuggestedQueryConsumed}
       />

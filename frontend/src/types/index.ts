@@ -124,13 +124,21 @@ export interface ChatRequest {
   clarification_context?: string
 }
 
+export interface PreviewResponse {
+  step_results: StepResult[]
+  has_warnings: boolean
+  has_errors: boolean
+  blocked_at_step: number | null
+}
+
 export interface ChatResponse {
   query: string
   planned_steps: WorkflowStep[]
   step_results: StepResult[]
   has_warnings: boolean
   has_errors: boolean
-  rag_context: RAGContext
+  // Optional: absent when the result comes from a rerun preview (no RAG context).
+  rag_context?: RAGContext | null
   // Null when execution_result is not yet available (preview-only mode).
   // The client should show a Confirm button and call POST /api/workflows/confirm.
   explanation: string | null
@@ -142,10 +150,27 @@ export interface ChatResponse {
   clarification_question?: string | null
 }
 
+// ─── Run history ──────────────────────────────────────────────────────────────
+
+export interface RunRecord {
+  run_id: string
+  dataset_id: string
+  query: string | null
+  status: string
+  step_count: number | null
+  row_count: number | null
+  created_at: string
+  parent_run_id: string | null
+  explanation?: string | null
+  planned_steps?: WorkflowStep[] | null
+}
+
 export interface ConfirmRequest {
   dataset_id: string
   steps: WorkflowStep[]
   query: string
+  // Populated when confirming after a rerun so the backend can record lineage.
+  parent_run_id?: string | null
 }
 
 export interface ConfirmResponse {
@@ -173,6 +198,8 @@ export interface RelevantStepHint {
 
 export interface ApiErrorContext {
   available_columns?: string[]
+  // Specific hint from the planner (e.g. column not found + did-you-mean suggestion).
+  planner_hint?: string | null
   // RAG-retrieved operations relevant to this specific query (preferred over supported_steps).
   relevant_steps?: RelevantStepHint[]
   // Generic fallback when RAG returned nothing useful.

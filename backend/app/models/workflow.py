@@ -222,6 +222,9 @@ class ConfirmRequest(BaseModel):
     # Original user query — used by the result explainer for language detection
     # and grounding the explanation in the user's intent.
     query: str
+    # When confirming after a rerun, carry the original run's ID so the new
+    # run record can reference it via parent_run_id.
+    parent_run_id: str | None = None
 
 
 class ConfirmResponse(BaseModel):
