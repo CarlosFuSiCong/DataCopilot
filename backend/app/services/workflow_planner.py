@@ -35,6 +35,9 @@ Rules:
 - Do not invent column names. Use only columns from the dataset profile.
 - Do not include explanations or comments in the JSON.
 - If the request cannot be represented with the supported steps, return {{"steps": []}}.
+- If the request references a column that does NOT exist in the dataset profile, return:
+  {{"steps": [], "error_hint": "Column '<name>' does not exist in the dataset. Available columns: <comma-separated list from profile>. Did you mean '<closest column>'?"}}
+  Always include the full list of available columns so the user knows what to choose from.
 
 STRICT FIELD CONSTRAINTS (must be followed exactly, no synonyms or alternatives):
 - filter_rows "operator": MUST be one of exactly: "=", "!=", ">", ">=", "<", "<="
@@ -42,17 +45,37 @@ STRICT FIELD CONSTRAINTS (must be followed exactly, no synonyms or alternatives)
 - group_by "agg": MUST be one of: "sum", "mean", "count", "min", "max"
 - sort_values "ascending": MUST be a boolean — true (ascending) or false (descending). Do NOT use "order", "asc", "desc", or any string.
 
-CLARIFICATION (use sparingly — only when genuinely required):
-- If a critical parameter is missing AND cannot be reasonably inferred, you may request clarification instead of generating steps.
-- To request clarification output EXACTLY: {{"needs_clarification": true, "question": "Your concise question here"}}
-- Only request clarification when ALL of these are true:
-  1. A specific column, numeric threshold, or operation target is required but not mentioned.
-  2. It cannot be inferred from the request or dataset profile.
-  3. Different answers would lead to materially different workflows.
-- Do NOT request clarification for minor phrasing ambiguities or when a reasonable default exists.
-- When asking, reference only column names from the dataset profile. Be concise and specific.
-- Examples that warrant clarification: "group the data" (missing: group-by column and aggregation target), "filter the big orders" (missing: threshold value and column).
-- Examples that do NOT warrant clarification: "show top rows" (use limit_rows with default 10), "remove bad data" (use remove_missing_values).
+CLARIFICATION — apply a structural test, not a list of examples:
+
+Before generating steps, ask yourself:
+  "Can I map this request to ONE specific sequence of supported transformations,
+   or could a reasonable person interpret it as two or more DIFFERENT structures?"
+
+- If ONE clear structure → generate it (use sensible defaults for missing numeric params).
+- If TWO OR MORE plausible structures → ask for clarification.
+
+To request clarification output EXACTLY: {{"needs_clarification": true, "question": "Your concise question here"}}
+
+SIGNALS that indicate structural ambiguity (ask):
+1. The verb is analytical/vague with no clear transformation target:
+   "summarize", "analyse", "explore", "understand", "what's interesting about"
+   → could mean group_by, sort+limit, generate_summary, or filter — ask which.
+2. "top / best / highest / lowest / most / least [noun]" without a sort column:
+   → implies ranking but no column given — ask which column to rank by.
+   Exception: "top [N] rows" or "first [N] rows" — literal row slice, use limit_rows.
+3. The operation could mean filter OR group OR sort depending on intent:
+   "show sales by region" — filter to one region? group by region? ask which.
+
+SIGNALS that indicate clear intent (act, use defaults for missing numeric values):
+1. The transformation type is explicit: "sort", "filter … where", "rename", "remove nulls",
+   "fill missing", "group by [column]", "select columns", "show the first N rows".
+2. Only a numeric threshold or count is unspecified and a default is safe:
+   "show top rows / first few rows" → limit_rows n=10
+   "filter large orders" with a numeric column → ask the threshold (one clear op, one missing param).
+3. Column name, operator, and approximate value are all present in the query.
+
+When asking: name the specific missing information, reference column names from the profile,
+and offer 2-3 concrete example answers to make it easy for the user to reply.
 
 Supported step types:
 {supported_transformations}
@@ -180,9 +203,9 @@ def _parse_steps(raw_json: str) -> list[WorkflowStep]:
         raise PlannerError("'steps' must be a JSON array.")
 
     if len(steps_raw) == 0:
-        raise PlannerError(
-            "The request cannot be handled with the supported transformations."
-        )
+        hint = data.get("error_hint", "")
+        msg = hint if hint else "The request cannot be handled with the supported transformations."
+        raise PlannerError(msg)
 
     try:
         request = WorkflowRequest(dataset_id="__parse_only__", steps=steps_raw)
