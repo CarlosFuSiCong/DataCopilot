@@ -25,6 +25,11 @@ Usage (from the backend/ directory):
     # Save JSON report
     python scripts/eval_workflow.py --output report.json
 
+    # Inside the Docker api container (sample_data is mounted at /app/sample_data)
+    docker exec datacopilot-api python scripts/eval_workflow.py
+    docker exec datacopilot-api python scripts/eval_workflow.py --method pgvector
+    docker exec datacopilot-api python scripts/eval_workflow.py --output /tmp/report.json
+
 Environment variables (read from .env or shell):
     LLM_API_KEY     required
     LLM_BASE_URL    optional; defaults to https://api.openai.com/v1
@@ -72,7 +77,11 @@ logging.basicConfig(
 logger = logging.getLogger("eval_workflow")
 
 _QUERIES_FILE = _SCRIPTS_DIR / "eval_workflow_queries.json"
-_DATASET_PATH = _REPO_DIR / "sample_data" / "orders.csv"
+# Default dataset path works both locally (repo root / sample_data) and inside
+# the Docker api container where sample_data is mounted at /app/sample_data.
+_DEFAULT_DATASET = _BACKEND_DIR / "sample_data" / "orders.csv"
+if not _DEFAULT_DATASET.exists():
+    _DEFAULT_DATASET = _REPO_DIR / "sample_data" / "orders.csv"
 
 ExpectedOutcome = Literal["success", "validation_error", "clarification"]
 
@@ -146,11 +155,11 @@ def _load_queries() -> list[dict]:
         sys.exit(1)
 
 
-def _load_dataset() -> bytes:
-    if not _DATASET_PATH.exists():
-        logger.error("Demo dataset not found: %s", _DATASET_PATH)
+def _load_dataset(path: Path) -> bytes:
+    if not path.exists():
+        logger.error("Demo dataset not found: %s", path)
         sys.exit(1)
-    return _DATASET_PATH.read_bytes()
+    return path.read_bytes()
 
 
 # ---------------------------------------------------------------------------
@@ -314,9 +323,9 @@ def _is_overall_ok(expected_outcome: ExpectedOutcome, phases: PhaseResult) -> bo
 # Eval runner
 # ---------------------------------------------------------------------------
 
-async def run_eval(method: str) -> EvalReport:
+async def run_eval(method: str, dataset_path: Path) -> EvalReport:
     queries = _load_queries()
-    dataset_bytes = _load_dataset()
+    dataset_bytes = _load_dataset(dataset_path)
 
     # For keyword retrieval, pre-load docs so each query doesn't reload from disk.
     docs: list[dict] | None = None
@@ -342,7 +351,7 @@ async def run_eval(method: str) -> EvalReport:
 
     return EvalReport(
         method=method,
-        dataset=str(_DATASET_PATH.relative_to(_REPO_DIR)),
+        dataset=str(dataset_path),
         total_queries=len(results),
         results=results,
     )
@@ -458,9 +467,10 @@ def _build_json_output(report: EvalReport) -> dict:
 # Entry point
 # ---------------------------------------------------------------------------
 
-async def main(method: str, output: str | None) -> None:
-    print(f"Running workflow eval (method={method}, dataset=sample_data/orders.csv)...")
-    report = await run_eval(method)
+async def main(method: str, dataset: str, output: str | None) -> None:
+    dataset_path = Path(dataset)
+    print(f"Running workflow eval (method={method}, dataset={dataset_path})...")
+    report = await run_eval(method, dataset_path)
     _print_report(report)
 
     if output:
@@ -485,6 +495,14 @@ def _parse_args() -> argparse.Namespace:
         help="RAG retrieval method to use (default: keyword).",
     )
     parser.add_argument(
+        "--dataset",
+        default=str(_DEFAULT_DATASET),
+        help=(
+            "Path to the demo CSV dataset "
+            f"(default: {_DEFAULT_DATASET})."
+        ),
+    )
+    parser.add_argument(
         "--output",
         default=None,
         help="Optional path to write a JSON report file.",
@@ -494,4 +512,4 @@ def _parse_args() -> argparse.Namespace:
 
 if __name__ == "__main__":
     args = _parse_args()
-    asyncio.run(main(args.method, args.output))
+    asyncio.run(main(args.method, args.dataset, args.output))
