@@ -111,11 +111,13 @@ async def chat(request: ChatRequest) -> ChatResponse:
             for doc in rag_ctx.retrieved_docs
             if doc.doc_type == "transformation" and doc.type
         ]
+        planner_hint = str(exc) if str(exc) != "The request cannot be handled with the supported transformations." else None
         raise WorkflowValidationError(
             "The planner could not build a workflow for this query. "
             "The request may be outside the supported transformation scope.",
             error_code="empty_workflow",
             context={
+                "planner_hint": planner_hint,
                 "relevant_steps": relevant or None,
                 # Fall back to generic list only when RAG returned nothing useful.
                 "supported_steps": _SUPPORTED_STEPS if not relevant else None,
@@ -217,6 +219,9 @@ async def chat(request: ChatRequest) -> ChatResponse:
                 filename=result_name,
                 planned_steps=planned_steps,
                 row_count=execution_result.row_count,
+                query=request.query,
+                status="success",
+                explanation=explanation,
             )
         except Exception:
             logger.warning("Failed to persist run artifact for dataset %s", request.dataset_id, exc_info=True)
