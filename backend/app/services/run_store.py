@@ -3,12 +3,16 @@
 save():  writes result CSV to {storage_root}/runs/{run_id}/result.csv and
          inserts a record into the workflow_runs table.
 load():  resolves storage_uri from Postgres and reads the file.
+list_for_dataset(): returns recent run records for a dataset.
+get_run(): returns a single run record by run_id.
 """
 import hashlib
 import json
 import logging
 import uuid
+from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from app.core import database
 from app.core.config import settings
@@ -38,6 +42,10 @@ async def save(
     filename: str,
     planned_steps: list[dict],
     row_count: int,
+    query: str | None = None,
+    status: str = "success",
+    explanation: str | None = None,
+    parent_run_id: str | None = None,
 ) -> str:
     """Persist the result CSV and return the new run_id."""
     run_id = str(uuid.uuid4())
@@ -45,12 +53,16 @@ async def save(
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(csv_bytes)
 
+    steps_json = json.dumps(planned_steps, ensure_ascii=False)
+    step_count = len(planned_steps)
+
     async with database.pool.acquire() as conn:
         await conn.execute(
             """
             INSERT INTO workflow_runs
-                (id, dataset_id, steps_hash, filename, storage_uri, row_count, size_bytes)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+                (id, dataset_id, steps_hash, filename, storage_uri, row_count, size_bytes,
+                 query, status, explanation, planned_steps, step_count, parent_run_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13)
             """,
             run_id,
             dataset_id,
@@ -59,9 +71,18 @@ async def save(
             _storage_uri(run_id),
             row_count,
             len(csv_bytes),
+            query,
+            status,
+            explanation,
+            steps_json,
+            step_count,
+            parent_run_id,
         )
 
-    logger.info("Saved run '%s' (%d bytes, %d rows) for dataset '%s'", run_id, len(csv_bytes), row_count, dataset_id)
+    logger.info(
+        "Saved run '%s' (%d bytes, %d rows, %d steps) for dataset '%s'",
+        run_id, len(csv_bytes), row_count, step_count, dataset_id,
+    )
     return run_id
 
 
@@ -74,9 +95,7 @@ async def load(run_id: str) -> tuple[bytes, str]:
         )
 
     if row is None:
-        raise DatasetNotFoundError(
-            f"Run '{run_id}' not found."
-        )
+        raise DatasetNotFoundError(f"Run '{run_id}' not found.")
 
     relative = row["storage_uri"].removeprefix("local://")
     path = Path(settings.storage_root) / relative
@@ -87,3 +106,55 @@ async def load(run_id: str) -> tuple[bytes, str]:
         )
 
     return path.read_bytes(), row["filename"]
+
+
+async def list_for_dataset(
+    dataset_id: str,
+    limit: int = 20,
+) -> tuple[list[dict[str, Any]], int]:
+    """Return (records, total_count) for a dataset, newest first.
+
+    total_count reflects all rows matching dataset_id, not just the page.
+    Uses a window function so only one DB round-trip is needed.
+    """
+    async with database.pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id, dataset_id, query, status, step_count, row_count,
+                   created_at, parent_run_id,
+                   COUNT(*) OVER () AS total_count
+            FROM workflow_runs
+            WHERE dataset_id = $1
+            ORDER BY created_at DESC
+            LIMIT $2
+            """,
+            dataset_id,
+            limit,
+        )
+    if not rows:
+        return [], 0
+    total = rows[0]["total_count"]
+    return [dict(row) for row in rows], total
+
+
+async def get_run(run_id: str) -> dict[str, Any]:
+    """Return full metadata for a single run, including explanation and planned_steps."""
+    async with database.pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT id, dataset_id, query, status, step_count, row_count,
+                   created_at, parent_run_id, explanation, planned_steps
+            FROM workflow_runs
+            WHERE id = $1
+            """,
+            run_id,
+        )
+
+    if row is None:
+        raise DatasetNotFoundError(f"Run '{run_id}' not found.")
+
+    data = dict(row)
+    # planned_steps is stored as JSONB; asyncpg returns it as a string.
+    if data.get("planned_steps") and isinstance(data["planned_steps"], str):
+        data["planned_steps"] = json.loads(data["planned_steps"])
+    return data
