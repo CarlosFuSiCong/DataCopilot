@@ -8,11 +8,14 @@ import { ResultTable } from './ResultTable'
 import { ExplanationPanel } from './ExplanationPanel'
 import { RAGPanel } from './RAGPanel'
 
+import type { WorkflowStep } from '../types'
+
 interface NotebookCellProps {
   cell: NotebookCellData
   onConfirm: (cell: NotebookCellData) => void
   onClarify: (cell: NotebookCellData, answer: string) => void
   onSuggest: (query: string) => void
+  onRerun: (steps: WorkflowStep[], query: string, runId?: string | null) => void
 }
 
 // ---------------------------------------------------------------------------
@@ -70,6 +73,7 @@ function ErrorEmptyWorkflow({
   onSuggest: (q: string) => void
 }) {
   const hasRelevant = context?.relevant_steps && context.relevant_steps.length > 0
+  const plannerHint = context?.planner_hint
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -79,6 +83,22 @@ function ErrorEmptyWorkflow({
           {message}
         </p>
       </div>
+
+      {/* Specific planner hint (e.g. column not found + did-you-mean) — shown before generic suggestions */}
+      {plannerHint && (
+        <div style={{
+          padding: '8px 12px',
+          background: 'var(--color-surface-2)',
+          border: '1px solid var(--color-yellow)',
+          borderRadius: 4,
+          fontFamily: 'var(--font-mono)',
+          fontSize: '0.8rem',
+          color: 'var(--color-text)',
+          lineHeight: 1.6,
+        }}>
+          {plannerHint}
+        </div>
+      )}
 
       {/* RAG-relevant operation cards — primary path */}
       {hasRelevant && (
@@ -434,7 +454,7 @@ function ClarificationPanel({
   )
 }
 
-export function NotebookCell({ cell, onConfirm, onClarify, onSuggest }: NotebookCellProps) {
+export function NotebookCell({ cell, onConfirm, onClarify, onSuggest, onRerun }: NotebookCellProps) {
   const execResult = cell.confirmResult?.execution_result ?? cell.result?.execution_result ?? null
   const explanation = cell.confirmResult?.explanation ?? cell.result?.explanation ?? null
   const stepResults = cell.confirmResult?.execution_result?.step_results ?? cell.result?.step_results
@@ -556,6 +576,7 @@ export function NotebookCell({ cell, onConfirm, onClarify, onSuggest }: Notebook
             <WorkflowViewer
               steps={cell.result!.planned_steps}
               stepResults={stepResults}
+              onRerun={steps => onRerun(steps, cell.result!.query, cell.result?.run_id ?? cell.confirmResult?.run_id)}
             />
 
             {ragContext && <RAGPanel ragContext={ragContext} />}

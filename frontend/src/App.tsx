@@ -11,7 +11,7 @@ import { ChatPanel } from './components/ChatPanel'
 export default function App() {
   const [dataset, setDataset] = useState<UploadResponse | null>(null)
   const [suggestedQuery, setSuggestedQuery] = useState<string | undefined>(undefined)
-  const { cells, isLoading, handleSubmit, handleConfirm, handleClarify } = useNotebook(dataset)
+  const { cells, isLoading, handleSubmit, handleConfirm, handleClarify, handleRerun } = useNotebook(dataset)
   const {
     containerRef,
     sidebarWidth,
@@ -27,6 +27,9 @@ export default function App() {
     minChat: 240,
     maxChat: 640,
   })
+
+  // Counts confirmed cells — used as a refresh trigger for run history.
+  const confirmedCount = cells.filter(c => c.status === 'ok').length
 
   // Last confirmed cell — drives the result tab in DataPanel
   const lastConfirmedCell = [...cells].reverse().find(c => c.status === 'ok')
@@ -52,7 +55,7 @@ export default function App() {
 
       {/* Three-panel area: sidebar | DataPanel (flex-1) | ChatPanel */}
       <div ref={containerRef} className="flex flex-1 overflow-hidden">
-        <Sidebar dataset={dataset} onDatasetChange={setDataset} width={sidebarWidth} />
+        <Sidebar dataset={dataset} onDatasetChange={setDataset} onRerun={handleRerun} historyRefreshKey={confirmedCount} width={sidebarWidth} />
         <ResizeDivider onMouseDown={onLeftDividerMouseDown} />
         <DataPanel
           dataset={dataset}
@@ -68,6 +71,7 @@ export default function App() {
           onSubmit={handleSubmit}
           onConfirm={handleConfirm}
           onClarify={handleClarify}
+          onRerun={handleRerun}
           onSuggest={setSuggestedQuery}
           suggestedQuery={suggestedQuery}
           onSuggestedQueryConsumed={() => setSuggestedQuery(undefined)}

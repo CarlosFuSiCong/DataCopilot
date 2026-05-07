@@ -5,6 +5,8 @@ import { OutputBlock } from './ui/OutputBlock'
 interface WorkflowViewerProps {
   steps: WorkflowStep[]
   stepResults?: StepResult[]
+  /** Called when the user edits the JSON and clicks Rerun. */
+  onRerun?: (steps: WorkflowStep[]) => void
 }
 
 function StatusBadge({ status }: { status: 'success' | 'warning' | 'error' }) {
@@ -21,10 +23,53 @@ function StatusBadge({ status }: { status: 'success' | 'warning' | 'error' }) {
   )
 }
 
-export function WorkflowViewer({ steps, stepResults }: WorkflowViewerProps) {
-  const [expanded, setExpanded] = useState(false)
+const btnBase: React.CSSProperties = {
+  padding: '2px 8px',
+  background: 'transparent',
+  border: '1px solid var(--color-border)',
+  borderRadius: 3,
+  color: 'var(--color-text-muted)',
+  fontFamily: 'var(--font-mono)',
+  fontSize: '0.75rem',
+  cursor: 'pointer',
+}
+
+export function WorkflowViewer({ steps, stepResults, onRerun }: WorkflowViewerProps) {
+  const [jsonExpanded, setJsonExpanded] = useState(false)
+  const [editMode, setEditMode] = useState(false)
+  const [editValue, setEditValue] = useState('')
+  const [editError, setEditError] = useState<string | null>(null)
 
   const hasAnyIssues = stepResults?.some(sr => sr.issues?.length > 0)
+
+  function enterEdit() {
+    setEditValue(JSON.stringify(steps, null, 2))
+    setEditError(null)
+    setEditMode(true)
+    setJsonExpanded(true)
+  }
+
+  function cancelEdit() {
+    setEditMode(false)
+    setEditError(null)
+  }
+
+  function handleRerun() {
+    setEditError(null)
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(editValue)
+    } catch {
+      setEditError('Invalid JSON — fix syntax errors before rerunning.')
+      return
+    }
+    if (!Array.isArray(parsed)) {
+      setEditError('Workflow must be a JSON array of steps.')
+      return
+    }
+    setEditMode(false)
+    onRerun?.(parsed as WorkflowStep[])
+  }
 
   return (
     <OutputBlock
@@ -95,7 +140,6 @@ export function WorkflowViewer({ steps, stepResults }: WorkflowViewerProps) {
                 </div>
               </div>
 
-              {/* Issue list below the step row */}
               {sr?.issues?.map((issue, j) => (
                 <div
                   key={j}
@@ -125,22 +169,72 @@ export function WorkflowViewer({ steps, stepResults }: WorkflowViewerProps) {
           )
         })}
 
-        <button
-          onClick={() => setExpanded(v => !v)}
-          style={{
-            marginTop: 2, padding: '2px 8px', background: 'transparent',
-            border: '1px solid var(--color-border)', borderRadius: 3,
-            color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)',
-            fontSize: '0.75rem', cursor: 'pointer', alignSelf: 'flex-start',
-          }}
-        >
-          {expanded ? '▲ hide JSON' : '▼ show JSON'}
-        </button>
+        {/* JSON toolbar */}
+        <div className="flex items-center gap-2 flex-wrap" style={{ marginTop: 2 }}>
+          <button
+            onClick={() => {
+              if (!jsonExpanded) setEditMode(false)
+              setJsonExpanded(v => !v)
+            }}
+            style={btnBase}
+          >
+            {jsonExpanded ? '▲ hide JSON' : '▼ show JSON'}
+          </button>
 
-        {expanded && (
+          {jsonExpanded && !editMode && onRerun && (
+            <button onClick={enterEdit} style={{ ...btnBase, color: 'var(--color-accent)', borderColor: 'var(--color-accent-dim)' }}>
+              ✎ Edit &amp; Rerun
+            </button>
+          )}
+
+          {editMode && (
+            <>
+              <button
+                onClick={handleRerun}
+                style={{ ...btnBase, color: 'var(--color-green)', borderColor: 'var(--color-green)' }}
+              >
+                ▶ Rerun
+              </button>
+              <button onClick={cancelEdit} style={btnBase}>
+                ✕ Cancel
+              </button>
+            </>
+          )}
+        </div>
+
+        {jsonExpanded && !editMode && (
           <pre style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--color-text-soft)', overflowX: 'auto' }}>
             {JSON.stringify(steps, null, 2)}
           </pre>
+        )}
+
+        {editMode && (
+          <div className="flex flex-col gap-1">
+            <textarea
+              value={editValue}
+              onChange={e => { setEditValue(e.target.value); setEditError(null) }}
+              spellCheck={false}
+              rows={Math.min(Math.max(editValue.split('\n').length, 8), 30)}
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.75rem',
+                color: 'var(--color-text)',
+                background: 'var(--color-surface-2)',
+                border: `1px solid ${editError ? 'var(--color-red)' : 'var(--color-border)'}`,
+                borderRadius: 4,
+                padding: '8px 10px',
+                resize: 'vertical',
+                outline: 'none',
+                width: '100%',
+                lineHeight: 1.6,
+              }}
+            />
+            {editError && (
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--color-red)' }}>
+                ✗ {editError}
+              </span>
+            )}
+          </div>
         )}
       </div>
     </OutputBlock>

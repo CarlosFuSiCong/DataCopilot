@@ -22,7 +22,7 @@ export function DataPreview({ dataset }: DataPreviewProps) {
   const [loading, setLoading] = useState(false)
   const [fetchError, setFetchError] = useState<string | null>(null)
 
-  const { filename, row_count, column_count, columns, preview, dataset_id } = dataset
+  const { filename, row_count, columns, preview, dataset_id } = dataset
   const colNames = columns.map(c => c.name)
 
   // Fetch a page of full rows from the backend

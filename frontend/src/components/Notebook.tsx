@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import type { UploadResponse } from '../types'
+import type { UploadResponse, WorkflowStep } from '../types'
 import type { NotebookCellData } from '../types/notebook'
 import { NotebookIcon } from './ui/Icons'
 import { NotebookCell } from './NotebookCell'
@@ -13,11 +13,12 @@ interface NotebookProps {
   onConfirm: (cell: NotebookCellData) => void
   onClarify: (cell: NotebookCellData, answer: string) => void
   onSuggest: (query: string) => void
+  onRerun: (steps: WorkflowStep[], query: string, runId?: string | null) => void
   suggestedQuery?: string
   onSuggestedQueryConsumed?: () => void
 }
 
-export function Notebook({ cells, dataset, onSubmit, onConfirm, onClarify, onSuggest, suggestedQuery, onSuggestedQueryConsumed }: NotebookProps) {
+export function Notebook({ cells, dataset, onSubmit, onConfirm, onClarify, onSuggest, onRerun, suggestedQuery, onSuggestedQueryConsumed }: NotebookProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -78,7 +79,7 @@ export function Notebook({ cells, dataset, onSubmit, onConfirm, onClarify, onSug
 
         {/* All cells, including loading ones */}
         {cells.map(cell => (
-          <NotebookCell key={cell.id} cell={cell} onConfirm={onConfirm} onClarify={onClarify} onSuggest={onSuggest} />
+          <NotebookCell key={cell.id} cell={cell} onConfirm={onConfirm} onClarify={onClarify} onSuggest={onSuggest} onRerun={onRerun} />
         ))}
 
         <div ref={bottomRef} style={{ height: 4 }} />
