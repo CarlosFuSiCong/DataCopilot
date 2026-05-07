@@ -9,6 +9,8 @@
   "keywords": [
     "fill", "impute", "replace null", "replace nan", "missing values", "fill missing",
     "填充缺失", "补充缺失值", "填充空值", "均值填充", "中位数填充", "众数填充",
+    "用均值填充", "用均值补全", "用均值替换", "填充缺失值", "缺失值填充",
+    "用常量填充", "用中位数填充", "用众数填充", "前向填充", "后向填充",
     "fill null", "fill na", "fillna", "impute missing", "handle missing",
     "mean imputation", "median imputation", "forward fill", "backward fill"
   ],

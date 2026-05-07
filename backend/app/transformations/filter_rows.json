@@ -33,7 +33,7 @@
   ],
   "example": {
     "type": "filter_rows",
-    "column": "sales",
+    "column": "amount",
     "operator": ">",
     "value": 1000
   },
