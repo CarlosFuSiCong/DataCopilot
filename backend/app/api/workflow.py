@@ -2,6 +2,7 @@ import logging
 
 from fastapi import APIRouter
 
+from app.core.exceptions import WorkflowValidationError
 from app.models.workflow import (
     ConfirmRequest,
     ConfirmResponse,
@@ -40,7 +41,13 @@ async def preview_workflow(request: WorkflowRequest) -> PreviewResponse:
     """
     content = await dataset_store.load(request.dataset_id)
     column_names = get_column_names(content)
-    validator_service.validate(request.steps, column_names)
+    try:
+        validator_service.validate(request.steps, column_names)
+    except WorkflowValidationError as exc:
+        try:
+            validator_service.validate_against_original_columns(request.steps, column_names)
+        except WorkflowValidationError:
+            raise exc
     return executor_service.preview(request.steps, content)
 
 

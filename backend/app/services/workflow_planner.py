@@ -13,6 +13,7 @@ Validation is always performed by the validator before execution.
 """
 import json
 import logging
+import re
 
 from openai import OpenAI
 
@@ -34,6 +35,9 @@ Rules:
 - Use only the supported step types listed below.
 - Do not invent column names. Use only columns from the dataset profile.
 - Do not include explanations or comments in the JSON.
+- Do not add data-cleaning steps unless the user explicitly asks for cleaning,
+  dropping, removing, or filling missing values. For example, "Group by region
+  and sum amount" should be only a group_by step, even if amount has missing values.
 - If the request cannot be represented with the supported steps, return {{"steps": []}}.
 - If the request references a column that does NOT exist in the dataset profile, return:
   {{"steps": [], "error_hint": "Column '<name>' does not exist in the dataset. Available columns: <comma-separated list from profile>. Did you mean '<closest column>'?"}}
@@ -176,6 +180,26 @@ def _build_messages(query: str, ctx: RAGContext) -> list[dict]:
     ]
 
 
+def _explicit_missing_column(query: str, ctx: RAGContext) -> str | None:
+    """Return an explicitly referenced missing column, if present.
+
+    This deterministic guard prevents the LLM from mapping a named missing
+    column such as "sales" to a semantically similar existing column like
+    "amount" when the user wrote a column-like `where ...` condition.
+    """
+    available = {c["name"] for c in ctx.dataset_summary.columns}
+    patterns = [
+        r"\bwhere\s+([A-Za-z_][A-Za-z0-9_]*)\b",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, query, flags=re.IGNORECASE)
+        if match:
+            col = match.group(1)
+            if col not in available:
+                return col
+    return None
+
+
 def _parse_steps(raw_json: str) -> list[WorkflowStep]:
     """Parse LLM output into a list of WorkflowStep.
 
@@ -221,6 +245,14 @@ def plan(query: str, ctx: RAGContext, client: OpenAI | None = None) -> list[Work
     Pass `client` explicitly in tests to inject a mock.
     Raises PlannerError when the LLM output cannot be parsed or is empty.
     """
+    missing_col = _explicit_missing_column(query, ctx)
+    if missing_col:
+        available = ", ".join(c["name"] for c in ctx.dataset_summary.columns)
+        raise PlannerError(
+            f"Column '{missing_col}' does not exist in the dataset. "
+            f"Available columns: {available}."
+        )
+
     if not settings.llm_api_key:
         raise PlannerError(
             "LLM API key is not configured. Set LLM_API_KEY in your .env file."

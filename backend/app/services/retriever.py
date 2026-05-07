@@ -33,6 +33,9 @@ async def _register_vector_codec(conn: "asyncpg.Connection") -> None:
     this registration it would fail to encode a Python list as a parameter.
     schema='public' is where CREATE EXTENSION vector installs the type.
     """
+    if not hasattr(conn, "set_type_codec"):
+        # Test database mocks do not need asyncpg codec registration.
+        return
     await conn.set_type_codec(
         "vector",
         encoder=lambda v: "[" + ",".join(str(x) for x in v) + "]",
