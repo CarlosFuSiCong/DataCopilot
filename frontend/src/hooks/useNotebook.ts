@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { UploadResponse, WorkflowStep } from '../types'
 import type { NotebookCellData } from '../types/notebook'
 import { ApiCallError, sendChat, confirmWorkflow, rerunWorkflow, previewWorkflow } from '../api/client'
@@ -37,7 +37,9 @@ export function useNotebook(dataset: UploadResponse | null) {
   const [cells, setCells] = useState<NotebookCellData[]>([])
   // Ref always holds the latest cells so async functions never read stale closure state.
   const cellsRef = useRef<NotebookCellData[]>(cells)
-  cellsRef.current = cells
+  useEffect(() => {
+    cellsRef.current = cells
+  }, [cells])
 
   function appendCell(cell: NotebookCellData) {
     setCells(prev => {

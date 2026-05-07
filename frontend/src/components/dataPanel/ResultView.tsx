@@ -10,11 +10,13 @@ import { buildPreviewDiff, mapDiffApiRows, type DiffTableRow } from './previewDi
 import {
   backBtnStyle,
   browseBtnStyle,
-  PanelTableFooter,
   td,
   tdIdx,
   th,
   thIdx,
+} from './tableStyles'
+import {
+  PanelTableFooter,
 } from './tablePrimitives'
 
 export function ResultView({
@@ -79,11 +81,13 @@ export function ResultView({
 
   useEffect(() => {
     if (mode !== 'full') return
-    if (showDiff) {
-      fetchDiffPage(0)
-      return
-    }
-    fetchPage(0)
+    queueMicrotask(() => {
+      if (showDiff) {
+        void fetchDiffPage(0)
+        return
+      }
+      void fetchPage(0)
+    })
   }, [mode, showDiff, fetchPage, fetchDiffPage])
 
   useEffect(() => {
