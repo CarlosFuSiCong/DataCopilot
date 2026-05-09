@@ -103,5 +103,95 @@
     "expected_output": null,
     "expected_outcome": "validation_error",
     "notes": "Column 'sales' does not exist; validator should reject with missing_column error"
+  },
+  {
+    "id": "w10",
+    "demo_case": "MVP4-P0",
+    "query": "Remove duplicate rows using all columns",
+    "expected_step_types": ["deduplicate_rows"],
+    "expected_output": null,
+    "expected_outcome": "success",
+    "notes": "MVP4 P0 deduplicate_rows case"
+  },
+  {
+    "id": "w11",
+    "demo_case": "MVP4-P0",
+    "query": "Replace status pending with open",
+    "expected_step_types": ["replace_values"],
+    "expected_output": null,
+    "expected_outcome": "success",
+    "notes": "MVP4 P0 replace_values case"
+  },
+  {
+    "id": "w12",
+    "demo_case": "MVP4-P0",
+    "query": "Cast amount to float",
+    "expected_step_types": ["cast_column"],
+    "expected_output": null,
+    "expected_outcome": "success",
+    "notes": "MVP4 P0 cast_column case"
+  },
+  {
+    "id": "w13",
+    "demo_case": "MVP4-P1",
+    "query": "Add a column is_large where amount > 1000",
+    "expected_step_types": ["conditional_column"],
+    "expected_output": null,
+    "expected_outcome": "success",
+    "notes": "MVP4 P1 conditional_column case"
+  },
+  {
+    "id": "w14",
+    "demo_case": "MVP4-P1",
+    "query": "Create amount bands with bins 0, 1000, 2000, 10000",
+    "expected_step_types": ["bin_column"],
+    "expected_output": null,
+    "expected_outcome": "success",
+    "notes": "MVP4 P1 bin_column case"
+  },
+  {
+    "id": "w15",
+    "demo_case": "MVP4-P1",
+    "query": "Create a pivot table with region as rows, category as columns, and sum amount",
+    "expected_step_types": ["pivot_table"],
+    "expected_output": null,
+    "expected_outcome": "success",
+    "notes": "MVP4 P1 pivot_table case"
+  },
+  {
+    "id": "w16",
+    "demo_case": "MVP4-P2",
+    "query": "Trim extra spaces in the customer_name column",
+    "expected_step_types": ["trim_text"],
+    "expected_output": null,
+    "expected_outcome": "success",
+    "notes": "MVP4 P2 trim_text case"
+  },
+  {
+    "id": "w17",
+    "demo_case": "MVP4-P2",
+    "query": "Normalize the status column to lowercase",
+    "expected_step_types": ["normalize_text"],
+    "expected_output": null,
+    "expected_outcome": "success",
+    "notes": "MVP4 P2 normalize_text case"
+  },
+  {
+    "id": "w18",
+    "demo_case": "MVP4-P2",
+    "query": "Extract the prefix from order_code like ABC-123 into order_prefix",
+    "expected_step_types": ["extract_text"],
+    "expected_output": null,
+    "expected_outcome": "success",
+    "notes": "MVP4 P2 extract_text case"
+  },
+  {
+    "id": "w19",
+    "demo_case": "MVP4-P2",
+    "query": "Calculate days between order_date and ship_date into ship_days",
+    "expected_step_types": ["date_diff"],
+    "expected_output": null,
+    "expected_outcome": "success",
+    "notes": "MVP4 P2 date_diff case"
   }
 ]
