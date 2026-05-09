@@ -122,6 +122,88 @@ class FillMissingValuesStep(BaseModel):
     value: Union[float, str, None] = None
 
 
+class DeduplicateRowsStep(BaseModel):
+    type: Literal["deduplicate_rows"]
+    # Empty means use all columns.
+    columns: list[str] = []
+    keep: Literal["first", "last"] = "first"
+
+
+class ReplaceValuesStep(BaseModel):
+    type: Literal["replace_values"]
+    column: str
+    mapping: dict[Union[int, float, str, bool], Union[int, float, str, bool, None]]
+
+
+class CastColumnStep(BaseModel):
+    type: Literal["cast_column"]
+    column: str
+    target_type: Literal["string", "int", "float", "boolean", "datetime"]
+    errors: Literal["raise", "coerce"] = "raise"
+
+
+class ConditionalColumnStep(BaseModel):
+    type: Literal["conditional_column"]
+    new_column: str
+    condition_column: str
+    operator: Literal["=", "!=", ">", ">=", "<", "<="]
+    value: Union[int, float, str]
+    true_value: Union[int, float, str, bool, None]
+    false_value: Union[int, float, str, bool, None]
+
+    @field_validator("operator", mode="before")
+    @classmethod
+    def normalize_operator(cls, v: str) -> str:
+        return _OPERATOR_ALIASES.get(v, v)
+
+
+class BinColumnStep(BaseModel):
+    type: Literal["bin_column"]
+    column: str
+    new_column: str
+    bins: list[float]
+    labels: list[str] = []
+    include_lowest: bool = True
+
+
+class PivotTableStep(BaseModel):
+    type: Literal["pivot_table"]
+    index: list[str]
+    columns: str | None = None
+    values: str
+    agg: Literal["sum", "mean", "count", "min", "max"]
+
+
+class TrimTextStep(BaseModel):
+    type: Literal["trim_text"]
+    column: str
+    collapse_whitespace: bool = False
+
+
+class NormalizeTextStep(BaseModel):
+    type: Literal["normalize_text"]
+    column: str
+    case: Literal["lower", "upper", "title"]
+
+
+class ExtractTextStep(BaseModel):
+    type: Literal["extract_text"]
+    column: str
+    pattern: str
+    new_column: str
+    group: int = 1
+    no_match: str | None = None
+
+
+class DateDiffStep(BaseModel):
+    type: Literal["date_diff"]
+    start_column: str
+    end_column: str
+    new_column: str
+    unit: Literal["days"] = "days"
+    errors: Literal["raise", "coerce"] = "raise"
+
+
 # Discriminated union — Pydantic resolves the correct subtype from "type"
 WorkflowStep = Annotated[
     Union[
@@ -137,6 +219,16 @@ WorkflowStep = Annotated[
         DateExtractStep,
         DropColumnsStep,
         FillMissingValuesStep,
+        DeduplicateRowsStep,
+        ReplaceValuesStep,
+        CastColumnStep,
+        ConditionalColumnStep,
+        BinColumnStep,
+        PivotTableStep,
+        TrimTextStep,
+        NormalizeTextStep,
+        ExtractTextStep,
+        DateDiffStep,
     ],
     Field(discriminator="type"),
 ]
