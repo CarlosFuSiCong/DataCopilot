@@ -1,56 +1,31 @@
 """Workflow evaluation script for DataCopilot.
 
-Runs a fixed set of annotated queries end-to-end against the demo dataset
-(sample_data/orders.csv) and reports per-phase success rates:
+Evaluates the RAG → planner → validator → executor pipeline against one or
+more dataset contracts. Reports include retrieval method, LLM model, dataset
+hash, git commit sha, strict/tolerant mode, and regression candidates.
 
-  - retrieval_ok    : RAG retrieved at least one relevant doc
-  - planner_ok      : LLM produced valid workflow steps (no PlannerError)
-  - clarification   : LLM requested clarification instead of steps
-  - validation_ok   : steps passed the validator
-  - execution_ok    : executor completed without error
-  - step_types_ok   : actual step types match expected_step_types
-  - shape_ok        : output row/column count matches expected_output
-
-Failure cases are classified by the earliest failing phase:
-  retrieval → planning → validation → execution → shape
-
-Usage (from the backend/ directory):
-
-    # Keyword retrieval (no database required; LLM_API_KEY is still needed)
+Usage:
     python scripts/eval_workflow.py
-
-    # pgvector retrieval (requires DATABASE_URL + LLM_API_KEY)
     python scripts/eval_workflow.py --method pgvector
-
-    # Save JSON report
-    python scripts/eval_workflow.py --output report.json
-
-    # Inside the Docker api container (sample_data is mounted at /app/sample_data)
-    docker exec datacopilot-api python scripts/eval_workflow.py
-    docker exec datacopilot-api python scripts/eval_workflow.py --method pgvector
-    docker exec datacopilot-api python scripts/eval_workflow.py --output /tmp/report.json
-
-Environment variables (read from .env or shell):
-    LLM_API_KEY     required
-    LLM_BASE_URL    optional; defaults to https://api.openai.com/v1
-    LLM_MODEL       optional; defaults to settings value
-    DATABASE_URL    required only for --method pgvector
-    RETRIEVAL_METHOD overridden by --method flag when provided
+    python scripts/eval_workflow.py --mode tolerant
+    python scripts/eval_workflow.py --contract scripts/eval_contract.json
+    python scripts/eval_workflow.py --output reports/eval.json
 """
+from __future__ import annotations
+
 import argparse
 import asyncio
+import hashlib
 import json
 import logging
+import subprocess
 import sys
 import time
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
-# ---------------------------------------------------------------------------
-# Bootstrap: add backend root to sys.path so app.* imports work when the
-# script is run from any working directory.
-# ---------------------------------------------------------------------------
 _SCRIPTS_DIR = Path(__file__).parent
 _BACKEND_DIR = _SCRIPTS_DIR.parent
 _REPO_DIR = _BACKEND_DIR.parent
@@ -72,29 +47,31 @@ from app.services.profiler import profile  # noqa: E402
 
 logging.basicConfig(
     level=logging.WARNING,
-    format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
+    format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
 )
 logger = logging.getLogger("eval_workflow")
 
-_QUERIES_FILE = _SCRIPTS_DIR / "eval_workflow_queries.json"
-# Default dataset path works both locally (repo root / sample_data) and inside
-# the Docker api container where sample_data is mounted at /app/sample_data.
+_DEFAULT_QUERIES_FILE = _SCRIPTS_DIR / "eval_workflow_queries.json"
 _DEFAULT_DATASET = _BACKEND_DIR / "sample_data" / "orders.csv"
 if not _DEFAULT_DATASET.exists():
     _DEFAULT_DATASET = _REPO_DIR / "sample_data" / "orders.csv"
 
 ExpectedOutcome = Literal["success", "validation_error", "clarification"]
+EvalMode = Literal["strict", "tolerant"]
 
 
-# ---------------------------------------------------------------------------
-# Data structures
-# ---------------------------------------------------------------------------
+@dataclass
+class DatasetContract:
+    id: str
+    path: Path
+    queries: list[dict]
+
 
 @dataclass
 class PhaseResult:
     retrieval_ok: bool = False
     planner_ok: bool = False
-    clarification: bool = False      # LLM asked for clarification (expected or not)
+    clarification: bool = False
     validation_ok: bool = False
     execution_ok: bool = False
     step_types_ok: bool = False
@@ -102,13 +79,14 @@ class PhaseResult:
     actual_step_types: list[str] = field(default_factory=list)
     actual_row_count: int | None = None
     actual_col_count: int | None = None
-    failure_phase: str | None = None  # retrieval | planning | validation | execution | shape
+    failure_phase: str | None = None
     failure_message: str = ""
     elapsed_ms: float = 0.0
 
 
 @dataclass
 class QueryResult:
+    dataset_id: str
     query_id: str
     demo_case: str
     query: str
@@ -118,18 +96,21 @@ class QueryResult:
     expected_col_count: int | None
     phases: PhaseResult
     overall_ok: bool
+    regression_candidate: bool
 
 
 @dataclass
-class EvalReport:
-    method: str
+class DatasetReport:
+    dataset_id: str
     dataset: str
+    dataset_hash: str
     total_queries: int
     results: list[QueryResult] = field(default_factory=list)
 
     @property
     def counts(self) -> dict[str, int]:
         return {
+            "retrieval_ok": sum(1 for r in self.results if r.phases.retrieval_ok),
             "planner_ok": sum(1 for r in self.results if r.phases.planner_ok),
             "validation_ok": sum(1 for r in self.results if r.phases.validation_ok),
             "execution_ok": sum(1 for r in self.results if r.phases.execution_ok),
@@ -143,33 +124,133 @@ class EvalReport:
         return [r for r in self.results if not r.overall_ok]
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+@dataclass
+class EvalReport:
+    method: str
+    mode: EvalMode
+    llm_model: str
+    git_commit_sha: str
+    generated_at: str
+    datasets: list[DatasetReport] = field(default_factory=list)
 
-def _load_queries() -> list[dict]:
+    @property
+    def total_queries(self) -> int:
+        return sum(d.total_queries for d in self.datasets)
+
+    @property
+    def counts(self) -> dict[str, int]:
+        keys = [
+            "retrieval_ok",
+            "planner_ok",
+            "validation_ok",
+            "execution_ok",
+            "step_types_ok",
+            "shape_ok",
+            "overall_ok",
+        ]
+        return {
+            key: sum(dataset.counts[key] for dataset in self.datasets)
+            for key in keys
+        }
+
+    @property
+    def failures(self) -> list[QueryResult]:
+        return [result for dataset in self.datasets for result in dataset.failures]
+
+
+def _load_json(path: Path) -> object:
     try:
-        return json.loads(_QUERIES_FILE.read_text(encoding="utf-8"))
+        return json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
-        logger.error("Eval queries file not found: %s", _QUERIES_FILE)
+        logger.error("File not found: %s", path)
         sys.exit(1)
+
+
+def _load_queries(path: Path) -> list[dict]:
+    data = _load_json(path)
+    if not isinstance(data, list):
+        raise SystemExit(f"Query file must be a JSON array: {path}")
+    return data
+
+
+def _load_contracts(contract_path: Path | None, dataset_path: Path, queries_path: Path) -> list[DatasetContract]:
+    if contract_path is None:
+        return [
+            DatasetContract(
+                id=dataset_path.stem,
+                path=dataset_path,
+                queries=_load_queries(queries_path),
+            )
+        ]
+
+    data = _load_json(contract_path)
+    if not isinstance(data, dict) or not isinstance(data.get("datasets"), list):
+        raise SystemExit("Contract must be an object with a 'datasets' array.")
+
+    contracts: list[DatasetContract] = []
+    for idx, item in enumerate(data["datasets"]):
+        if not isinstance(item, dict):
+            raise SystemExit(f"Dataset contract item #{idx} must be an object.")
+        if "path" not in item:
+            raise SystemExit(f"Dataset contract item #{idx} is missing required field 'path'.")
+
+        base = contract_path.parent
+        path = Path(item["path"])
+        if not path.is_absolute():
+            path = base / path
+
+        if "queries" in item:
+            queries = item["queries"]
+        elif "queries_path" in item:
+            q_path = Path(item["queries_path"])
+            if not q_path.is_absolute():
+                q_path = base / q_path
+            queries = _load_queries(q_path)
+        else:
+            raise SystemExit(f"Dataset contract '{item.get('id', path.stem)}' lacks queries or queries_path.")
+
+        contracts.append(DatasetContract(
+            id=item.get("id", path.stem),
+            path=path,
+            queries=queries,
+        ))
+
+    return contracts
 
 
 def _load_dataset(path: Path) -> bytes:
     if not path.exists():
-        logger.error("Demo dataset not found: %s", path)
+        logger.error("Dataset not found: %s", path)
         sys.exit(1)
     return path.read_bytes()
 
 
-# ---------------------------------------------------------------------------
-# Per-query evaluation
-# ---------------------------------------------------------------------------
+def _sha256(content: bytes) -> str:
+    return hashlib.sha256(content).hexdigest()
+
+
+def _git_commit_sha() -> str:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=_REPO_DIR,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return result.stdout.strip()
+    except Exception:
+        return "unknown"
+
 
 async def _eval_query(
+    *,
+    dataset_id: str,
+    dataset_filename: str,
     query_spec: dict,
     dataset_bytes: bytes,
     method: str,
+    mode: EvalMode,
     docs: list[dict] | None,
 ) -> QueryResult:
     q_id: str = query_spec["id"]
@@ -184,27 +265,23 @@ async def _eval_query(
     phases = PhaseResult()
     t0 = time.monotonic()
 
-    # --- Phase 0: profile dataset ---
-    dataset_profile = profile(dataset_bytes, "orders.csv")
+    dataset_profile = profile(dataset_bytes, dataset_filename)
     column_names = [c.name for c in dataset_profile.columns]
 
-    # --- Phase 1: RAG retrieval ---
     try:
         rag_ctx = await rag_service.build_context(
             query=query,
             dataset_profile=dataset_profile,
-            top_k=3,
+            top_k=query_spec.get("rag_top_k", 3),
             docs=docs,
         )
         phases.retrieval_ok = bool(rag_ctx.retrieved_docs)
     except Exception as exc:
         phases.failure_phase = "retrieval"
         phases.failure_message = str(exc)
-        phases.elapsed_ms = (time.monotonic() - t0) * 1000
-        return _build_result(q_id, demo_case, query, expected_step_types, expected_outcome,
-                              expected_row_count, expected_col_count, phases)
+        return _build_result(dataset_id, q_id, demo_case, query, expected_step_types,
+                             expected_outcome, expected_row_count, expected_col_count, phases, mode, t0)
 
-    # --- Phase 2: planning ---
     planned_steps: list[WorkflowStep] = []
     try:
         planned_steps = workflow_planner.plan(query, rag_ctx)
@@ -214,29 +291,23 @@ async def _eval_query(
         phases.clarification = True
         phases.failure_phase = "planning"
         phases.failure_message = f"clarification: {exc}"
-        phases.elapsed_ms = (time.monotonic() - t0) * 1000
-        return _build_result(q_id, demo_case, query, expected_step_types, expected_outcome,
-                              expected_row_count, expected_col_count, phases)
+        return _build_result(dataset_id, q_id, demo_case, query, expected_step_types,
+                             expected_outcome, expected_row_count, expected_col_count, phases, mode, t0)
     except PlannerError as exc:
         phases.failure_phase = "planning"
         phases.failure_message = str(exc)
-        phases.elapsed_ms = (time.monotonic() - t0) * 1000
-        return _build_result(q_id, demo_case, query, expected_step_types, expected_outcome,
-                              expected_row_count, expected_col_count, phases)
+        return _build_result(dataset_id, q_id, demo_case, query, expected_step_types,
+                             expected_outcome, expected_row_count, expected_col_count, phases, mode, t0)
 
-    # --- Phase 3: validation ---
     try:
         validator_service.validate(planned_steps, column_names)
         phases.validation_ok = True
     except WorkflowValidationError as exc:
-        # For w09-style cases, a validation error is the expected outcome.
         phases.failure_phase = "validation"
         phases.failure_message = str(exc)
-        phases.elapsed_ms = (time.monotonic() - t0) * 1000
-        return _build_result(q_id, demo_case, query, expected_step_types, expected_outcome,
-                              expected_row_count, expected_col_count, phases)
+        return _build_result(dataset_id, q_id, demo_case, query, expected_step_types,
+                             expected_outcome, expected_row_count, expected_col_count, phases, mode, t0)
 
-    # --- Phase 4: execution ---
     try:
         exec_result = executor_service.execute(planned_steps, dataset_bytes)
         phases.execution_ok = True
@@ -245,11 +316,9 @@ async def _eval_query(
     except ExecutionError as exc:
         phases.failure_phase = "execution"
         phases.failure_message = str(exc)
-        phases.elapsed_ms = (time.monotonic() - t0) * 1000
-        return _build_result(q_id, demo_case, query, expected_step_types, expected_outcome,
-                              expected_row_count, expected_col_count, phases)
+        return _build_result(dataset_id, q_id, demo_case, query, expected_step_types,
+                             expected_outcome, expected_row_count, expected_col_count, phases, mode, t0)
 
-    # --- Phase 5: shape check ---
     if expected_row_count is not None and phases.actual_row_count != expected_row_count:
         phases.failure_phase = "shape"
         phases.failure_message = (
@@ -263,15 +332,13 @@ async def _eval_query(
     else:
         phases.shape_ok = True
 
-    # --- Step type check ---
     phases.step_types_ok = phases.actual_step_types == expected_step_types
-
-    phases.elapsed_ms = (time.monotonic() - t0) * 1000
-    return _build_result(q_id, demo_case, query, expected_step_types, expected_outcome,
-                          expected_row_count, expected_col_count, phases)
+    return _build_result(dataset_id, q_id, demo_case, query, expected_step_types,
+                         expected_outcome, expected_row_count, expected_col_count, phases, mode, t0)
 
 
 def _build_result(
+    dataset_id: str,
     q_id: str,
     demo_case: str,
     query: str,
@@ -280,9 +347,13 @@ def _build_result(
     expected_row_count: int | None,
     expected_col_count: int | None,
     phases: PhaseResult,
+    mode: EvalMode,
+    t0: float,
 ) -> QueryResult:
-    overall_ok = _is_overall_ok(expected_outcome, phases)
+    phases.elapsed_ms = (time.monotonic() - t0) * 1000
+    overall_ok = _is_overall_ok(expected_outcome, phases, mode)
     return QueryResult(
+        dataset_id=dataset_id,
         query_id=q_id,
         demo_case=demo_case,
         query=query,
@@ -292,58 +363,68 @@ def _build_result(
         expected_col_count=expected_col_count,
         phases=phases,
         overall_ok=overall_ok,
+        regression_candidate=not overall_ok,
     )
 
 
-def _is_overall_ok(expected_outcome: ExpectedOutcome, phases: PhaseResult) -> bool:
-    """Decide if a query passed based on the expected outcome type.
-
-    - success: all phases must pass (retrieval, planner, validation, execution, shape)
-    - validation_error: planner must succeed and validator must reject (validation_ok=False)
-    - clarification: planner must return clarification (clarification=True)
-    """
+def _is_overall_ok(expected_outcome: ExpectedOutcome, phases: PhaseResult, mode: EvalMode) -> bool:
     if expected_outcome == "validation_error":
-        # Planner should have generated steps that fail validation.
-        # If planner itself fails, that is also acceptable (e.g. column-not-found hint).
         return phases.failure_phase in ("validation", "planning") and not phases.validation_ok
     if expected_outcome == "clarification":
         return phases.clarification
-    # Default: success
-    return (
+
+    required = (
         phases.retrieval_ok
         and phases.planner_ok
         and phases.validation_ok
         and phases.execution_ok
         and phases.shape_ok
-        and phases.step_types_ok
     )
+    if mode == "strict":
+        return required and phases.step_types_ok
+    return required
 
 
-# ---------------------------------------------------------------------------
-# Eval runner
-# ---------------------------------------------------------------------------
-
-async def run_eval(method: str, dataset_path: Path) -> EvalReport:
-    queries = _load_queries()
-    dataset_bytes = _load_dataset(dataset_path)
-
-    # For keyword retrieval, pre-load docs so each query doesn't reload from disk.
-    docs: list[dict] | None = None
-    if method == "keyword":
-        docs = rag_service.load_docs()
+async def run_eval(
+    *,
+    method: str,
+    mode: EvalMode,
+    contracts: list[DatasetContract],
+) -> EvalReport:
+    docs: list[dict] | None = rag_service.load_docs() if method == "keyword" else None
 
     if method == "pgvector":
         from app.core import database  # noqa: PLC0415
         await database.connect()
 
-    results: list[QueryResult] = []
+    dataset_reports: list[DatasetReport] = []
     try:
-        for q in queries:
-            print(f"  [{q['id']}] {q['query'][:60]}...")
-            result = await _eval_query(q, dataset_bytes, method, docs)
-            icon = "OK" if result.overall_ok else "FAIL"
-            print(f"         → {icon}  (phase failure: {result.phases.failure_phase or '—'})")
-            results.append(result)
+        for contract in contracts:
+            dataset_bytes = _load_dataset(contract.path)
+            print(f"\nDataset [{contract.id}] {contract.path}")
+            results: list[QueryResult] = []
+            for q in contract.queries:
+                print(f"  [{q['id']}] {q['query'][:60]}...")
+                result = await _eval_query(
+                    dataset_id=contract.id,
+                    dataset_filename=contract.path.name,
+                    query_spec=q,
+                    dataset_bytes=dataset_bytes,
+                    method=method,
+                    mode=mode,
+                    docs=docs,
+                )
+                icon = "OK" if result.overall_ok else "FAIL"
+                print(f"         -> {icon}  (phase failure: {result.phases.failure_phase or '-'})")
+                results.append(result)
+
+            dataset_reports.append(DatasetReport(
+                dataset_id=contract.id,
+                dataset=str(contract.path),
+                dataset_hash=_sha256(dataset_bytes),
+                total_queries=len(results),
+                results=results,
+            ))
     finally:
         if method == "pgvector":
             from app.core import database  # noqa: PLC0415
@@ -351,140 +432,96 @@ async def run_eval(method: str, dataset_path: Path) -> EvalReport:
 
     return EvalReport(
         method=method,
-        dataset=str(dataset_path),
-        total_queries=len(results),
-        results=results,
+        mode=mode,
+        llm_model=settings.llm_model,
+        git_commit_sha=_git_commit_sha(),
+        generated_at=datetime.now(timezone.utc).isoformat(),
+        datasets=dataset_reports,
     )
 
 
-# ---------------------------------------------------------------------------
-# Report printing
-# ---------------------------------------------------------------------------
-
 def _print_report(report: EvalReport) -> None:
-    sep = "─" * 68
+    sep = "-" * 76
     c = report.counts
     n = report.total_queries
-
     print(f"\n{sep}")
-    print(f"  Workflow Eval — method: {report.method}  dataset: {report.dataset}")
+    print(
+        f"Workflow Eval - method: {report.method}  mode: {report.mode}  "
+        f"model: {report.llm_model}"
+    )
+    print(f"git: {report.git_commit_sha}")
     print(sep)
-    print(f"  {'Metric':<30} {'Pass':>6} / {'Total':>5}   {'Rate':>7}")
-    print(f"  {'-'*30} {'-'*6}   {'-'*5}   {'-'*7}")
 
     def _row(label: str, val: int) -> None:
-        print(f"  {label:<30} {val:>6} / {n:>5}   {val/n:>7.2%}")
+        rate = val / n if n else 0
+        print(f"  {label:<30} {val:>6} / {n:>5}   {rate:>7.2%}")
 
-    _row("planner_ok", c["planner_ok"])
-    _row("validation_ok", c["validation_ok"])
-    _row("execution_ok", c["execution_ok"])
-    _row("step_types_ok", c["step_types_ok"])
-    _row("shape_ok", c["shape_ok"])
+    for key in ("retrieval_ok", "planner_ok", "validation_ok", "execution_ok", "step_types_ok", "shape_ok"):
+        _row(key, c[key])
     print(f"  {sep}")
     _row("overall_ok", c["overall_ok"])
-    print(sep)
 
-    failures = report.failures
-    if not failures:
-        print("  All queries passed. [OK]")
-    else:
-        print(f"\n  Failure cases ({len(failures)}):")
-        for r in failures:
-            print(f"\n  [{r.query_id}/{r.demo_case}] {r.query}")
+    if report.failures:
+        print(f"\nFailure cases / regression candidates ({len(report.failures)}):")
+        for r in report.failures:
+            print(f"\n  [{r.dataset_id}/{r.query_id}/{r.demo_case}] {r.query}")
             print(f"    expected outcome : {r.expected_outcome}")
-            print(f"    failure phase    : {r.phases.failure_phase or '—'}")
-            print(f"    failure message  : {r.phases.failure_message or '—'}")
+            print(f"    failure phase    : {r.phases.failure_phase or '-'}")
+            print(f"    failure message  : {r.phases.failure_message or '-'}")
             print(f"    expected steps   : {r.expected_step_types}")
             print(f"    actual steps     : {r.phases.actual_step_types}")
-            if r.expected_row_count is not None:
-                print(f"    expected rows    : {r.expected_row_count}  actual: {r.phases.actual_row_count}")
-            if r.expected_col_count is not None:
-                print(f"    expected cols    : {r.expected_col_count}  actual: {r.phases.actual_col_count}")
-            print(f"    elapsed_ms       : {r.phases.elapsed_ms:.0f}")
+    else:
+        print("\nAll queries passed. [OK]")
     print(sep)
 
 
 def _build_json_output(report: EvalReport) -> dict:
-    c = report.counts
-    n = report.total_queries
-
-    def _phase_dict(p: PhaseResult) -> dict:
-        return {
-            "retrieval_ok": p.retrieval_ok,
-            "planner_ok": p.planner_ok,
-            "clarification": p.clarification,
-            "validation_ok": p.validation_ok,
-            "execution_ok": p.execution_ok,
-            "step_types_ok": p.step_types_ok,
-            "shape_ok": p.shape_ok,
-            "actual_step_types": p.actual_step_types,
-            "actual_row_count": p.actual_row_count,
-            "actual_col_count": p.actual_col_count,
-            "failure_phase": p.failure_phase,
-            "failure_message": p.failure_message,
-            "elapsed_ms": round(p.elapsed_ms),
-        }
-
-    return {
-        "method": report.method,
-        "dataset": report.dataset,
-        "total_queries": n,
-        "summary": {
-            "planner_ok": f"{c['planner_ok']}/{n}",
-            "validation_ok": f"{c['validation_ok']}/{n}",
-            "execution_ok": f"{c['execution_ok']}/{n}",
-            "step_types_ok": f"{c['step_types_ok']}/{n}",
-            "shape_ok": f"{c['shape_ok']}/{n}",
-            "overall_ok": f"{c['overall_ok']}/{n}",
-        },
-        "failures": [
-            {
-                "query_id": r.query_id,
-                "demo_case": r.demo_case,
-                "query": r.query,
-                "failure_phase": r.phases.failure_phase,
-                "failure_message": r.phases.failure_message,
-                "expected_step_types": r.expected_step_types,
-                "actual_step_types": r.phases.actual_step_types,
-            }
-            for r in report.failures
-        ],
-        "results": [
-            {
-                "query_id": r.query_id,
-                "demo_case": r.demo_case,
-                "query": r.query,
-                "expected_outcome": r.expected_outcome,
-                "overall_ok": r.overall_ok,
-                "phases": _phase_dict(r.phases),
-            }
-            for r in report.results
-        ],
+    output = asdict(report)
+    output["total_queries"] = report.total_queries
+    output["summary"] = {
+        key: f"{value}/{report.total_queries}"
+        for key, value in report.counts.items()
     }
+    output["failures"] = [
+        {
+            "dataset_id": r.dataset_id,
+            "query_id": r.query_id,
+            "demo_case": r.demo_case,
+            "query": r.query,
+            "failure_phase": r.phases.failure_phase,
+            "failure_message": r.phases.failure_message,
+            "expected_step_types": r.expected_step_types,
+            "actual_step_types": r.phases.actual_step_types,
+            "regression_candidate": r.regression_candidate,
+        }
+        for r in report.failures
+    ]
+    return output
 
 
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
+def _default_output_path() -> Path:
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return _REPO_DIR / "reports" / f"workflow_eval_{stamp}.json"
 
-async def main(method: str, dataset: str, output: str | None) -> None:
-    dataset_path = Path(dataset)
-    print(f"Running workflow eval (method={method}, dataset={dataset_path})...")
-    report = await run_eval(method, dataset_path)
+
+async def main(args: argparse.Namespace) -> None:
+    contracts = _load_contracts(args.contract, Path(args.dataset), Path(args.queries))
+    print(f"Running workflow eval (method={args.method}, mode={args.mode}, datasets={len(contracts)})...")
+    report = await run_eval(method=args.method, mode=args.mode, contracts=contracts)
     _print_report(report)
 
-    if output:
-        out_path = Path(output)
-        out_path.write_text(
-            json.dumps(_build_json_output(report), indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
-        print(f"\nJSON report saved to: {out_path}")
+    out_path = Path(args.output) if args.output else _default_output_path()
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(
+        json.dumps(_build_json_output(report), indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    print(f"\nJSON report saved to: {out_path}")
 
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Evaluate full workflow pipeline quality against the demo dataset.",
+        description="Evaluate workflow pipeline quality against dataset contracts.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
@@ -495,21 +532,34 @@ def _parse_args() -> argparse.Namespace:
         help="RAG retrieval method to use (default: keyword).",
     )
     parser.add_argument(
+        "--mode",
+        choices=["strict", "tolerant"],
+        default="strict",
+        help="strict checks exact step types; tolerant checks validation/execution/output shape.",
+    )
+    parser.add_argument(
         "--dataset",
         default=str(_DEFAULT_DATASET),
-        help=(
-            "Path to the demo CSV dataset "
-            f"(default: {_DEFAULT_DATASET})."
-        ),
+        help=f"CSV path for legacy single-dataset mode (default: {_DEFAULT_DATASET}).",
+    )
+    parser.add_argument(
+        "--queries",
+        default=str(_DEFAULT_QUERIES_FILE),
+        help=f"Query JSON path for legacy single-dataset mode (default: {_DEFAULT_QUERIES_FILE}).",
+    )
+    parser.add_argument(
+        "--contract",
+        default=None,
+        type=Path,
+        help="Optional multi-dataset contract JSON path.",
     )
     parser.add_argument(
         "--output",
         default=None,
-        help="Optional path to write a JSON report file.",
+        help="Optional report path. Defaults to reports/workflow_eval_<timestamp>.json.",
     )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
-    args = _parse_args()
-    asyncio.run(main(args.method, args.dataset, args.output))
+    asyncio.run(main(_parse_args()))

@@ -21,6 +21,7 @@ from app.core.config import settings
 from app.core.exceptions import ClarificationNeeded, PlannerError
 from app.models.rag import RAGContext
 from app.models.workflow import WorkflowRequest, WorkflowStep
+from app.tools import registry
 
 logger = logging.getLogger(__name__)
 
@@ -98,16 +99,8 @@ Generate the workflow JSON.
 """
 
 
-_SUPPORTED_STEP_TYPES = (
-    "remove_missing_values, select_columns, filter_rows, "
-    "group_by, sort_values, rename_columns, generate_summary, "
-    "limit_rows, derive_column, date_extract, "
-    "drop_columns, fill_missing_values"
-)
-
-
 def _format_supported_transformations() -> str:
-    return _SUPPORTED_STEP_TYPES
+    return registry.supported_tools_prompt()
 
 
 def _format_dataset_profile(ctx: RAGContext) -> str:
