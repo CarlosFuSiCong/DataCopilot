@@ -1,0 +1,33 @@
+{
+  "doc_type": "transformation",
+  "step_type": "normalize_text",
+  "issue_code": null,
+  "source_path": "transformations/normalize_text.json",
+  "type": "normalize_text",
+  "title": "normalize_text: normalize case in one text column",
+  "description": "Convert the values in one text column to lower case, upper case, or title case.",
+  "keywords": [
+    "normalize text", "case", "lowercase", "uppercase", "title case", "standardize text",
+    "大小写", "小写", "大写", "标题格式", "文本标准化"
+  ],
+  "parameters": [
+    {
+      "name": "column",
+      "type": "str",
+      "required": true,
+      "description": "The text column to normalize. Must exist in the dataset."
+    },
+    {
+      "name": "case",
+      "type": "str",
+      "required": true,
+      "description": "Case normalization mode. Allowed values: lower, upper, title."
+    }
+  ],
+  "example": {
+    "type": "normalize_text",
+    "column": "status",
+    "case": "lower"
+  },
+  "rag_note": "Use normalize_text when the user asks to standardize text casing. It modifies one existing column and does not create new columns."
+}

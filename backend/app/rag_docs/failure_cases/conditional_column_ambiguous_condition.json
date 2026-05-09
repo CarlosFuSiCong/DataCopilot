@@ -1,0 +1,16 @@
+{
+  "doc_type": "failure_case",
+  "step_type": "conditional_column",
+  "issue_code": "ambiguous_condition",
+  "source_path": "rag_docs/failure_cases/conditional_column_ambiguous_condition.json",
+  "title": "Failure: ambiguous condition for conditional_column",
+  "description": "A conditional_column step needs a condition column, operator, comparison value, true_value, and false_value. Queries like 'mark large orders' are ambiguous unless the threshold and labels are clear.",
+  "keywords": ["ambiguous condition", "missing threshold", "conditional label", "flag large", "条件不明确", "缺少阈值", "标记大订单"],
+  "planner_guidance": "Ask for clarification when the user does not provide a clear condition, threshold, or output labels. Do not guess business thresholds unless the user gives one.",
+  "example": {
+    "query": "Mark large orders",
+    "problem": "No threshold or true/false labels are specified.",
+    "resolution": "Ask: Which column and threshold define large orders, and what values should be written?"
+  },
+  "rag_note": "conditional_column should be planned only when the condition and branch values are explicit."
+}

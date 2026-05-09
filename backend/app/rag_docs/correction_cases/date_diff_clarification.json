@@ -1,0 +1,22 @@
+{
+  "doc_type": "correction_case",
+  "step_type": "date_diff",
+  "issue_code": "missing_date_columns",
+  "source_path": "rag_docs/correction_cases/date_diff_clarification.json",
+  "title": "Correction: ask for date_diff start and end columns",
+  "description": "When a duration request does not name both date columns, ask the user to identify the start and end columns before generating date_diff.",
+  "keywords": ["date diff clarification", "duration columns", "start end dates", "日期差澄清", "起止日期"],
+  "planner_guidance": "The clarification should ask for two concrete existing columns and whether invalid date values should raise an error or become missing values.",
+  "example": {
+    "question": "Which two date columns should I compare, and should invalid dates fail the workflow or become missing values?",
+    "resolved_step": {
+      "type": "date_diff",
+      "start_column": "order_date",
+      "end_column": "ship_date",
+      "new_column": "ship_days",
+      "unit": "days",
+      "errors": "raise"
+    }
+  },
+  "rag_note": "MVP4 date_diff supports days only; do not propose weeks or months yet."
+}

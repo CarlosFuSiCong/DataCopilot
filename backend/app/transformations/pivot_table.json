@@ -1,0 +1,27 @@
+{
+  "doc_type": "transformation",
+  "step_type": "pivot_table",
+  "issue_code": null,
+  "source_path": "transformations/pivot_table.json",
+  "type": "pivot_table",
+  "title": "pivot_table: reshape grouped values into a pivot table",
+  "description": "Create a pivot table using index columns, an optional columns field, a value column, and an aggregation. Use this when the user asks for a cross-tab, matrix, or pivoted summary.",
+  "keywords": [
+    "pivot", "pivot table", "cross tab", "crosstab", "matrix", "reshape",
+    "透视表", "交叉表", "矩阵", "数据透视"
+  ],
+  "parameters": [
+    {"name": "index", "required": true, "description": "Columns that remain as row keys."},
+    {"name": "columns", "required": false, "description": "Column whose values become pivoted output columns."},
+    {"name": "values", "required": true, "description": "Numeric value column to aggregate."},
+    {"name": "agg", "required": true, "description": "Aggregation: sum, mean, count, min, max."}
+  ],
+  "example": {
+    "type": "pivot_table",
+    "index": ["region"],
+    "columns": "category",
+    "values": "amount",
+    "agg": "sum"
+  },
+  "rag_note": "If index, columns, values, or aggregation are missing, ask for clarification because pivot_table has multiple structural interpretations."
+}

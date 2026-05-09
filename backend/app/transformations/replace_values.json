@@ -1,0 +1,23 @@
+{
+  "doc_type": "transformation",
+  "step_type": "replace_values",
+  "issue_code": null,
+  "source_path": "transformations/replace_values.json",
+  "type": "replace_values",
+  "title": "replace_values: replace values in a single column",
+  "description": "Replace string or numeric values in one column using an explicit mapping. Use this for standardizing labels, fixing typos, or replacing coded values.",
+  "keywords": [
+    "replace", "replace values", "mapping", "standardize", "fix typos", "recode",
+    "替换", "映射", "标准化", "修正值", "重编码"
+  ],
+  "parameters": [
+    {"name": "column", "required": true, "description": "Column where values should be replaced."},
+    {"name": "mapping", "required": true, "description": "Object mapping old values to new values."}
+  ],
+  "example": {
+    "type": "replace_values",
+    "column": "status",
+    "mapping": {"N/A": "unknown", "done": "completed"}
+  },
+  "rag_note": "Only use replace_values when the user provides an explicit mapping or clear old/new value pair."
+}

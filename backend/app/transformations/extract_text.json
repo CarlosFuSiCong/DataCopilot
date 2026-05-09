@@ -1,0 +1,54 @@
+{
+  "doc_type": "transformation",
+  "step_type": "extract_text",
+  "issue_code": null,
+  "source_path": "transformations/extract_text.json",
+  "type": "extract_text",
+  "title": "extract_text: extract text from one column using regex",
+  "description": "Use a regular expression to extract a match or capture group from one text column into a new column. Unmatched rows receive no_match, which defaults to null.",
+  "keywords": [
+    "regex", "regular expression", "extract", "capture group", "parse code", "text extraction",
+    "正则", "提取", "捕获组", "文本解析", "提取编号"
+  ],
+  "parameters": [
+    {
+      "name": "column",
+      "type": "str",
+      "required": true,
+      "description": "The source text column. Must exist in the dataset."
+    },
+    {
+      "name": "pattern",
+      "type": "str",
+      "required": true,
+      "description": "Python regex pattern. The selected group must exist in this pattern."
+    },
+    {
+      "name": "new_column",
+      "type": "str",
+      "required": true,
+      "description": "Name for the extracted text column."
+    },
+    {
+      "name": "group",
+      "type": "int",
+      "required": false,
+      "description": "Regex group number to write. Use 0 for the full match or 1+ for capture groups. Defaults to 1."
+    },
+    {
+      "name": "no_match",
+      "type": "str | null",
+      "required": false,
+      "description": "Value to write when the regex does not match. Defaults to null."
+    }
+  ],
+  "example": {
+    "type": "extract_text",
+    "column": "order_code",
+    "pattern": "([A-Z]+)-\\d+",
+    "new_column": "order_prefix",
+    "group": 1,
+    "no_match": null
+  },
+  "rag_note": "Use extract_text only for extraction into one new column. Do not use it for replacement, splitting into multiple columns, or arbitrary Python expressions."
+}

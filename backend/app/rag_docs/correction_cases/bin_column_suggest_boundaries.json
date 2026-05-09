@@ -1,0 +1,21 @@
+{
+  "doc_type": "correction_case",
+  "step_type": "bin_column",
+  "issue_code": "missing_bins",
+  "source_path": "rag_docs/correction_cases/bin_column_suggest_boundaries.json",
+  "title": "Correction: ask for bin_column boundaries",
+  "description": "When a binning request lacks numeric boundaries, ask the user to provide ranges and labels before generating a bin_column step.",
+  "keywords": ["bin clarification", "bucket ranges", "boundaries needed", "分箱澄清", "需要边界"],
+  "planner_guidance": "Offer a concrete answer format, such as: 'Use bins [0, 100, 1000, 10000] with labels low, medium, high.'",
+  "example": {
+    "question": "What numeric boundaries should define the amount bands?",
+    "resolved_step": {
+      "type": "bin_column",
+      "column": "amount",
+      "new_column": "amount_band",
+      "bins": [0, 100, 1000, 10000],
+      "labels": ["low", "medium", "high"]
+    }
+  },
+  "rag_note": "Do not silently choose arbitrary bins for user-facing workflows."
+}

@@ -1,0 +1,16 @@
+{
+  "doc_type": "failure_case",
+  "step_type": "bin_column",
+  "issue_code": "missing_bins",
+  "source_path": "rag_docs/failure_cases/bin_column_missing_bins.json",
+  "title": "Failure: bin_column without explicit bin boundaries",
+  "description": "A bin_column step needs sorted numeric boundaries and optional labels. Queries like 'bucket amounts' are underspecified when they do not provide ranges or label names.",
+  "keywords": ["missing bins", "bucket without ranges", "bin boundaries", "range labels", "缺少分箱边界", "区间不明确"],
+  "planner_guidance": "Ask for bin boundaries and labels when the user asks to bucket or bin values without giving concrete ranges.",
+  "example": {
+    "query": "Bucket amount into low medium high",
+    "problem": "The labels are present but numeric boundaries are missing.",
+    "resolution": "Ask for boundaries, for example 0-100, 100-1000, 1000+."
+  },
+  "rag_note": "Do not invent bin boundaries for business data unless the user explicitly provides them."
+}

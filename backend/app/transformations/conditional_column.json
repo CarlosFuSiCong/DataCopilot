@@ -1,0 +1,31 @@
+{
+  "doc_type": "transformation",
+  "step_type": "conditional_column",
+  "issue_code": null,
+  "source_path": "transformations/conditional_column.json",
+  "type": "conditional_column",
+  "title": "conditional_column: create a column from a condition",
+  "description": "Create a new column by testing a condition on another column and writing true/false branch values. Use this for flags, labels, and simple if-then logic.",
+  "keywords": [
+    "conditional", "if then", "flag", "label", "create flag", "is large",
+    "条件列", "如果", "标记", "标签", "新增标志"
+  ],
+  "parameters": [
+    {"name": "new_column", "required": true, "description": "Name of the new column."},
+    {"name": "condition_column", "required": true, "description": "Column used in the condition."},
+    {"name": "operator", "required": true, "description": "One of =, !=, >, >=, <, <=."},
+    {"name": "value", "required": true, "description": "Comparison value."},
+    {"name": "true_value", "required": true, "description": "Value written when condition is true."},
+    {"name": "false_value", "required": true, "description": "Value written when condition is false."}
+  ],
+  "example": {
+    "type": "conditional_column",
+    "new_column": "is_large",
+    "condition_column": "amount",
+    "operator": ">",
+    "value": 1000,
+    "true_value": true,
+    "false_value": false
+  },
+  "rag_note": "If the user gives an ambiguous condition or labels, ask for clarification before planning this step."
+}

@@ -1,0 +1,33 @@
+{
+  "doc_type": "transformation",
+  "step_type": "trim_text",
+  "issue_code": null,
+  "source_path": "transformations/trim_text.json",
+  "type": "trim_text",
+  "title": "trim_text: trim whitespace in one text column",
+  "description": "Remove leading and trailing whitespace from a single text column. Optionally collapse repeated whitespace inside the value into one space.",
+  "keywords": [
+    "trim", "strip", "whitespace", "spaces", "clean text", "collapse whitespace",
+    "去空格", "去除空格", "文本清洗", "多余空格"
+  ],
+  "parameters": [
+    {
+      "name": "column",
+      "type": "str",
+      "required": true,
+      "description": "The text column to clean. Must exist in the dataset."
+    },
+    {
+      "name": "collapse_whitespace",
+      "type": "bool",
+      "required": false,
+      "description": "When true, replace repeated whitespace inside the text with a single space."
+    }
+  ],
+  "example": {
+    "type": "trim_text",
+    "column": "customer_name",
+    "collapse_whitespace": true
+  },
+  "rag_note": "Use trim_text for low-risk whitespace cleanup on one column. Do not use it for regex replacement or multi-column parsing."
+}

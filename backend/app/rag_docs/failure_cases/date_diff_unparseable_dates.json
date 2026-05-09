@@ -1,0 +1,16 @@
+{
+  "doc_type": "failure_case",
+  "step_type": "date_diff",
+  "issue_code": "unparseable_dates",
+  "source_path": "rag_docs/failure_cases/date_diff_unparseable_dates.json",
+  "title": "Failure: date_diff cannot parse date values",
+  "description": "A date_diff step may fail when one or both selected columns contain values pandas cannot parse as dates under errors='raise'.",
+  "keywords": ["unparseable date", "invalid date", "date parse failed", "日期无法解析", "无效日期"],
+  "planner_guidance": "If the user expects invalid dates to become missing values, use errors='coerce'. Otherwise keep errors='raise' so data quality issues are visible.",
+  "example": {
+    "query": "Calculate days from order_date to ship_date",
+    "problem": "Some values in ship_date are not valid dates.",
+    "resolution": "Use errors='coerce' only when the user accepts missing durations for bad date values."
+  },
+  "rag_note": "date_diff should not silently hide date parsing problems unless the workflow explicitly uses coerce."
+}
