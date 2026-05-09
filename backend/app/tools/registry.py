@@ -7,6 +7,7 @@ and applied.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -14,18 +15,28 @@ import pandas as pd
 
 from app.core.exceptions import ExecutionError, WorkflowValidationError
 from app.models.workflow import (
+    BinColumnStep,
+    CastColumnStep,
+    ConditionalColumnStep,
     DateExtractStep,
+    DateDiffStep,
+    DeduplicateRowsStep,
     DeriveColumnStep,
     DropColumnsStep,
+    ExtractTextStep,
     FillMissingValuesStep,
     FilterRowsStep,
     GenerateSummaryStep,
     GroupByStep,
     LimitRowsStep,
+    NormalizeTextStep,
+    PivotTableStep,
+    ReplaceValuesStep,
     RemoveMissingValuesStep,
     RenameColumnsStep,
     SelectColumnsStep,
     SortValuesStep,
+    TrimTextStep,
     WorkflowStep,
 )
 
@@ -228,6 +239,82 @@ def _validate_fill_missing_values(step: WorkflowStep, col_set: set[str], label: 
         )
 
 
+def _validate_deduplicate_rows(step: WorkflowStep, col_set: set[str], label: str) -> None:
+    assert isinstance(step, DeduplicateRowsStep)
+    if step.columns:
+        _require_columns(step.columns, col_set, label)
+
+
+def _validate_replace_values(step: WorkflowStep, col_set: set[str], label: str) -> None:
+    assert isinstance(step, ReplaceValuesStep)
+    _require_columns([step.column], col_set, label)
+    if not step.mapping:
+        raise WorkflowValidationError(f"{label}: mapping must not be empty.")
+
+
+def _validate_cast_column(step: WorkflowStep, col_set: set[str], label: str) -> None:
+    assert isinstance(step, CastColumnStep)
+    _require_columns([step.column], col_set, label)
+
+
+def _validate_conditional_column(step: WorkflowStep, col_set: set[str], label: str) -> None:
+    assert isinstance(step, ConditionalColumnStep)
+    _require_columns([step.condition_column], col_set, label)
+
+
+def _validate_bin_column(step: WorkflowStep, col_set: set[str], label: str) -> None:
+    assert isinstance(step, BinColumnStep)
+    _require_columns([step.column], col_set, label)
+    if len(step.bins) < 2:
+        raise WorkflowValidationError(f"{label}: bins must contain at least two boundaries.")
+    if any(left >= right for left, right in zip(step.bins, step.bins[1:])):
+        raise WorkflowValidationError(f"{label}: bins must be strictly increasing.")
+    if step.labels and len(step.labels) != len(step.bins) - 1:
+        raise WorkflowValidationError(
+            f"{label}: labels length must be exactly len(bins) - 1."
+        )
+
+
+def _validate_pivot_table(step: WorkflowStep, col_set: set[str], label: str) -> None:
+    assert isinstance(step, PivotTableStep)
+    if not step.index:
+        raise WorkflowValidationError(f"{label}: index list must not be empty.")
+    cols = list(step.index) + [step.values]
+    if step.columns:
+        cols.append(step.columns)
+    _require_columns(cols, col_set, label)
+
+
+def _validate_trim_text(step: WorkflowStep, col_set: set[str], label: str) -> None:
+    assert isinstance(step, TrimTextStep)
+    _require_columns([step.column], col_set, label)
+
+
+def _validate_normalize_text(step: WorkflowStep, col_set: set[str], label: str) -> None:
+    assert isinstance(step, NormalizeTextStep)
+    _require_columns([step.column], col_set, label)
+
+
+def _validate_extract_text(step: WorkflowStep, col_set: set[str], label: str) -> None:
+    assert isinstance(step, ExtractTextStep)
+    _require_columns([step.column], col_set, label)
+    if step.group < 0:
+        raise WorkflowValidationError(f"{label}: group must be zero or a positive integer.")
+    try:
+        compiled = re.compile(step.pattern)
+    except re.error as exc:
+        raise WorkflowValidationError(f"{label}: invalid regex pattern: {exc}") from exc
+    if step.group > compiled.groups:
+        raise WorkflowValidationError(
+            f"{label}: group {step.group} does not exist in pattern with {compiled.groups} capture group(s)."
+        )
+
+
+def _validate_date_diff(step: WorkflowStep, col_set: set[str], label: str) -> None:
+    assert isinstance(step, DateDiffStep)
+    _require_columns([step.start_column, step.end_column], col_set, label)
+
+
 def _advance_select_columns(step: WorkflowStep, col_set: set[str]) -> set[str]:
     assert isinstance(step, SelectColumnsStep)
     return set(step.columns)
@@ -257,6 +344,18 @@ def _advance_group_by(step: WorkflowStep, col_set: set[str]) -> set[str]:
     assert isinstance(step, GroupByStep)
     group_cols = set(step.columns) if step.columns else {step.column}
     return group_cols | {step.target}
+
+
+def _advance_add_new_column(step: WorkflowStep, col_set: set[str]) -> set[str]:
+    new_column = getattr(step, "new_column")
+    return set(col_set) | {new_column}
+
+
+def _advance_pivot_table(step: WorkflowStep, col_set: set[str]) -> set[str]:
+    assert isinstance(step, PivotTableStep)
+    # Pivoted value columns are data-dependent and the original values column
+    # is aggregated away, so only stable index columns remain in static state.
+    return set(step.index)
 
 
 def _execute_remove_missing_values(step: WorkflowStep, df: pd.DataFrame) -> tuple[pd.DataFrame, str, StepMetrics]:
@@ -482,6 +581,291 @@ def _execute_fill_missing_values(step: WorkflowStep, df: pd.DataFrame) -> tuple[
     )
 
 
+def _execute_deduplicate_rows(step: WorkflowStep, df: pd.DataFrame) -> tuple[pd.DataFrame, str, StepMetrics]:
+    assert isinstance(step, DeduplicateRowsStep)
+    subset = step.columns or None
+    if subset:
+        missing = [c for c in subset if c not in df.columns]
+        if missing:
+            raise ExecutionError(
+                f"deduplicate_rows: column(s) {missing} not found. "
+                f"Available columns: {_available(df)}"
+            )
+    before = len(df)
+    result = df.drop_duplicates(subset=subset, keep=step.keep).reset_index(drop=True)
+    removed = before - len(result)
+    scope = f"columns {step.columns}" if step.columns else "all columns"
+    return (
+        result,
+        f"Removed {removed} duplicate row(s) using {scope}, keeping {step.keep}.",
+        StepMetrics(affected_rate=_safe_rate(removed, before)),
+    )
+
+
+def _coerce_mapping_key(raw: object, series: pd.Series) -> object:
+    if pd.api.types.is_bool_dtype(series):
+        if isinstance(raw, str):
+            lowered = raw.strip().lower()
+            if lowered in {"true", "1", "yes"}:
+                return True
+            if lowered in {"false", "0", "no"}:
+                return False
+        return raw
+    if pd.api.types.is_integer_dtype(series):
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            return raw
+    if pd.api.types.is_float_dtype(series):
+        try:
+            return float(raw)
+        except (TypeError, ValueError):
+            return raw
+    return raw
+
+
+def _execute_replace_values(step: WorkflowStep, df: pd.DataFrame) -> tuple[pd.DataFrame, str, StepMetrics]:
+    assert isinstance(step, ReplaceValuesStep)
+    if step.column not in df.columns:
+        raise ExecutionError(
+            f"replace_values: column '{step.column}' not found. "
+            f"Available columns: {_available(df)}"
+        )
+    result = df.copy()
+    mapping = {
+        _coerce_mapping_key(k, result[step.column]): v
+        for k, v in step.mapping.items()
+    }
+    before = result[step.column].copy()
+    result[step.column] = result[step.column].replace(mapping)
+    both_missing = before.isna() & result[step.column].isna()
+    changed = int(((before != result[step.column]) & ~both_missing).sum())
+    return (
+        result,
+        f"Replaced {changed} value(s) in '{step.column}'.",
+        StepMetrics(),
+    )
+
+
+def _execute_cast_column(step: WorkflowStep, df: pd.DataFrame) -> tuple[pd.DataFrame, str, StepMetrics]:
+    assert isinstance(step, CastColumnStep)
+    if step.column not in df.columns:
+        raise ExecutionError(
+            f"cast_column: column '{step.column}' not found. "
+            f"Available columns: {_available(df)}"
+        )
+    result = df.copy()
+    errors = step.errors
+    try:
+        if step.target_type == "string":
+            result[step.column] = result[step.column].astype("string")
+        elif step.target_type == "int":
+            converted = pd.to_numeric(result[step.column], errors=errors)
+            result[step.column] = converted.astype("Int64" if errors == "coerce" else "int64")
+        elif step.target_type == "float":
+            result[step.column] = pd.to_numeric(result[step.column], errors=errors).astype("float64")
+        elif step.target_type == "boolean":
+            result[step.column] = _to_boolean_series(result[step.column], errors)
+        elif step.target_type == "datetime":
+            result[step.column] = pd.to_datetime(result[step.column], errors=errors)
+        else:
+            raise ExecutionError(f"cast_column: unknown target_type '{step.target_type}'.")
+    except Exception as exc:
+        raise ExecutionError(
+            f"cast_column: could not cast '{step.column}' to {step.target_type}: {exc}"
+        ) from exc
+    return result, f"Cast '{step.column}' to {step.target_type}.", StepMetrics()
+
+
+def _to_boolean_series(series: pd.Series, errors: str) -> pd.Series:
+    mapping = {
+        "true": True, "1": True, "yes": True, "y": True,
+        "false": False, "0": False, "no": False, "n": False,
+    }
+    if pd.api.types.is_bool_dtype(series):
+        return series.astype("boolean")
+    normalized = series.astype("string").str.strip().str.lower()
+    converted = normalized.map(mapping)
+    invalid = converted.isna() & normalized.notna()
+    if invalid.any() and errors == "raise":
+        bad = sorted(normalized[invalid].dropna().unique().tolist())
+        raise ExecutionError(f"boolean cast found unsupported value(s): {bad}")
+    return converted.astype("boolean")
+
+
+def _execute_conditional_column(step: WorkflowStep, df: pd.DataFrame) -> tuple[pd.DataFrame, str, StepMetrics]:
+    assert isinstance(step, ConditionalColumnStep)
+    if step.condition_column not in df.columns:
+        raise ExecutionError(
+            f"conditional_column: column '{step.condition_column}' not found. "
+            f"Available columns: {_available(df)}"
+        )
+    result = df.copy()
+    mask = _FILTER_OPS[step.operator](result[step.condition_column], step.value)
+    result[step.new_column] = mask.map({True: step.true_value, False: step.false_value})
+    matched = int(mask.sum())
+    return (
+        result,
+        f"Created '{step.new_column}' from condition '{step.condition_column}' {step.operator} {step.value!r}.",
+        StepMetrics(match_rate=_safe_rate(matched, len(df))),
+    )
+
+
+def _execute_bin_column(step: WorkflowStep, df: pd.DataFrame) -> tuple[pd.DataFrame, str, StepMetrics]:
+    assert isinstance(step, BinColumnStep)
+    if step.column not in df.columns:
+        raise ExecutionError(
+            f"bin_column: column '{step.column}' not found. "
+            f"Available columns: {_available(df)}"
+        )
+    result = df.copy()
+    try:
+        result[step.new_column] = pd.cut(
+            result[step.column],
+            bins=step.bins,
+            labels=step.labels or None,
+            include_lowest=step.include_lowest,
+        )
+    except Exception as exc:
+        raise ExecutionError(f"bin_column: could not bin '{step.column}': {exc}") from exc
+    return result, f"Binned '{step.column}' into '{step.new_column}'.", StepMetrics()
+
+
+def _execute_pivot_table(step: WorkflowStep, df: pd.DataFrame) -> tuple[pd.DataFrame, str, StepMetrics]:
+    assert isinstance(step, PivotTableStep)
+    required = list(step.index) + [step.values]
+    if step.columns:
+        required.append(step.columns)
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        raise ExecutionError(
+            f"pivot_table: column(s) {missing} not found. "
+            f"Available columns: {_available(df)}"
+        )
+    try:
+        result = pd.pivot_table(
+            df,
+            index=step.index,
+            columns=step.columns,
+            values=step.values,
+            aggfunc=step.agg,
+            fill_value=0,
+        ).reset_index()
+    except Exception as exc:
+        raise ExecutionError(f"pivot_table: could not build pivot table: {exc}") from exc
+    result.columns = [
+        "_".join(str(part) for part in col if str(part))
+        if isinstance(col, tuple)
+        else str(col)
+        for col in result.columns
+    ]
+    affected_rows = len(df) - len(result)
+    return (
+        result,
+        f"Pivoted values '{step.values}' by index {step.index} and columns '{step.columns}'.",
+        StepMetrics(affected_rate=_safe_rate(affected_rows, len(df))),
+    )
+
+
+def _execute_trim_text(step: WorkflowStep, df: pd.DataFrame) -> tuple[pd.DataFrame, str, StepMetrics]:
+    assert isinstance(step, TrimTextStep)
+    if step.column not in df.columns:
+        raise ExecutionError(
+            f"trim_text: column '{step.column}' not found. "
+            f"Available columns: {_available(df)}"
+        )
+    result = df.copy()
+    before = result[step.column].copy()
+    text = result[step.column].astype("string").str.strip()
+    if step.collapse_whitespace:
+        text = text.str.replace(r"\s+", " ", regex=True)
+    result[step.column] = text
+    both_missing = before.isna() & result[step.column].isna()
+    changed = int(((before != result[step.column]) & ~both_missing).sum())
+    return result, f"Trimmed text in '{step.column}' for {changed} row(s).", StepMetrics()
+
+
+def _execute_normalize_text(step: WorkflowStep, df: pd.DataFrame) -> tuple[pd.DataFrame, str, StepMetrics]:
+    assert isinstance(step, NormalizeTextStep)
+    if step.column not in df.columns:
+        raise ExecutionError(
+            f"normalize_text: column '{step.column}' not found. "
+            f"Available columns: {_available(df)}"
+        )
+    result = df.copy()
+    before = result[step.column].copy()
+    text = result[step.column].astype("string")
+    if step.case == "lower":
+        result[step.column] = text.str.lower()
+    elif step.case == "upper":
+        result[step.column] = text.str.upper()
+    elif step.case == "title":
+        result[step.column] = text.str.title()
+    else:
+        raise ExecutionError(f"normalize_text: unknown case '{step.case}'.")
+    both_missing = before.isna() & result[step.column].isna()
+    changed = int(((before != result[step.column]) & ~both_missing).sum())
+    return result, f"Normalized text in '{step.column}' to {step.case} for {changed} row(s).", StepMetrics()
+
+
+def _execute_extract_text(step: WorkflowStep, df: pd.DataFrame) -> tuple[pd.DataFrame, str, StepMetrics]:
+    assert isinstance(step, ExtractTextStep)
+    if step.column not in df.columns:
+        raise ExecutionError(
+            f"extract_text: column '{step.column}' not found. "
+            f"Available columns: {_available(df)}"
+        )
+    try:
+        compiled = re.compile(step.pattern)
+    except re.error as exc:
+        raise ExecutionError(f"extract_text: invalid regex pattern: {exc}") from exc
+    result = df.copy()
+    series = result[step.column].astype("string").map(
+        lambda value: (
+            match.group(step.group)
+            if not pd.isna(value) and (match := compiled.search(str(value))) is not None
+            else None
+        ),
+        na_action=None,
+    )
+    result[step.new_column] = series.where(series.notna(), step.no_match)
+    matched = int(series.notna().sum())
+    return (
+        result,
+        f"Extracted text from '{step.column}' into '{step.new_column}' for {matched} row(s).",
+        StepMetrics(match_rate=_safe_rate(matched, len(df))),
+    )
+
+
+def _execute_date_diff(step: WorkflowStep, df: pd.DataFrame) -> tuple[pd.DataFrame, str, StepMetrics]:
+    assert isinstance(step, DateDiffStep)
+    missing = [c for c in [step.start_column, step.end_column] if c not in df.columns]
+    if missing:
+        raise ExecutionError(
+            f"date_diff: column(s) {missing} not found. "
+            f"Available columns: {_available(df)}"
+        )
+    result = df.copy()
+    try:
+        start = pd.to_datetime(result[step.start_column], errors=step.errors)
+        end = pd.to_datetime(result[step.end_column], errors=step.errors)
+    except Exception as exc:
+        raise ExecutionError(
+            f"date_diff: could not parse date columns '{step.start_column}' and '{step.end_column}': {exc}"
+        ) from exc
+    diff = end - start
+    if step.unit == "days":
+        result[step.new_column] = diff.dt.days
+    else:
+        raise ExecutionError(f"date_diff: unknown unit '{step.unit}'.")
+    computed = int(result[step.new_column].notna().sum())
+    return (
+        result,
+        f"Computed date difference from '{step.start_column}' to '{step.end_column}' in {step.unit}.",
+        StepMetrics(match_rate=_safe_rate(computed, len(df))),
+    )
+
+
 _REGISTRY: dict[str, ToolSpec] = {
     "remove_missing_values": ToolSpec(
         type="remove_missing_values",
@@ -596,5 +980,114 @@ _REGISTRY: dict[str, ToolSpec] = {
         execute=_execute_fill_missing_values,
         examples=[{"type": "fill_missing_values", "column": "amount", "strategy": "mean"}],
         risk_profile={"can_modify_values": True},
+    ),
+    "deduplicate_rows": ToolSpec(
+        type="deduplicate_rows",
+        description="Remove duplicate rows using all columns or a subset of columns.",
+        input_schema=_schema(DeduplicateRowsStep),
+        validate=_validate_deduplicate_rows,
+        execute=_execute_deduplicate_rows,
+        examples=[{"type": "deduplicate_rows", "columns": ["customer_id"], "keep": "first"}],
+        risk_profile={"can_reduce_rows": True, "warning_codes": ["empty_output", "affects_most_rows"]},
+    ),
+    "replace_values": ToolSpec(
+        type="replace_values",
+        description="Replace values in one column using an explicit mapping.",
+        input_schema=_schema(ReplaceValuesStep),
+        validate=_validate_replace_values,
+        execute=_execute_replace_values,
+        examples=[{"type": "replace_values", "column": "status", "mapping": {"N/A": "unknown"}}],
+        risk_profile={"can_modify_values": True},
+    ),
+    "cast_column": ToolSpec(
+        type="cast_column",
+        description="Cast one column to string, int, float, boolean, or datetime.",
+        input_schema=_schema(CastColumnStep),
+        validate=_validate_cast_column,
+        execute=_execute_cast_column,
+        examples=[{"type": "cast_column", "column": "amount", "target_type": "float", "errors": "raise"}],
+        risk_profile={"can_modify_values": True},
+    ),
+    "conditional_column": ToolSpec(
+        type="conditional_column",
+        description="Create a new column using true/false values from a condition.",
+        input_schema=_schema(ConditionalColumnStep),
+        validate=_validate_conditional_column,
+        execute=_execute_conditional_column,
+        advance_columns=_advance_add_new_column,
+        examples=[{
+            "type": "conditional_column",
+            "new_column": "is_large",
+            "condition_column": "amount",
+            "operator": ">",
+            "value": 1000,
+            "true_value": True,
+            "false_value": False,
+        }],
+        risk_profile={"can_change_columns": True, "can_modify_values": True},
+    ),
+    "bin_column": ToolSpec(
+        type="bin_column",
+        description="Bucket a numeric column into intervals and store labels in a new column.",
+        input_schema=_schema(BinColumnStep),
+        validate=_validate_bin_column,
+        execute=_execute_bin_column,
+        advance_columns=_advance_add_new_column,
+        examples=[{
+            "type": "bin_column",
+            "column": "amount",
+            "new_column": "amount_band",
+            "bins": [0, 100, 1000, 10000],
+            "labels": ["low", "medium", "high"],
+        }],
+        risk_profile={"can_change_columns": True},
+    ),
+    "pivot_table": ToolSpec(
+        type="pivot_table",
+        description="Create a pivot table from index, optional columns, values, and aggregation.",
+        input_schema=_schema(PivotTableStep),
+        validate=_validate_pivot_table,
+        execute=_execute_pivot_table,
+        advance_columns=_advance_pivot_table,
+        examples=[{"type": "pivot_table", "index": ["region"], "columns": "category", "values": "amount", "agg": "sum"}],
+        risk_profile={"can_reduce_rows": True, "can_change_columns": True},
+    ),
+    "trim_text": ToolSpec(
+        type="trim_text",
+        description="Trim leading/trailing whitespace in one text column, optionally collapsing repeated whitespace.",
+        input_schema=_schema(TrimTextStep),
+        validate=_validate_trim_text,
+        execute=_execute_trim_text,
+        examples=[{"type": "trim_text", "column": "customer_name", "collapse_whitespace": True}],
+        risk_profile={"can_modify_values": True},
+    ),
+    "normalize_text": ToolSpec(
+        type="normalize_text",
+        description="Normalize text case in one column using lower, upper, or title case.",
+        input_schema=_schema(NormalizeTextStep),
+        validate=_validate_normalize_text,
+        execute=_execute_normalize_text,
+        examples=[{"type": "normalize_text", "column": "status", "case": "lower"}],
+        risk_profile={"can_modify_values": True},
+    ),
+    "extract_text": ToolSpec(
+        type="extract_text",
+        description="Extract text from one column into a new column using a validated regex group.",
+        input_schema=_schema(ExtractTextStep),
+        validate=_validate_extract_text,
+        execute=_execute_extract_text,
+        advance_columns=_advance_add_new_column,
+        examples=[{"type": "extract_text", "column": "order_code", "pattern": "([A-Z]+)-\\d+", "new_column": "order_prefix", "group": 1}],
+        risk_profile={"can_change_columns": True},
+    ),
+    "date_diff": ToolSpec(
+        type="date_diff",
+        description="Compute the day difference between two date columns into a new column.",
+        input_schema=_schema(DateDiffStep),
+        validate=_validate_date_diff,
+        execute=_execute_date_diff,
+        advance_columns=_advance_add_new_column,
+        examples=[{"type": "date_diff", "start_column": "order_date", "end_column": "ship_date", "new_column": "ship_days", "unit": "days"}],
+        risk_profile={"can_change_columns": True},
     ),
 }

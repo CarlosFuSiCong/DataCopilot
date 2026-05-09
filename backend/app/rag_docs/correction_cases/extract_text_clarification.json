@@ -1,0 +1,22 @@
+{
+  "doc_type": "correction_case",
+  "step_type": "extract_text",
+  "issue_code": "ambiguous_regex",
+  "source_path": "rag_docs/correction_cases/extract_text_clarification.json",
+  "title": "Correction: ask for extract_text pattern examples",
+  "description": "When a text extraction request lacks a clear pattern, ask for a sample source value and the expected extracted value.",
+  "keywords": ["regex clarification", "extract example", "capture group clarification", "正则澄清", "提取示例"],
+  "planner_guidance": "Ask for one or two examples before generating extract_text when the regex cannot be inferred safely.",
+  "example": {
+    "question": "What pattern should I extract? For example, from 'ABC-123', should the new value be 'ABC', '123', or 'ABC-123'?",
+    "resolved_step": {
+      "type": "extract_text",
+      "column": "order_code",
+      "pattern": "([A-Z]+)-\\d+",
+      "new_column": "order_prefix",
+      "group": 1,
+      "no_match": null
+    }
+  },
+  "rag_note": "Prefer clarification over brittle regex guesses."
+}

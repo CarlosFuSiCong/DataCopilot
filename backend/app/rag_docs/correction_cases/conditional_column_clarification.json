@@ -1,0 +1,23 @@
+{
+  "doc_type": "correction_case",
+  "step_type": "conditional_column",
+  "issue_code": "ambiguous_condition",
+  "source_path": "rag_docs/correction_cases/conditional_column_clarification.json",
+  "title": "Correction: clarify conditional_column parameters",
+  "description": "When conditional column parameters are incomplete, ask for the condition column, operator, comparison value, true value, and false value before planning.",
+  "keywords": ["conditional clarification", "if then clarification", "condition parameters", "条件澄清", "条件列参数"],
+  "planner_guidance": "Ask a concise question with concrete examples, such as: 'Should is_large be true when amount > 1000 and false otherwise?'",
+  "example": {
+    "question": "Should I create is_large as true when amount > 1000 and false otherwise?",
+    "resolved_step": {
+      "type": "conditional_column",
+      "new_column": "is_large",
+      "condition_column": "amount",
+      "operator": ">",
+      "value": 1000,
+      "true_value": true,
+      "false_value": false
+    }
+  },
+  "rag_note": "Correction should preserve validator boundaries and never bypass workflow JSON."
+}

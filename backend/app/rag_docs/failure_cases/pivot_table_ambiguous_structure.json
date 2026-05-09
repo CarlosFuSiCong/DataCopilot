@@ -1,0 +1,16 @@
+{
+  "doc_type": "failure_case",
+  "step_type": "pivot_table",
+  "issue_code": "ambiguous_pivot_structure",
+  "source_path": "rag_docs/failure_cases/pivot_table_ambiguous_structure.json",
+  "title": "Failure: ambiguous pivot table structure",
+  "description": "A pivot_table step needs row index columns, an optional pivot columns field, a values column, and an aggregation. Queries like 'make a pivot table' are ambiguous without these structural choices.",
+  "keywords": ["ambiguous pivot", "pivot structure", "missing index", "missing values", "pivot aggregation", "透视表不明确", "缺少行列值"],
+  "planner_guidance": "Ask for clarification when index, columns, values, or aggregation are missing. If the user says 'by region and category', region is usually index and category is usually columns only if a value/aggregation is also specified.",
+  "example": {
+    "query": "Create a pivot table by region",
+    "problem": "Values and aggregation are missing.",
+    "resolution": "Ask which value column to aggregate and which aggregation to use."
+  },
+  "rag_note": "pivot_table has multiple valid structures, so missing structural parameters should trigger clarification."
+}

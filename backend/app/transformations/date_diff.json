@@ -1,0 +1,54 @@
+{
+  "doc_type": "transformation",
+  "step_type": "date_diff",
+  "issue_code": null,
+  "source_path": "transformations/date_diff.json",
+  "type": "date_diff",
+  "title": "date_diff: compute day difference between two date columns",
+  "description": "Parse two date or datetime columns and write the difference between end and start into a new numeric column. MVP4 supports days only.",
+  "keywords": [
+    "date difference", "date diff", "days between", "duration", "lead time", "ship days",
+    "日期差", "天数差", "持续时间", "间隔", "发货天数"
+  ],
+  "parameters": [
+    {
+      "name": "start_column",
+      "type": "str",
+      "required": true,
+      "description": "The start date column. Must exist in the dataset."
+    },
+    {
+      "name": "end_column",
+      "type": "str",
+      "required": true,
+      "description": "The end date column. Must exist in the dataset."
+    },
+    {
+      "name": "new_column",
+      "type": "str",
+      "required": true,
+      "description": "Name for the output numeric duration column."
+    },
+    {
+      "name": "unit",
+      "type": "str",
+      "required": false,
+      "description": "Difference unit. MVP4 supports only days."
+    },
+    {
+      "name": "errors",
+      "type": "str",
+      "required": false,
+      "description": "Date parsing behavior. Allowed values: raise or coerce."
+    }
+  ],
+  "example": {
+    "type": "date_diff",
+    "start_column": "order_date",
+    "end_column": "ship_date",
+    "new_column": "ship_days",
+    "unit": "days",
+    "errors": "raise"
+  },
+  "rag_note": "Use date_diff only when both start and end date columns are explicit. Ask for clarification if either date column is missing or ambiguous."
+}

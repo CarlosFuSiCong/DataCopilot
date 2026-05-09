@@ -1,0 +1,16 @@
+{
+  "doc_type": "failure_case",
+  "step_type": "extract_text",
+  "issue_code": "no_regex_match",
+  "source_path": "rag_docs/failure_cases/extract_text_no_match.json",
+  "title": "Failure: extract_text regex does not match source values",
+  "description": "An extract_text step can produce null or no_match values when the regex pattern does not match the source column values.",
+  "keywords": ["regex no match", "extract failed", "capture group missing", "正则无匹配", "提取失败"],
+  "planner_guidance": "Use a concrete regex only when the requested pattern is clear. If the text structure is ambiguous, ask the user for an example value and expected extraction result.",
+  "example": {
+    "query": "Extract the code from description",
+    "problem": "The source column format and target code pattern are not specified.",
+    "resolution": "Ask for an example such as 'ABC-123 should extract ABC'."
+  },
+  "rag_note": "Do not invent fragile regex patterns for unknown text formats."
+}

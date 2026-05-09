@@ -1,0 +1,23 @@
+{
+  "doc_type": "transformation",
+  "step_type": "deduplicate_rows",
+  "issue_code": null,
+  "source_path": "transformations/deduplicate_rows.json",
+  "type": "deduplicate_rows",
+  "title": "deduplicate_rows: remove duplicate rows",
+  "description": "Remove duplicate rows using either all columns or a subset of columns. Use this when the user asks to deduplicate, remove duplicate records, or keep one row per key.",
+  "keywords": [
+    "deduplicate", "duplicates", "duplicate rows", "remove duplicates", "unique rows",
+    "去重", "重复行", "删除重复", "唯一记录"
+  ],
+  "parameters": [
+    {"name": "columns", "required": false, "description": "Subset of columns used to identify duplicates. Empty means all columns."},
+    {"name": "keep", "required": false, "description": "Which duplicate to keep: first or last."}
+  ],
+  "example": {
+    "type": "deduplicate_rows",
+    "columns": ["customer_id"],
+    "keep": "first"
+  },
+  "rag_note": "If the user does not name duplicate key columns, use columns: [] to deduplicate across all columns."
+}

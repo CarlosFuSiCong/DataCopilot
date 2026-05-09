@@ -1,0 +1,25 @@
+{
+  "doc_type": "transformation",
+  "step_type": "cast_column",
+  "issue_code": null,
+  "source_path": "transformations/cast_column.json",
+  "type": "cast_column",
+  "title": "cast_column: convert a column type",
+  "description": "Convert a single column to string, int, float, boolean, or datetime. Use this when the user asks to change a column type or parse dates/numbers.",
+  "keywords": [
+    "cast", "convert type", "data type", "parse date", "to float", "to int", "to datetime", "boolean",
+    "转换类型", "数据类型", "转成数字", "转成日期", "布尔"
+  ],
+  "parameters": [
+    {"name": "column", "required": true, "description": "Column to cast."},
+    {"name": "target_type", "required": true, "description": "One of string, int, float, boolean, datetime."},
+    {"name": "errors", "required": false, "description": "raise or coerce. Default is raise."}
+  ],
+  "example": {
+    "type": "cast_column",
+    "column": "amount",
+    "target_type": "float",
+    "errors": "raise"
+  },
+  "rag_note": "Use errors='coerce' only if the user accepts invalid values becoming missing/null."
+}

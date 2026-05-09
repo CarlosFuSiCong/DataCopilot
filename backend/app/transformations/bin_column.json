@@ -1,0 +1,28 @@
+{
+  "doc_type": "transformation",
+  "step_type": "bin_column",
+  "issue_code": null,
+  "source_path": "transformations/bin_column.json",
+  "type": "bin_column",
+  "title": "bin_column: bucket numeric values into intervals",
+  "description": "Create a new column by binning a numeric column into intervals. Use this for ranges such as low/medium/high, age bands, or amount buckets.",
+  "keywords": [
+    "bin", "bucket", "range", "interval", "band", "low medium high",
+    "分箱", "区间", "范围", "档位", "金额段"
+  ],
+  "parameters": [
+    {"name": "column", "required": true, "description": "Numeric column to bin."},
+    {"name": "new_column", "required": true, "description": "Name of the new binned column."},
+    {"name": "bins", "required": true, "description": "Sorted numeric boundaries."},
+    {"name": "labels", "required": false, "description": "Optional labels. Must have len(bins)-1 values."},
+    {"name": "include_lowest", "required": false, "description": "Whether the first interval includes the lowest value."}
+  ],
+  "example": {
+    "type": "bin_column",
+    "column": "amount",
+    "new_column": "amount_band",
+    "bins": [0, 100, 1000, 10000],
+    "labels": ["low", "medium", "high"]
+  },
+  "rag_note": "Ask for clarification when the user asks to bucket values but does not provide boundaries or clear labels."
+}

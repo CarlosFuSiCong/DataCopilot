@@ -1,0 +1,21 @@
+{
+  "doc_type": "correction_case",
+  "step_type": "pivot_table",
+  "issue_code": "ambiguous_pivot_structure",
+  "source_path": "rag_docs/correction_cases/pivot_table_clarification.json",
+  "title": "Correction: clarify pivot_table structure",
+  "description": "When a pivot request omits index, columns, values, or aggregation, ask for the missing structural choices before planning.",
+  "keywords": ["pivot clarification", "pivot index columns values", "aggregation clarification", "透视表澄清", "行列值聚合"],
+  "planner_guidance": "Ask for row field, column field, value field, and aggregation. Use the dataset profile column names in the question.",
+  "example": {
+    "question": "Should I use region as rows, category as columns, and sum amount as values?",
+    "resolved_step": {
+      "type": "pivot_table",
+      "index": ["region"],
+      "columns": "category",
+      "values": "amount",
+      "agg": "sum"
+    }
+  },
+  "rag_note": "Pivot correction should turn ambiguous natural language into explicit workflow JSON fields."
+}

@@ -1,0 +1,16 @@
+{
+  "doc_type": "failure_case",
+  "step_type": "date_diff",
+  "issue_code": "missing_date_columns",
+  "source_path": "rag_docs/failure_cases/date_diff_missing_date_columns.json",
+  "title": "Failure: date_diff missing start or end date column",
+  "description": "A date_diff step requires explicit start_column and end_column values that both exist in the active dataset.",
+  "keywords": ["missing date column", "start date missing", "end date missing", "缺少日期列", "开始日期", "结束日期"],
+  "planner_guidance": "When the request says 'duration' or 'days between' but does not identify both date columns, ask which columns should be used.",
+  "example": {
+    "query": "Calculate delivery days",
+    "problem": "The request does not say which columns represent order date and delivery date.",
+    "resolution": "Ask the user to choose start and end columns before generating date_diff."
+  },
+  "rag_note": "Do not guess date_diff columns from names unless the dataset schema makes the user's intent explicit."
+}
