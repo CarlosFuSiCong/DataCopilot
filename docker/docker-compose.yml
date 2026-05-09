@@ -35,6 +35,7 @@ services:
       - ../backend/tests:/app/tests
       - ../backend/pytest.ini:/app/pytest.ini
       - ../backend/storage:/app/storage
+      - ../sample_data:/app/sample_data
     depends_on:
       postgres:
         condition: service_healthy

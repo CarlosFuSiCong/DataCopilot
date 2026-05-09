@@ -46,6 +46,24 @@ def validate(steps: list[WorkflowStep], column_names: list[str]) -> None:
     logger.info("Workflow validated: %d steps against columns %s", len(steps), column_names)
 
 
+def validate_against_original_columns(
+    steps: list[WorkflowStep],
+    column_names: list[str],
+) -> None:
+    """Validate each step only against the original dataset columns.
+
+    Preview uses this as a fallback when strict column-state validation fails:
+    if every referenced column exists in the raw dataset, the executor preview
+    can surface the failure as a partial step result instead of a 400 response.
+    """
+    if not steps:
+        raise WorkflowValidationError("Workflow must contain at least one step.")
+
+    original_col_set = set(column_names)
+    for idx, step in enumerate(steps):
+        _validate_step(step, original_col_set, idx)
+
+
 def simulate_columns(steps: list[WorkflowStep], initial_column_names: list[str]) -> list[str]:
     """Return the column names that would exist after running all steps.
 

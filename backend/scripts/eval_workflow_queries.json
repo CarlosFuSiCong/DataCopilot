@@ -1,0 +1,107 @@
+[
+  {
+    "id": "w01",
+    "demo_case": "D01",
+    "query": "Filter rows where amount > 1000",
+    "expected_step_types": ["filter_rows"],
+    "expected_output": {
+      "row_count": 8,
+      "column_count": 6
+    },
+    "expected_outcome": "success",
+    "notes": "Basic filter on amount; NaN rows are excluded by pandas comparison"
+  },
+  {
+    "id": "w02",
+    "demo_case": "D02",
+    "query": "Group by region and sum the amount",
+    "expected_step_types": ["group_by"],
+    "expected_output": {
+      "row_count": 4,
+      "column_count": 2
+    },
+    "expected_outcome": "success",
+    "notes": "group_by region with sum aggregation on amount"
+  },
+  {
+    "id": "w03",
+    "demo_case": "D03",
+    "query": "Filter orders over 1000, keep only order_id, region, amount, then sort by amount descending",
+    "expected_step_types": ["filter_rows", "select_columns", "sort_values"],
+    "expected_output": {
+      "row_count": 8,
+      "column_count": 3
+    },
+    "expected_outcome": "success",
+    "notes": "Multi-step: filter + select + sort; first row should have highest amount"
+  },
+  {
+    "id": "w04",
+    "demo_case": "D04",
+    "query": "Fill missing values in the amount column with the mean",
+    "expected_step_types": ["fill_missing_values"],
+    "expected_output": {
+      "row_count": 30,
+      "column_count": 6
+    },
+    "expected_outcome": "success",
+    "notes": "fill_missing_values with mean strategy; 3 NaN rows filled, total row count unchanged"
+  },
+  {
+    "id": "w05",
+    "demo_case": "D05",
+    "query": "Add a column total = amount * quantity",
+    "expected_step_types": ["derive_column"],
+    "expected_output": {
+      "row_count": 30,
+      "column_count": 7
+    },
+    "expected_outcome": "success",
+    "notes": "derive_column; result has one extra column 'total'"
+  },
+  {
+    "id": "w06",
+    "demo_case": "D06",
+    "query": "按地区分组，统计每组的销售总额",
+    "expected_step_types": ["group_by"],
+    "expected_output": {
+      "row_count": 4,
+      "column_count": 2
+    },
+    "expected_outcome": "success",
+    "notes": "Chinese query — pgvector cross-lingual retrieval; same workflow as w02"
+  },
+  {
+    "id": "w07",
+    "demo_case": "D07",
+    "query": "筛选金额大于1000的订单",
+    "expected_step_types": ["filter_rows"],
+    "expected_output": {
+      "row_count": 8,
+      "column_count": 6
+    },
+    "expected_outcome": "success",
+    "notes": "Chinese query — pgvector cross-lingual retrieval; same filter as w01"
+  },
+  {
+    "id": "w08",
+    "demo_case": "D08",
+    "query": "用均值填充amount列的缺失值",
+    "expected_step_types": ["fill_missing_values"],
+    "expected_output": {
+      "row_count": 30,
+      "column_count": 6
+    },
+    "expected_outcome": "success",
+    "notes": "Chinese query — same fill_missing_values as w04"
+  },
+  {
+    "id": "w09",
+    "demo_case": "D13",
+    "query": "Filter rows where sales > 1000",
+    "expected_step_types": [],
+    "expected_output": null,
+    "expected_outcome": "validation_error",
+    "notes": "Column 'sales' does not exist; validator should reject with missing_column error"
+  }
+]

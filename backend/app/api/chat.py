@@ -18,6 +18,7 @@ Error states returned as 400 with error_code + context:
   - execution_error: a step failed at pandas runtime
 """
 import logging
+import re
 
 from fastapi import APIRouter
 
@@ -51,11 +52,38 @@ _EXAMPLE_QUERIES = [
 ]
 
 
+def _explicit_missing_column(query: str, column_names: list[str]) -> str | None:
+    """Return an explicitly referenced missing column, if the query has one.
+
+    This catches product-facing cases like "where sales > 1000" before the LLM
+    can reinterpret "sales" as a semantically similar existing column.
+    """
+    available = set(column_names)
+    patterns = [
+        r"\bwhere\s+([A-Za-z_][A-Za-z0-9_]*)\b",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, query, flags=re.IGNORECASE)
+        if match:
+            col = match.group(1)
+            if col not in available:
+                return col
+    return None
+
+
 @router.post("", response_model=ChatResponse)
 async def chat(request: ChatRequest) -> ChatResponse:
     content = await dataset_store.load(request.dataset_id)
     dataset_profile = profile(content, filename="<cached>")
     column_names = [col.name for col in dataset_profile.columns]
+
+    missing_col = _explicit_missing_column(request.query, column_names)
+    if missing_col:
+        raise WorkflowValidationError(
+            f"Column '{missing_col}' does not exist in the dataset.",
+            error_code="missing_column",
+            context={"available_columns": column_names},
+        )
 
     # When the user answers a clarification question, merge the answer into the
     # query so the planner has full context.

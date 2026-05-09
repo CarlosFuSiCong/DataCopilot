@@ -47,7 +47,9 @@ export function DataPreview({ dataset }: DataPreviewProps) {
   // Load the first page when entering full mode
   useEffect(() => {
     if (mode === 'full' && fullRows.length === 0) {
-      fetchPage(0)
+      queueMicrotask(() => {
+        void fetchPage(0)
+      })
     }
   }, [mode, fullRows.length, fetchPage])
 

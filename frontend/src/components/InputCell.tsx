@@ -15,12 +15,12 @@ export function InputCell({ disabled, onSubmit, suggestedQuery, onSuggestedQuery
   // When a "Use this" suggestion arrives, fill the textarea and focus it.
   useEffect(() => {
     if (suggestedQuery) {
-      setQuery(suggestedQuery)
-      onSuggestedQueryConsumed?.()
-      setTimeout(() => {
+      queueMicrotask(() => {
+        setQuery(suggestedQuery)
+        onSuggestedQueryConsumed?.()
         textareaRef.current?.focus()
         autoResize()
-      }, 0)
+      })
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [suggestedQuery])

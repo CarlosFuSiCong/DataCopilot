@@ -186,10 +186,13 @@ function RunHistorySection({ datasetId, onRerun, refreshKey }: RunHistorySection
 
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
-    listRuns(datasetId, 20).then(resp => {
-      if (!cancelled) { setRuns(resp.runs); setLoading(false) }
-    }).catch(() => { if (!cancelled) setLoading(false) })
+    queueMicrotask(() => {
+      if (cancelled) return
+      setLoading(true)
+      listRuns(datasetId, 20).then(resp => {
+        if (!cancelled) { setRuns(resp.runs); setLoading(false) }
+      }).catch(() => { if (!cancelled) setLoading(false) })
+    })
     return () => { cancelled = true }
   }, [datasetId, refreshKey])
 

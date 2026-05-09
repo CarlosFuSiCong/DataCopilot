@@ -26,11 +26,13 @@ export function DataPanel({ dataset, lastExecutionResult, lastConfirmedSteps, la
   )
 
   useEffect(() => {
-    if (lastExecutionResult) setViewMode('result')
+    if (lastExecutionResult) {
+      queueMicrotask(() => setViewMode('result'))
+    }
   }, [lastExecutionResult])
 
   useEffect(() => {
-    setViewMode('original')
+    queueMicrotask(() => setViewMode('original'))
   }, [dataset?.dataset_id])
 
   function handleDownloadOriginal() {

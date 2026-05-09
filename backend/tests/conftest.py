@@ -66,5 +66,6 @@ def mock_database(tmp_path, monkeypatch):
     monkeypatch.setattr("app.core.database.connect", AsyncMock())
     monkeypatch.setattr("app.core.database.disconnect", AsyncMock())
     monkeypatch.setattr("app.core.config.settings.storage_root", str(tmp_path))
+    monkeypatch.setattr("app.core.config.settings.retrieval_method", "keyword")
 
     yield pool

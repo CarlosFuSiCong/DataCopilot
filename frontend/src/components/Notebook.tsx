@@ -20,10 +20,11 @@ interface NotebookProps {
 
 export function Notebook({ cells, dataset, onSubmit, onConfirm, onClarify, onSuggest, onRerun, suggestedQuery, onSuggestedQueryConsumed }: NotebookProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
+  const lastCellStatus = cells.at(-1)?.status
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-  }, [cells.length, cells.at(-1)?.status])
+  }, [cells.length, lastCellStatus])
 
   const isEmpty = cells.length === 0
 
