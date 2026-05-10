@@ -1,7 +1,8 @@
 """Unit tests for run history response shaping."""
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from app.api.runs import _to_run_record
+from app.services import run_store
 
 
 def _run_row(status: str | None = "success") -> dict:
@@ -52,3 +53,38 @@ def test_to_run_record_preserves_non_legacy_status():
 
     assert record.status == "warning_review"
     assert record.state == "warning_review"
+
+
+async def test_list_for_dataset_filters_legacy_success_as_executed(mock_database):
+    conn = mock_database.conn
+    conn._runs["legacy-run"] = _run_row("success")
+    conn._runs["legacy-run"]["id"] = "legacy-run"
+    conn._runs["preview-run"] = _run_row("warning_review")
+    conn._runs["preview-run"]["id"] = "preview-run"
+
+    rows, total = await run_store.list_for_dataset(
+        "dataset-1",
+        status="executed",
+    )
+
+    assert total == 1
+    assert rows[0]["id"] == "legacy-run"
+
+
+async def test_list_for_dataset_total_count_is_before_limit(mock_database):
+    conn = mock_database.conn
+    base_time = datetime.now(timezone.utc)
+    for index in range(3):
+        run = _run_row("warning_review")
+        run["id"] = f"run-{index}"
+        run["created_at"] = base_time - timedelta(minutes=index)
+        conn._runs[run["id"]] = run
+
+    rows, total = await run_store.list_for_dataset(
+        "dataset-1",
+        limit=1,
+        status="warning_review",
+    )
+
+    assert len(rows) == 1
+    assert total == 3

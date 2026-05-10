@@ -62,6 +62,23 @@ class _MockConnection:
             return {"id": record_id} if record_id in self._datasets else None
         return None
 
+    async def fetch(self, query: str, *args) -> list[dict]:
+        if "FROM workflow_runs" not in query:
+            return []
+
+        dataset_id = str(args[0]) if args else ""
+        limit = int(args[1]) if len(args) > 1 else 20
+        statuses = set(args[2]) if len(args) > 2 else None
+        rows = [
+            run
+            for run in self._runs.values()
+            if run["dataset_id"] == dataset_id
+            and (statuses is None or run["status"] in statuses)
+        ]
+        total = len(rows)
+        page = sorted(rows, key=lambda r: r["created_at"], reverse=True)[:limit]
+        return [{**row, "total_count": total} for row in page]
+
 
 class _MockPool:
     """asyncpg.Pool-compatible mock that provides a _MockConnection."""

@@ -1,0 +1,9 @@
+customer_id,customer_name,email,status,age,signup_date,total_spend
+1, Alice Smith ,alice@example.com,Active,34,2024-01-05,1200.50
+2,Bob Jones,bob@example.com,active,29,2024-01-12,850.00
+3,Carla Ray,carla@example.com,PENDING,,2024-02-03,430.25
+4,Deepak Rao,deepak@example.com,inactive,41,2024-02-20,
+5,Alice Smith,alice@example.com,Active,34,2024-01-05,1200.50
+6, Mei Chen ,mei@example.com,Pending,37,2024-03-10,980.00
+7,Noah Kim,noah@example.com,active,,2024-03-22,610.75
+8,Lina Park,lina@example.com,Inactive,25,2024-04-01,300.00

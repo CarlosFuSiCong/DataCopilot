@@ -1,0 +1,11 @@
+date,region,revenue,orders,channel
+2024-01-01,North,1200,12,web
+2024-01-02,North,1350,14,store
+2024-01-03,South,980,9,web
+2024-01-04,South,1600,16,partner
+2024-02-01,North,1800,18,web
+2024-02-02,East,760,7,store
+2024-02-03,East,1100,11,web
+2024-03-01,West,2100,21,partner
+2024-03-02,West,1900,19,web
+2024-03-03,South,1750,17,store

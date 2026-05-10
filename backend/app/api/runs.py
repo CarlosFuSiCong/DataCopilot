@@ -54,9 +54,10 @@ def _to_run_record(row: dict, include_detail: bool = False) -> RunRecord:
 async def list_runs(
     dataset_id: str = Query(..., description="Filter runs by dataset UUID"),
     limit: int = Query(20, ge=1, le=100),
+    status: str | None = Query(None, description="Filter runs by normalized workflow status"),
 ) -> RunListResponse:
     """List recent workflow runs for a dataset, newest first."""
-    rows, total = await run_store.list_for_dataset(dataset_id, limit=limit)
+    rows, total = await run_store.list_for_dataset(dataset_id, limit=limit, status=status)
     records = [_to_run_record(r) for r in rows]
     return RunListResponse(runs=records, total=total)
 

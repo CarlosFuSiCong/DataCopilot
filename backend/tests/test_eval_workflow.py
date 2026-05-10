@@ -13,6 +13,8 @@ from scripts.eval_workflow import (
     _load_contracts,
 )
 
+MVP4_CONTRACT = Path(__file__).parents[1] / "scripts" / "eval_contract_mvp4.json"
+
 
 def test_load_contracts_missing_dataset_path_raises_clear_error(tmp_path: Path):
     contract = tmp_path / "contract.json"
@@ -64,3 +66,36 @@ def test_build_json_output_uses_query_regression_candidate_field():
     output = _build_json_output(report)
 
     assert output["failures"][0]["regression_candidate"] is False
+
+
+def test_mvp4_eval_contract_defines_required_datasets():
+    data = json.loads(MVP4_CONTRACT.read_text(encoding="utf-8"))
+    dataset_ids = {dataset["id"] for dataset in data["datasets"]}
+
+    assert {
+        "orders",
+        "sales",
+        "messy_customers",
+        "time_series",
+        "wide_table",
+    }.issubset(dataset_ids)
+
+
+def test_mvp4_eval_contract_documents_schema_and_expected_outputs():
+    data = json.loads(MVP4_CONTRACT.read_text(encoding="utf-8"))
+
+    for dataset in data["datasets"]:
+        schema = dataset["schema"]
+        assert schema["row_count"] > 0
+        assert schema["columns"]
+        assert "missing_values" in schema
+        assert dataset["demo_prompts"]
+
+        queries = dataset.get("queries")
+        if queries is None:
+            continue
+        for query in queries:
+            assert "expected_step_types" in query
+            assert "expected_outcome" in query
+            assert "expected_output" in query
+            assert "expected_warning" in query

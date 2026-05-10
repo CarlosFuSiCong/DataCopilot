@@ -167,9 +167,14 @@ function timeAgo(iso: string): string {
 }
 
 function statusColor(status: string) {
-  if (status === 'success') return 'var(--color-green)'
-  if (status === 'error') return 'var(--color-red)'
+  if (status === 'executed' || status === 'confirmed' || status === 'success') return 'var(--color-green)'
+  if (status === 'failed' || status === 'error') return 'var(--color-red)'
+  if (status === 'warning_review' || status === 'preview_ready') return 'var(--color-yellow)'
   return 'var(--color-yellow)'
+}
+
+function statusLabel(status: string) {
+  return status.replace(/_/g, ' ')
 }
 
 interface RunHistorySectionProps {
@@ -183,18 +188,29 @@ function RunHistorySection({ datasetId, onRerun, refreshKey }: RunHistorySection
   const [loading, setLoading] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [loadingRerun, setLoadingRerun] = useState<string | null>(null)
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [detailsById, setDetailsById] = useState<Record<string, RunRecord>>({})
 
   useEffect(() => {
     let cancelled = false
     queueMicrotask(() => {
       if (cancelled) return
       setLoading(true)
-      listRuns(datasetId, 20).then(resp => {
+      listRuns(datasetId, 20, statusFilter).then(resp => {
         if (!cancelled) { setRuns(resp.runs); setLoading(false) }
       }).catch(() => { if (!cancelled) setLoading(false) })
     })
     return () => { cancelled = true }
-  }, [datasetId, refreshKey])
+  }, [datasetId, refreshKey, statusFilter])
+
+  async function toggleExpanded(run: RunRecord) {
+    const nextId = expandedId === run.run_id ? null : run.run_id
+    setExpandedId(nextId)
+    if (nextId && !detailsById[run.run_id]) {
+      const full = await getRun(run.run_id)
+      setDetailsById(prev => ({ ...prev, [run.run_id]: full }))
+    }
+  }
 
   async function handleRerun(run: RunRecord) {
     setLoadingRerun(run.run_id)
@@ -213,6 +229,25 @@ function RunHistorySection({ datasetId, onRerun, refreshKey }: RunHistorySection
   return (
     <SidebarSection label="HISTORY">
       <div className="flex flex-col px-2 py-1.5 gap-0.5">
+        <select
+          value={statusFilter}
+          onChange={e => setStatusFilter(e.target.value)}
+          style={{
+            margin: '0 2px 6px',
+            background: 'var(--color-surface-1)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 4,
+            color: 'var(--color-text-soft)',
+            fontFamily: 'var(--font-mono)',
+            fontSize: '0.7rem',
+            padding: '3px 6px',
+          }}
+        >
+          <option value="all">all statuses</option>
+          <option value="executed">executed</option>
+          <option value="warning_review">warning review</option>
+          <option value="failed">failed</option>
+        </select>
         {!loading && runs.length === 0 && (
           <span style={{
             fontFamily: 'var(--font-mono)', fontSize: '0.7rem',
@@ -223,10 +258,14 @@ function RunHistorySection({ datasetId, onRerun, refreshKey }: RunHistorySection
         )}
         {runs.map(run => {
           const isExpanded = expandedId === run.run_id
+          const detail = detailsById[run.run_id] ?? run
+          const summary = detail.context_summary
+          const attempts = detail.attempts ?? []
           return (
             <div key={run.run_id}>
               <button
-                onClick={() => setExpandedId(isExpanded ? null : run.run_id)}
+                data-testid={`run-history-${run.run_id}`}
+                onClick={() => void toggleExpanded(run)}
                 style={{
                   width: '100%', textAlign: 'left', background: 'transparent',
                   border: 'none', cursor: 'pointer', padding: '3px 4px',
@@ -256,6 +295,7 @@ function RunHistorySection({ datasetId, onRerun, refreshKey }: RunHistorySection
                   {timeAgo(run.created_at)}
                   {run.row_count != null ? ` · ${run.row_count.toLocaleString()} rows` : ''}
                   {run.step_count != null ? ` · ${run.step_count} steps` : ''}
+                  {run.status ? ` · ${statusLabel(run.status)}` : ''}
                 </div>
               </button>
 
@@ -268,7 +308,7 @@ function RunHistorySection({ datasetId, onRerun, refreshKey }: RunHistorySection
                     borderRadius: 4,
                   }}
                 >
-                  {run.explanation && (
+                  {detail.explanation && (
                     <p
                       style={{
                         margin: '0 0 6px', fontFamily: 'var(--font-mono)',
@@ -280,8 +320,33 @@ function RunHistorySection({ datasetId, onRerun, refreshKey }: RunHistorySection
                         overflow: 'hidden',
                       }}
                     >
-                      {run.explanation}
+                      {detail.explanation}
                     </p>
+                  )}
+                  {summary && (
+                    <div style={{ marginBottom: 6, fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
+                      <div>state: <span style={{ color: statusColor(summary.status) }}>{statusLabel(summary.status)}</span></div>
+                      <div>boundary: {summary.boundary}</div>
+                      <div>validation: {summary.validation_status ?? 'n/a'} · warnings: {summary.warning_count} · errors: {summary.error_count}</div>
+                      <div>schema: {summary.schema_columns.slice(0, 4).join(', ')}{summary.schema_columns.length > 4 ? '…' : ''}</div>
+                      {summary.planned_step_types.length > 0 && (
+                        <div>steps: {summary.planned_step_types.join(' → ')}</div>
+                      )}
+                      {summary.retrieved_docs.length > 0 && (
+                        <div>docs: {summary.retrieved_docs.slice(0, 2).join(', ')}</div>
+                      )}
+                    </div>
+                  )}
+                  {attempts.length > 0 && (
+                    <div style={{ marginBottom: 6, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      {attempts.map(attempt => (
+                        <div key={attempt.attempt_index} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.67rem', color: 'var(--color-text-muted)' }}>
+                          attempt {attempt.attempt_index}: {attempt.summary.validation_status} / {attempt.summary.preview_status} → {statusLabel(attempt.final_status)}
+                          {attempt.repair_reason ? ` · repair: ${attempt.repair_reason}` : ''}
+                          {attempt.planner_raw_output ? ` · planner: ${attempt.planner_raw_output.slice(0, 80)}` : ''}
+                        </div>
+                      ))}
+                    </div>
                   )}
                   <button
                     onClick={() => handleRerun(run)}

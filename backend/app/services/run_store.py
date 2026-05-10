@@ -123,26 +123,48 @@ async def load(run_id: str) -> tuple[bytes, str]:
 async def list_for_dataset(
     dataset_id: str,
     limit: int = 20,
+    status: str | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
     """Return (records, total_count) for a dataset, newest first.
 
     total_count reflects all rows matching dataset_id, not just the page.
     Uses a window function so only one DB round-trip is needed.
     """
+    status_values: tuple[str, ...] | None = None
+    if status:
+        normalized = "executed" if status == "success" else status
+        status_values = ("executed", "success") if normalized == "executed" else (normalized,)
+
     async with database.pool.acquire() as conn:
-        rows = await conn.fetch(
-            """
-            SELECT id, dataset_id, query, status, step_count, row_count,
-                   created_at, parent_run_id,
-                   COUNT(*) OVER () AS total_count
-            FROM workflow_runs
-            WHERE dataset_id = $1
-            ORDER BY created_at DESC
-            LIMIT $2
-            """,
-            dataset_id,
-            limit,
-        )
+        if status_values:
+            rows = await conn.fetch(
+                """
+                SELECT id, dataset_id, query, status, step_count, row_count,
+                       created_at, parent_run_id,
+                       COUNT(*) OVER () AS total_count
+                FROM workflow_runs
+                WHERE dataset_id = $1 AND status = ANY($3::text[])
+                ORDER BY created_at DESC
+                LIMIT $2
+                """,
+                dataset_id,
+                limit,
+                list(status_values),
+            )
+        else:
+            rows = await conn.fetch(
+                """
+                SELECT id, dataset_id, query, status, step_count, row_count,
+                       created_at, parent_run_id,
+                       COUNT(*) OVER () AS total_count
+                FROM workflow_runs
+                WHERE dataset_id = $1
+                ORDER BY created_at DESC
+                LIMIT $2
+                """,
+                dataset_id,
+                limit,
+            )
     if not rows:
         return [], 0
     total = rows[0]["total_count"]

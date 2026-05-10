@@ -7,6 +7,10 @@ examples/
 sample_data/
 .cursor/rules/
 
+# Versioned project contracts and lightweight engineering docs
+!project-docs/
+!project-docs/*.md
+
 # Local environment and generated files
 .env
 .env.*

@@ -80,6 +80,60 @@ export interface ExecutionResult {
   summary?: Record<string, unknown>
 }
 
+export type WorkflowRunState =
+  | 'draft'
+  | 'needs_clarification'
+  | 'planned'
+  | 'validation_failed'
+  | 'repair_attempted'
+  | 'preview_ready'
+  | 'warning_review'
+  | 'confirmed'
+  | 'executed'
+  | 'failed'
+
+export interface AttemptSummary {
+  attempt_index: number
+  query: string
+  retrieval_method?: string | null
+  retrieved_docs: string[]
+  planner_raw_output?: string | null
+  parsed_step_types: string[]
+  validation_status: 'not_run' | 'passed' | 'failed'
+  preview_status: 'not_run' | 'passed' | 'warning' | 'error'
+  warning_count: number
+  error_count: number
+  repair_reason?: string | null
+  final_status: WorkflowRunState
+}
+
+export interface WorkflowAttempt {
+  attempt_index: number
+  query: string
+  retrieval_method?: string | null
+  retrieved_docs: Record<string, unknown>[]
+  planner_raw_output?: string | null
+  parsed_steps: WorkflowStep[]
+  validation_result?: Record<string, unknown> | null
+  repair_reason?: string | null
+  final_status: WorkflowRunState
+  summary: AttemptSummary
+}
+
+export interface WorkflowContextSummary {
+  query: string
+  dataset_hash: string
+  schema_columns: string[]
+  row_count: number
+  retrieved_docs: string[]
+  planned_step_types: string[]
+  status: WorkflowRunState
+  boundary: string
+  validation_status?: string | null
+  warning_count: number
+  error_count: number
+}
+
 // ─── RAG ─────────────────────────────────────────────────────────────────────
 
 export interface RetrievedDoc {
@@ -148,6 +202,9 @@ export interface ChatResponse {
   // True when the planner needs clarification before producing a workflow.
   needs_clarification?: boolean
   clarification_question?: string | null
+  state?: WorkflowRunState
+  attempts?: WorkflowAttempt[]
+  context_summary?: WorkflowContextSummary | null
 }
 
 // ─── Run history ──────────────────────────────────────────────────────────────
@@ -163,6 +220,9 @@ export interface RunRecord {
   parent_run_id: string | null
   explanation?: string | null
   planned_steps?: WorkflowStep[] | null
+  state?: WorkflowRunState | null
+  attempts?: WorkflowAttempt[] | null
+  context_summary?: WorkflowContextSummary | null
 }
 
 export interface ConfirmRequest {
@@ -179,6 +239,9 @@ export interface ConfirmResponse {
   execution_result: ExecutionResult
   explanation: string
   run_id?: string | null
+  state?: WorkflowRunState
+  attempts?: WorkflowAttempt[]
+  context_summary?: WorkflowContextSummary | null
 }
 
 // ─── API errors ───────────────────────────────────────────────────────────────
