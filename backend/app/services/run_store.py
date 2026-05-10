@@ -46,6 +46,8 @@ async def save(
     status: str = "success",
     explanation: str | None = None,
     parent_run_id: str | None = None,
+    trace: dict[str, Any] | None = None,
+    context_summary: dict[str, Any] | None = None,
 ) -> str:
     """Persist the result CSV and return the new run_id."""
     run_id = str(uuid.uuid4())
@@ -54,6 +56,12 @@ async def save(
     path.write_bytes(csv_bytes)
 
     steps_json = json.dumps(planned_steps, ensure_ascii=False)
+    trace_json = json.dumps(trace, ensure_ascii=False) if trace is not None else None
+    context_summary_json = (
+        json.dumps(context_summary, ensure_ascii=False)
+        if context_summary is not None
+        else None
+    )
     step_count = len(planned_steps)
 
     async with database.pool.acquire() as conn:
@@ -61,8 +69,10 @@ async def save(
             """
             INSERT INTO workflow_runs
                 (id, dataset_id, steps_hash, filename, storage_uri, row_count, size_bytes,
-                 query, status, explanation, planned_steps, step_count, parent_run_id)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13)
+                 query, status, explanation, planned_steps, step_count, parent_run_id,
+                 trace, context_summary)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13,
+                    $14::jsonb, $15::jsonb)
             """,
             run_id,
             dataset_id,
@@ -77,6 +87,8 @@ async def save(
             steps_json,
             step_count,
             parent_run_id,
+            trace_json,
+            context_summary_json,
         )
 
     logger.info(
@@ -143,7 +155,8 @@ async def get_run(run_id: str) -> dict[str, Any]:
         row = await conn.fetchrow(
             """
             SELECT id, dataset_id, query, status, step_count, row_count,
-                   created_at, parent_run_id, explanation, planned_steps
+                   created_at, parent_run_id, explanation, planned_steps,
+                   trace, context_summary
             FROM workflow_runs
             WHERE id = $1
             """,
@@ -157,4 +170,8 @@ async def get_run(run_id: str) -> dict[str, Any]:
     # planned_steps is stored as JSONB; asyncpg returns it as a string.
     if data.get("planned_steps") and isinstance(data["planned_steps"], str):
         data["planned_steps"] = json.loads(data["planned_steps"])
+    if data.get("trace") and isinstance(data["trace"], str):
+        data["trace"] = json.loads(data["trace"])
+    if data.get("context_summary") and isinstance(data["context_summary"], str):
+        data["context_summary"] = json.loads(data["context_summary"])
     return data

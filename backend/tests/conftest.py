@@ -9,6 +9,7 @@ load() resolves it, mirroring the real round-trip through the datasets table.
 """
 import pytest
 from unittest.mock import AsyncMock
+from datetime import datetime, timezone
 
 
 class _MockConnection:
@@ -20,6 +21,7 @@ class _MockConnection:
 
     def __init__(self) -> None:
         self._datasets: dict[str, str] = {}
+        self._runs: dict[str, dict] = {}
 
     async def execute(self, query: str, *args) -> None:
         if "INSERT INTO datasets" in query:
@@ -27,14 +29,37 @@ class _MockConnection:
             dataset_id = str(args[0])
             storage_uri = str(args[2])
             self._datasets[dataset_id] = storage_uri
+        if "INSERT INTO workflow_runs" in query:
+            run_id = str(args[0])
+            self._runs[run_id] = {
+                "id": run_id,
+                "dataset_id": str(args[1]),
+                "filename": str(args[3]),
+                "storage_uri": str(args[4]),
+                "row_count": args[5],
+                "query": args[7],
+                "status": args[8],
+                "explanation": args[9],
+                "planned_steps": args[10],
+                "step_count": args[11],
+                "parent_run_id": args[12],
+                "trace": args[13],
+                "context_summary": args[14],
+                "created_at": datetime.now(timezone.utc),
+            }
 
     async def fetchrow(self, query: str, *args) -> dict | None:
-        dataset_id = str(args[0]) if args else ""
+        record_id = str(args[0]) if args else ""
+        if "FROM workflow_runs" in query and "SELECT storage_uri, filename" in query:
+            run = self._runs.get(record_id)
+            return {"storage_uri": run["storage_uri"], "filename": run["filename"]} if run else None
+        if "FROM workflow_runs" in query:
+            return self._runs.get(record_id)
         if "SELECT storage_uri" in query:
-            uri = self._datasets.get(dataset_id)
+            uri = self._datasets.get(record_id)
             return {"storage_uri": uri} if uri else None
         if "SELECT id" in query:
-            return {"id": dataset_id} if dataset_id in self._datasets else None
+            return {"id": record_id} if record_id in self._datasets else None
         return None
 
 

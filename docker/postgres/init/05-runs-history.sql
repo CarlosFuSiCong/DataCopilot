@@ -7,7 +7,9 @@ ALTER TABLE workflow_runs
     ADD COLUMN IF NOT EXISTS explanation    TEXT,
     ADD COLUMN IF NOT EXISTS planned_steps  JSONB,
     ADD COLUMN IF NOT EXISTS step_count     INTEGER,
-    ADD COLUMN IF NOT EXISTS parent_run_id  UUID REFERENCES workflow_runs(id);
+    ADD COLUMN IF NOT EXISTS parent_run_id  UUID REFERENCES workflow_runs(id),
+    ADD COLUMN IF NOT EXISTS trace          JSONB,
+    ADD COLUMN IF NOT EXISTS context_summary JSONB;
 
 CREATE INDEX IF NOT EXISTS idx_workflow_runs_created_at
     ON workflow_runs (created_at DESC);
