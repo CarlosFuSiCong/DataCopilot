@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.core.exceptions import PlannerError
+from app.core.exceptions import ClarificationNeeded, PlannerError
 from app.models.dataset import ColumnProfile, DatasetProfile
 from app.models.rag import DatasetSummary, RAGContext, RetrievalDebug, RetrievedDoc
 from app.services.workflow_planner import _build_messages, _parse_steps, plan
@@ -111,6 +111,12 @@ def test_parse_steps_steps_not_list_raises():
 def test_parse_steps_unknown_type_raises():
     raw = json.dumps({"steps": [{"type": "chart", "column": "sales"}]})
     with pytest.raises(PlannerError, match="invalid step structure"):
+        _parse_steps(raw)
+
+
+def test_parse_steps_missing_required_field_asks_clarification():
+    raw = json.dumps({"steps": [{"type": "filter_rows", "column": "sales", "operator": ">"}]})
+    with pytest.raises(ClarificationNeeded, match="value"):
         _parse_steps(raw)
 
 

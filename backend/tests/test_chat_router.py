@@ -79,7 +79,17 @@ def test_chat_returns_200():
 def test_chat_response_has_required_fields():
     did = _upload()
     data = _chat(did).json()
-    for field in ("query", "planned_steps", "step_results", "has_warnings", "has_errors", "rag_context"):
+    for field in (
+        "query",
+        "planned_steps",
+        "step_results",
+        "has_warnings",
+        "has_errors",
+        "rag_context",
+        "state",
+        "attempts",
+        "context_summary",
+    ):
         assert field in data
 
 
@@ -142,6 +152,14 @@ def test_chat_auto_confirm_true_no_warnings_sets_has_warnings_false():
     assert data["has_errors"] is False
 
 
+def test_chat_auto_confirm_true_no_warnings_sets_executed_state():
+    did = _upload()
+    data = _chat(did).json()
+    assert data["state"] == "executed"
+    assert data["context_summary"]["status"] == "executed"
+    assert data["attempts"][0]["summary"]["validation_status"] == "passed"
+
+
 # ---------------------------------------------------------------------------
 # auto_confirm=True — with warnings: preview-only returned
 # ---------------------------------------------------------------------------
@@ -176,6 +194,13 @@ def test_chat_auto_confirm_true_with_warnings_does_not_call_explainer():
         with patch("app.api.chat.result_explainer.explain") as mock_explain:
             client.post("/api/chat", json={"dataset_id": did, "query": "test", "auto_confirm": True})
     mock_explain.assert_not_called()
+
+
+def test_chat_auto_confirm_true_with_warnings_sets_warning_review_state():
+    did = _upload()
+    data = _chat_with_warnings(did, auto_confirm=True).json()
+    assert data["state"] == "warning_review"
+    assert data["context_summary"]["warning_count"] >= 1
 
 
 # ---------------------------------------------------------------------------
@@ -214,6 +239,12 @@ def test_chat_auto_confirm_false_does_not_call_explainer():
     mock_explain.assert_not_called()
 
 
+def test_chat_auto_confirm_false_sets_preview_ready_state():
+    did = _upload()
+    data = _chat(did, auto_confirm=False).json()
+    assert data["state"] == "preview_ready"
+
+
 # ---------------------------------------------------------------------------
 # Error paths
 # ---------------------------------------------------------------------------
@@ -234,11 +265,54 @@ def test_chat_planner_error_returns_400():
     assert "error" in resp.json()
 
 
-def test_chat_validation_error_returns_400():
+def test_chat_missing_column_validation_asks_clarification():
     bad_steps = [FilterRowsStep(type="filter_rows", column="nonexistent_col", operator=">", value=0)]
     did = _upload()
     with patch("app.api.chat.workflow_planner.plan", return_value=bad_steps):
         with patch("app.api.chat.result_explainer.explain", return_value=_MOCK_EXPLANATION):
             resp = client.post("/api/chat", json={"dataset_id": did, "query": "test"})
-    assert resp.status_code == 400
-    assert "nonexistent_col" in resp.json()["error"]
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["needs_clarification"] is True
+    assert data["state"] == "needs_clarification"
+    assert "nonexistent_col" in data["clarification_question"]
+    assert "sales" in data["clarification_question"]
+
+
+def test_chat_explicit_missing_column_asks_clarification_before_planning():
+    did = _upload()
+    with patch("app.api.chat.workflow_planner.plan") as mock_plan:
+        resp = client.post(
+            "/api/chat",
+            json={"dataset_id": did, "query": "filter rows where revenue > 100"},
+        )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["needs_clarification"] is True
+    assert "revenue" in data["clarification_question"]
+    assert "sales" in data["clarification_question"]
+    mock_plan.assert_not_called()
+
+
+def test_chat_validation_failure_allows_one_case_repair():
+    bad_case_steps = [FilterRowsStep(type="filter_rows", column="Sales", operator=">", value=1000)]
+    did = _upload()
+    with patch("app.api.chat.workflow_planner.plan", return_value=bad_case_steps):
+        with patch("app.api.chat.result_explainer.explain", return_value=_MOCK_EXPLANATION):
+            resp = client.post("/api/chat", json={"dataset_id": did, "query": "filter Sales"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["planned_steps"][0]["column"] == "sales"
+    assert len(data["attempts"]) == 2
+    assert data["attempts"][1]["repair_reason"] == "case_insensitive_column_match"
+
+
+def test_chat_persisted_run_detail_includes_trace_summary():
+    did = _upload()
+    run_id = _chat(did).json()["run_id"]
+    resp = client.get(f"/api/runs/{run_id}")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["state"] == "executed"
+    assert data["context_summary"]["status"] == "executed"
+    assert data["attempts"][0]["summary"]["final_status"] == "executed"
