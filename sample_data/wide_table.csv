@@ -1,0 +1,6 @@
+id,region,segment,metric_a,metric_b,metric_c,metric_d,metric_e,notes,updated_at
+1,North,Enterprise,12,40,8,100,3,keep,2024-01-01
+2,South,SMB,9,25,7,80,2,review,2024-01-02
+3,East,Enterprise,15,45,9,120,4,keep,2024-01-03
+4,West,Midmarket,6,20,5,70,1,drop,2024-01-04
+5,North,SMB,11,30,6,90,2,keep,2024-01-05

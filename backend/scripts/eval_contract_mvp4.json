@@ -1,0 +1,153 @@
+{
+  "datasets": [
+    {
+      "id": "orders",
+      "path": "../../sample_data/orders.csv",
+      "schema": {
+        "row_count": 30,
+        "columns": ["order_id", "region", "category", "amount", "quantity", "status"],
+        "missing_values": {"amount": 3}
+      },
+      "demo_prompts": [
+        "Filter rows where amount > 1000",
+        "Group by region and sum the amount"
+      ],
+      "queries_path": "eval_workflow_queries.json"
+    },
+    {
+      "id": "sales",
+      "path": "../../sample_data/sales.csv",
+      "schema": {
+        "row_count": 20,
+        "columns": ["region", "product", "sales", "month"],
+        "missing_values": {"sales": 2}
+      },
+      "demo_prompts": [
+        "Group by region and sum sales",
+        "Extract the month from month into month_number"
+      ],
+      "queries": [
+        {
+          "id": "sales_group_region",
+          "demo_case": "sales-analysis",
+          "query": "Group by region and sum sales",
+          "expected_step_types": ["group_by"],
+          "expected_output": {"row_count": 4, "column_count": 2},
+          "expected_outcome": "success",
+          "expected_warning": null
+        },
+        {
+          "id": "sales_missing_column",
+          "demo_case": "sales-error",
+          "query": "Filter rows where revenue > 1000",
+          "expected_step_types": [],
+          "expected_output": null,
+          "expected_outcome": "validation_error",
+          "expected_warning": "missing_column"
+        }
+      ]
+    },
+    {
+      "id": "messy_customers",
+      "path": "../../sample_data/messy_customers.csv",
+      "schema": {
+        "row_count": 8,
+        "columns": ["customer_id", "customer_name", "email", "status", "age", "signup_date", "total_spend"],
+        "missing_values": {"age": 2, "total_spend": 1}
+      },
+      "demo_prompts": [
+        "Remove duplicate rows using email",
+        "Normalize the status column to lowercase",
+        "Fill missing values in age with the median"
+      ],
+      "queries": [
+        {
+          "id": "customers_deduplicate",
+          "demo_case": "cleaning",
+          "query": "Remove duplicate rows using email",
+          "expected_step_types": ["deduplicate_rows"],
+          "expected_output": {"row_count": 7, "column_count": 7},
+          "expected_outcome": "success",
+          "expected_warning": null
+        },
+        {
+          "id": "customers_normalize_status",
+          "demo_case": "cleaning",
+          "query": "Normalize the status column to lowercase",
+          "expected_step_types": ["normalize_text"],
+          "expected_output": {"row_count": 8, "column_count": 7},
+          "expected_outcome": "success",
+          "expected_warning": null
+        }
+      ]
+    },
+    {
+      "id": "time_series",
+      "path": "../../sample_data/time_series.csv",
+      "schema": {
+        "row_count": 10,
+        "columns": ["date", "region", "revenue", "orders", "channel"],
+        "missing_values": {}
+      },
+      "demo_prompts": [
+        "Extract the month from date into month",
+        "Create revenue bands with bins 0, 1000, 2000, 3000",
+        "Create a pivot table with region as rows, channel as columns, and sum revenue"
+      ],
+      "queries": [
+        {
+          "id": "time_date_extract",
+          "demo_case": "time-series",
+          "query": "Extract the month from date into month",
+          "expected_step_types": ["date_extract"],
+          "expected_output": {"row_count": 10, "column_count": 6},
+          "expected_outcome": "success",
+          "expected_warning": null
+        },
+        {
+          "id": "time_pivot",
+          "demo_case": "time-series",
+          "query": "Create a pivot table with region as rows, channel as columns, and sum revenue",
+          "expected_step_types": ["pivot_table"],
+          "expected_output": null,
+          "expected_outcome": "success",
+          "expected_warning": null
+        }
+      ]
+    },
+    {
+      "id": "wide_table",
+      "path": "../../sample_data/wide_table.csv",
+      "schema": {
+        "row_count": 5,
+        "columns": ["id", "region", "segment", "metric_a", "metric_b", "metric_c", "metric_d", "metric_e", "notes", "updated_at"],
+        "missing_values": {}
+      },
+      "demo_prompts": [
+        "Select columns id, region, metric_a",
+        "Drop columns notes and updated_at",
+        "Rename metric_a to baseline_score"
+      ],
+      "queries": [
+        {
+          "id": "wide_select",
+          "demo_case": "wide-table",
+          "query": "Select columns id, region, metric_a",
+          "expected_step_types": ["select_columns"],
+          "expected_output": {"row_count": 5, "column_count": 3},
+          "expected_outcome": "success",
+          "expected_warning": null
+        },
+        {
+          "id": "wide_drop",
+          "demo_case": "wide-table",
+          "query": "Drop columns notes and updated_at",
+          "expected_step_types": ["drop_columns"],
+          "expected_output": {"row_count": 5, "column_count": 8},
+          "expected_outcome": "success",
+          "expected_warning": null
+        }
+      ]
+    }
+  ]
+}
