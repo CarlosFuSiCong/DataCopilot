@@ -14,8 +14,10 @@ Validation is always performed by the validator before execution.
 import json
 import logging
 import re
+from dataclasses import dataclass
 
 from openai import OpenAI
+from pydantic import ValidationError
 
 from app.core.config import settings
 from app.core.exceptions import ClarificationNeeded, PlannerError
@@ -24,6 +26,13 @@ from app.models.workflow import WorkflowRequest, WorkflowStep
 from app.tools import registry
 
 logger = logging.getLogger(__name__)
+last_raw_output: str | None = None
+
+
+@dataclass(frozen=True)
+class PlannerResult:
+    steps: list[WorkflowStep]
+    raw_output: str
 
 _SYSTEM_PROMPT = """\
 You are the Workflow Planner for DataCopilot.
@@ -226,13 +235,59 @@ def _parse_steps(raw_json: str) -> list[WorkflowStep]:
 
     try:
         request = WorkflowRequest(dataset_id="__parse_only__", steps=steps_raw)
+    except ValidationError as exc:
+        question = _missing_required_field_question(exc, steps_raw)
+        if question:
+            raise ClarificationNeeded(question) from exc
+        raise PlannerError(f"LLM workflow contains invalid step structure: {exc}") from exc
     except Exception as exc:
         raise PlannerError(f"LLM workflow contains invalid step structure: {exc}") from exc
 
     return request.steps
 
 
-def plan(query: str, ctx: RAGContext, client: OpenAI | None = None) -> list[WorkflowStep]:
+def _missing_required_field_question(
+    exc: ValidationError,
+    steps_raw: list,
+) -> str | None:
+    missing_errors = [err for err in exc.errors() if err.get("type") == "missing"]
+    if not missing_errors:
+        return None
+
+    first = missing_errors[0]
+    loc = first.get("loc", ())
+    field_name = str(loc[-1]) if loc else "a required field"
+    step_index = _extract_step_index(loc)
+    step_type = _extract_step_type(steps_raw, step_index)
+    if step_type:
+        return (
+            f"The planned '{step_type}' step is missing required field '{field_name}'. "
+            f"What value should I use for '{field_name}'?"
+        )
+    return (
+        f"The planned workflow is missing required field '{field_name}'. "
+        f"What value should I use for '{field_name}'?"
+    )
+
+
+def _extract_step_index(loc: tuple) -> int | None:
+    for part in loc:
+        if isinstance(part, int):
+            return part
+    return None
+
+
+def _extract_step_type(steps_raw: list, step_index: int | None) -> str | None:
+    if step_index is None or step_index >= len(steps_raw):
+        return None
+    step_raw = steps_raw[step_index]
+    if isinstance(step_raw, dict):
+        step_type = step_raw.get("type")
+        return str(step_type) if step_type else None
+    return None
+
+
+def plan_with_trace(query: str, ctx: RAGContext, client: OpenAI | None = None) -> PlannerResult:
     """Call the LLM to produce a workflow for the given query and RAG context.
 
     Pass `client` explicitly in tests to inject a mock.
@@ -277,7 +332,14 @@ def plan(query: str, ctx: RAGContext, client: OpenAI | None = None) -> list[Work
         raise PlannerError(f"Planner received unexpected response structure: {exc}") from exc
 
     logger.info("LLM planner raw response: %s", raw)
+    global last_raw_output
+    last_raw_output = raw
 
     steps = _parse_steps(raw)
     logger.info("Planner produced %d steps", len(steps))
-    return steps
+    return PlannerResult(steps=steps, raw_output=raw)
+
+
+def plan(query: str, ctx: RAGContext, client: OpenAI | None = None) -> list[WorkflowStep]:
+    """Return only workflow steps for callers/tests that do not need trace data."""
+    return plan_with_trace(query=query, ctx=ctx, client=client).steps

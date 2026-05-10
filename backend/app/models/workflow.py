@@ -2,6 +2,8 @@ from typing import Annotated, Literal, Union
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.models.runtime import WorkflowAttempt, WorkflowContextSummary, WorkflowRunState
+
 
 # ---------------------------------------------------------------------------
 # Individual step models — discriminated by the "type" literal field
@@ -334,3 +336,6 @@ class ConfirmResponse(BaseModel):
     # UUID of the persisted result run; used by the frontend to download the
     # full result CSV via GET /api/runs/{run_id}/download.
     run_id: str | None = None
+    state: WorkflowRunState = "executed"
+    attempts: list[WorkflowAttempt] = Field(default_factory=list)
+    context_summary: WorkflowContextSummary | None = None

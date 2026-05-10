@@ -26,18 +26,27 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/runs", tags=["runs"])
 
 
+def _normalize_run_status(status: str | None) -> str:
+    value = status or "success"
+    return "executed" if value == "success" else value
+
+
 def _to_run_record(row: dict, include_detail: bool = False) -> RunRecord:
+    status = _normalize_run_status(row.get("status"))
     return RunRecord(
         run_id=str(row["id"]),
         dataset_id=str(row["dataset_id"]),
         query=row.get("query"),
-        status=row.get("status", "success"),
+        status=status,
         step_count=row.get("step_count"),
         row_count=row.get("row_count"),
         created_at=row["created_at"],
         parent_run_id=str(row["parent_run_id"]) if row.get("parent_run_id") else None,
         explanation=row.get("explanation") if include_detail else None,
         planned_steps=row.get("planned_steps") if include_detail else None,
+        state=status if include_detail else None,
+        attempts=(row.get("trace") or {}).get("attempts") if include_detail and row.get("trace") else None,
+        context_summary=row.get("context_summary") if include_detail else None,
     )
 
 

@@ -2,6 +2,7 @@
 from pydantic import BaseModel
 
 from app.models.rag import RAGContext
+from app.models.runtime import WorkflowAttempt, WorkflowContextSummary, WorkflowRunState
 from app.models.workflow import ExecutionResult, StepResult, WorkflowStep
 
 
@@ -41,3 +42,6 @@ class ChatResponse(BaseModel):
     # The frontend should show clarification_question and await the user's answer.
     needs_clarification: bool = False
     clarification_question: str | None = None
+    state: WorkflowRunState = "draft"
+    attempts: list[WorkflowAttempt] = []
+    context_summary: WorkflowContextSummary | None = None

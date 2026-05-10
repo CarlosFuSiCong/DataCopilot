@@ -4,6 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from app.models.runtime import WorkflowAttempt, WorkflowContextSummary, WorkflowRunState
 from app.models.workflow import WorkflowStep
 
 
@@ -21,6 +22,9 @@ class RunRecord(BaseModel):
     # Full fields only in detail response:
     explanation: str | None = None
     planned_steps: list[dict[str, Any]] | None = None
+    state: WorkflowRunState | None = None
+    attempts: list[WorkflowAttempt] | None = None
+    context_summary: WorkflowContextSummary | None = None
 
 
 class RunListResponse(BaseModel):

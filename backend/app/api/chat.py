@@ -26,7 +26,8 @@ from app.core.exceptions import ClarificationNeeded, ExecutionError, PlannerErro
 from app.models.chat import ChatRequest, ChatResponse
 from app.models.workflow import ExecutionResult
 from app.services import dataset_store, executor as executor_service
-from app.services import rag_service, result_explainer, run_store, validator as validator_service
+from app.services import rag_service, result_explainer, run_store
+from app.services import workflow_runtime
 from app.services import workflow_planner
 from app.services.profiler import profile
 from app.services.validator import simulate_columns
@@ -50,6 +51,53 @@ _EXAMPLE_QUERIES = [
     "Extract the month from the order_date column",
     "Add a new column total = amount * quantity",
 ]
+
+
+def _clarification_response(
+    *,
+    request: ChatRequest,
+    content: bytes,
+    dataset_profile,
+    column_names: list[str],
+    rag_ctx,
+    question: str,
+    current_steps: list = None,
+    attempts: list = None,
+    validation_status: str | None = None,
+) -> ChatResponse:
+    steps = current_steps or []
+    trace_attempts = attempts or []
+    context = workflow_runtime.build_context(
+        dataset_id=request.dataset_id,
+        content=content,
+        query=request.query,
+        dataset_profile=dataset_profile,
+        column_names=column_names,
+        previous_steps=request.previous_steps,
+        current_steps=steps,
+        rag_ctx=rag_ctx,
+        clarification_answer=request.clarification_context,
+        execution_boundary="preview",
+    )
+    trace = workflow_runtime.make_trace(
+        state="needs_clarification",
+        context=context,
+        attempts=trace_attempts,
+        validation_status=validation_status,
+    )
+    return ChatResponse(
+        query=request.query,
+        planned_steps=[step.model_dump() for step in steps],
+        step_results=[],
+        has_warnings=False,
+        has_errors=False,
+        rag_context=rag_ctx,
+        needs_clarification=True,
+        clarification_question=question,
+        state="needs_clarification",
+        attempts=trace_attempts,
+        context_summary=trace.context_summary,
+    )
 
 
 def _explicit_missing_column(query: str, column_names: list[str]) -> str | None:
@@ -77,13 +125,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
     dataset_profile = profile(content, filename="<cached>")
     column_names = [col.name for col in dataset_profile.columns]
 
-    missing_col = _explicit_missing_column(request.query, column_names)
-    if missing_col:
-        raise WorkflowValidationError(
-            f"Column '{missing_col}' does not exist in the dataset.",
-            error_code="missing_column",
-            context={"available_columns": column_names},
-        )
+    explicit_missing_col = _explicit_missing_column(request.query, column_names)
 
     # When the user answers a clarification question, merge the answer into the
     # query so the planner has full context.
@@ -115,21 +157,36 @@ async def chat(request: ChatRequest) -> ChatResponse:
             },
         )
 
+    if explicit_missing_col:
+        available = ", ".join(column_names)
+        return _clarification_response(
+            request=request,
+            content=content,
+            dataset_profile=dataset_profile,
+            column_names=column_names,
+            rag_ctx=rag_ctx,
+            question=(
+                f"Column '{explicit_missing_col}' is not in this dataset. "
+                f"Which available column should I use instead? Available columns: {available}."
+            ),
+            validation_status="failed",
+        )
+
     try:
+        workflow_planner.last_raw_output = None
         new_steps = workflow_planner.plan(query=planner_query, ctx=rag_ctx)
+        planner_raw_output = workflow_planner.last_raw_output
     except ClarificationNeeded as exc:
         # Planner decided it needs more information — return 200 with a
         # clarification question; the frontend will ask the user and resend.
         logger.info("Clarification needed for query=%r: %s", request.query, exc.question)
-        return ChatResponse(
-            query=request.query,
-            planned_steps=[],
-            step_results=[],
-            has_warnings=False,
-            has_errors=False,
-            rag_context=rag_ctx,
-            needs_clarification=True,
-            clarification_question=exc.question,
+        return _clarification_response(
+            request=request,
+            content=content,
+            dataset_profile=dataset_profile,
+            column_names=column_names,
+            rag_ctx=rag_ctx,
+            question=exc.question,
         )
     except PlannerError as exc:
         # Build context from what RAG actually retrieved — only show the
@@ -159,7 +216,14 @@ async def chat(request: ChatRequest) -> ChatResponse:
     planned_steps = [step.model_dump() for step in steps]
 
     try:
-        validator_service.validate(steps, column_names)
+        steps, attempts, validation_status = workflow_runtime.validate_with_single_repair(
+            steps,
+            column_names,
+            query=request.query,
+            rag_ctx=rag_ctx,
+            planner_raw_output=planner_raw_output,
+        )
+        planned_steps = [step.model_dump() for step in steps]
     except WorkflowValidationError as exc:
         msg = str(exc)
         # Empty workflow: planner produced no steps.
@@ -184,11 +248,30 @@ async def chat(request: ChatRequest) -> ChatResponse:
         # steps ran, not the original dataset columns.
         if "does not exist in the dataset" in msg or "not found" in msg.lower():
             intermediate_cols = simulate_columns(request.previous_steps, column_names)
-            raise WorkflowValidationError(
-                msg,
-                error_code="missing_column",
-                context={"available_columns": intermediate_cols},
-            ) from exc
+            failed_attempt = workflow_runtime.make_attempt(
+                attempt_index=0,
+                query=request.query,
+                steps=steps,
+                final_status="needs_clarification",
+                rag_ctx=rag_ctx,
+                planner_raw_output=planner_raw_output,
+                validation_result={"ok": False, "error": msg},
+            )
+            available = ", ".join(intermediate_cols)
+            return _clarification_response(
+                request=request,
+                content=content,
+                dataset_profile=dataset_profile,
+                column_names=column_names,
+                rag_ctx=rag_ctx,
+                question=(
+                    f"{msg} Which available column should I use instead? "
+                    f"Available columns: {available}."
+                ),
+                current_steps=steps,
+                attempts=[failed_attempt],
+                validation_status="failed",
+            )
         raise
 
     preview_result = executor_service.preview(steps, content)
@@ -223,12 +306,16 @@ async def chat(request: ChatRequest) -> ChatResponse:
     explanation: str | None = None
     execution_result: ExecutionResult | None = None
     run_id: str | None = None
+    state = "preview_ready"
+    execution_boundary = "preview"
 
     if (
         request.auto_confirm
         and not preview_result.has_warnings
         and not preview_result.has_errors
     ):
+        state = "executed"
+        execution_boundary = "executed"
         execution_result = executor_service.execute(steps, content)
         explanation = result_explainer.explain(
             query=request.query,
@@ -236,6 +323,38 @@ async def chat(request: ChatRequest) -> ChatResponse:
             execution_result=execution_result,
             dataset_summary=rag_ctx.dataset_summary.model_dump(),
         )
+        context = workflow_runtime.build_context(
+            dataset_id=request.dataset_id,
+            content=content,
+            query=request.query,
+            dataset_profile=dataset_profile,
+            column_names=column_names,
+            previous_steps=request.previous_steps,
+            current_steps=steps,
+            rag_ctx=rag_ctx,
+            clarification_answer=request.clarification_context,
+            execution_boundary=execution_boundary,
+        )
+        final_attempt = workflow_runtime.make_attempt(
+            attempt_index=attempts[-1].attempt_index if attempts else 0,
+            query=request.query,
+            steps=steps,
+            final_status=state,
+            rag_ctx=rag_ctx,
+            planner_raw_output=planner_raw_output,
+            validation_result={"ok": True},
+            preview_result=preview_result,
+            repair_reason=attempts[-1].repair_reason if attempts else None,
+        )
+        attempts = attempts[:-1] + [final_attempt] if attempts else [final_attempt]
+        trace = workflow_runtime.make_trace(
+            state=state,
+            context=context,
+            attempts=attempts,
+            validation_status=validation_status,
+            preview_result=preview_result,
+        )
+
         # Persist result CSV so the frontend can offer a download link.
         try:
             result_df = executor_service.execute_to_df(steps, content)
@@ -248,8 +367,10 @@ async def chat(request: ChatRequest) -> ChatResponse:
                 planned_steps=planned_steps,
                 row_count=execution_result.row_count,
                 query=request.query,
-                status="success",
+                status=state,
                 explanation=explanation,
+                trace=trace.model_dump(),
+                context_summary=trace.context_summary.model_dump(),
             )
         except Exception:
             logger.warning("Failed to persist run artifact for dataset %s", request.dataset_id, exc_info=True)
@@ -262,12 +383,45 @@ async def chat(request: ChatRequest) -> ChatResponse:
             run_id,
         )
     else:
+        state = "warning_review" if preview_result.has_warnings else "preview_ready"
+        execution_boundary = "warning" if preview_result.has_warnings else "preview"
         logger.info(
             "Chat preview-only: query=%r auto_confirm=%s has_warnings=%s has_errors=%s",
             request.query,
             request.auto_confirm,
             preview_result.has_warnings,
             preview_result.has_errors,
+        )
+        context = workflow_runtime.build_context(
+            dataset_id=request.dataset_id,
+            content=content,
+            query=request.query,
+            dataset_profile=dataset_profile,
+            column_names=column_names,
+            previous_steps=request.previous_steps,
+            current_steps=steps,
+            rag_ctx=rag_ctx,
+            clarification_answer=request.clarification_context,
+            execution_boundary=execution_boundary,
+        )
+        final_attempt = workflow_runtime.make_attempt(
+            attempt_index=attempts[-1].attempt_index if attempts else 0,
+            query=request.query,
+            steps=steps,
+            final_status=state,
+            rag_ctx=rag_ctx,
+            planner_raw_output=planner_raw_output,
+            validation_result={"ok": True},
+            preview_result=preview_result,
+            repair_reason=attempts[-1].repair_reason if attempts else None,
+        )
+        attempts = attempts[:-1] + [final_attempt] if attempts else [final_attempt]
+        trace = workflow_runtime.make_trace(
+            state=state,
+            context=context,
+            attempts=attempts,
+            validation_status=validation_status,
+            preview_result=preview_result,
         )
 
     return ChatResponse(
@@ -281,4 +435,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
         execution_result=execution_result,
         run_id=run_id,
         needs_clarification=False,
+        state=state,
+        attempts=attempts,
+        context_summary=trace.context_summary,
     )
