@@ -135,8 +135,9 @@ export async function fetchResultRows(
   return handleResponse<DatasetRowsResponse>(res)
 }
 
-export async function listRuns(datasetId: string, limit = 20): Promise<RunListResponse> {
+export async function listRuns(datasetId: string, limit = 20, status?: string): Promise<RunListResponse> {
   const params = new URLSearchParams({ dataset_id: datasetId, limit: String(limit) })
+  if (status && status !== 'all') params.set('status', status)
   const res = await fetch(`${BASE}/runs?${params}`)
   return handleResponse<RunListResponse>(res)
 }

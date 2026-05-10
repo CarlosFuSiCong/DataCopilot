@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { UploadResponse, WorkflowStep } from '../types'
+import type { ChatResponse, UploadResponse, WorkflowStep } from '../types'
 import type { NotebookCellData } from '../types/notebook'
 import { ApiCallError, sendChat, confirmWorkflow, rerunWorkflow, previewWorkflow } from '../api/client'
 
@@ -147,7 +147,7 @@ export function useNotebook(dataset: UploadResponse | null) {
         ? await rerunWorkflow(runId, dataset.dataset_id, steps, query)
         : await previewWorkflow(dataset.dataset_id, steps)
 
-      const syntheticResult = {
+      const syntheticResult: ChatResponse = {
         query,
         planned_steps: steps,
         step_results: preview.step_results,
@@ -158,6 +158,9 @@ export function useNotebook(dataset: UploadResponse | null) {
         execution_result: null,
         run_id: null,
         needs_clarification: false,
+        state: preview.has_errors ? 'failed' : preview.has_warnings ? 'warning_review' : 'preview_ready',
+        attempts: [],
+        context_summary: null,
       }
 
       appendCell({ id, query, status: 'preview', result: syntheticResult, parentRunId: runId ?? null })
