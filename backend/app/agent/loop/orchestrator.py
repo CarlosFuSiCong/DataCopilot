@@ -11,9 +11,16 @@ from app.agent.observation import signal_rules
 from app.agent.observation.models import ObservationSummary
 from app.agent.planning import workflow_planner
 from app.agent.policy import action_policy
-from app.agent.validation.workflow_validator import simulate_columns
+from app.agent.validation.workflow_validator import simulate_columns, validate as validate_workflow
 from app.core.exceptions import ClarificationNeeded, ExecutionError, PlannerError, WorkflowValidationError
 from app.models.chat import ChatRequest, ChatResponse
+from app.models.clarification_context import (
+    ClarificationContext,
+    new_pending_context,
+    planner_query_with_context,
+    resolve_context,
+    validate_scope,
+)
 from app.models.workflow_execution import ExecutionResult
 from app.models.workflow_responses import ConfirmResponse
 from app.models.workflow_transport import ConfirmRequest
@@ -58,11 +65,14 @@ async def run_chat(request: ChatRequest) -> ChatResponse:
     content = await dataset_store.load(request.dataset_id)
     dataset_profile = profile(content, filename="<cached>")
     column_names = [col.name for col in dataset_profile.columns]
+    clarification = _resolve_request_clarification(request)
 
-    explicit_missing_col = _explicit_missing_column(request.query, column_names)
-    planner_query = request.query
-    if request.clarification_context:
-        planner_query = f"{request.query}\nUser clarification: {request.clarification_context}"
+    explicit_missing_col = (
+        None
+        if clarification and clarification.user_answer
+        else _explicit_missing_column(request.query, column_names)
+    )
+    planner_query = planner_query_with_context(request.query, clarification)
 
     rag_ctx = await rag_service.build_context(
         query=planner_query,
@@ -103,6 +113,7 @@ async def run_chat(request: ChatRequest) -> ChatResponse:
             ),
             validation_status="failed",
             observation=observation,
+            affected_step={"type": "filter_rows", "column": explicit_missing_col},
         )
 
     try:
@@ -184,6 +195,11 @@ async def run_chat(request: ChatRequest) -> ChatResponse:
                 attempts=[failed_attempt],
                 validation_status="failed",
                 observation=observation,
+                affected_step=_failed_new_step(
+                    previous_steps=request.previous_steps,
+                    new_steps=new_steps,
+                    column_names=column_names,
+                ),
             )
         raise
 
@@ -253,6 +269,7 @@ async def run_chat(request: ChatRequest) -> ChatResponse:
             validation_status=validation_status,
             preview_result=preview_result,
             observation=observation,
+            clarification=clarification,
         )
         run_id = await _persist_run_artifact(
             dataset_id=request.dataset_id,
@@ -296,6 +313,7 @@ async def run_chat(request: ChatRequest) -> ChatResponse:
             validation_status=validation_status,
             preview_result=preview_result,
             observation=observation,
+            clarification=clarification,
         )
 
     return ChatResponse(
@@ -312,6 +330,7 @@ async def run_chat(request: ChatRequest) -> ChatResponse:
         state=state,
         attempts=attempts,
         context_summary=trace.context_summary,
+        clarification_context=clarification,
     )
 
 
@@ -420,9 +439,16 @@ def _clarification_response(
     attempts: list = None,
     validation_status: str | None = None,
     observation: ObservationSummary | None = None,
+    affected_step: dict | None = None,
 ) -> ChatResponse:
     steps = current_steps or []
     trace_attempts = attempts or []
+    pending_clarification = new_pending_context(
+        dataset_id=request.dataset_id,
+        original_query=request.query,
+        question=question,
+        affected_step=affected_step,
+    )
     context = workflow_runtime.build_context(
         dataset_id=request.dataset_id,
         content=content,
@@ -432,7 +458,7 @@ def _clarification_response(
         previous_steps=request.previous_steps,
         current_steps=steps,
         rag_ctx=rag_ctx,
-        clarification_answer=request.clarification_context,
+        clarification_answer=pending_clarification.user_answer,
         execution_boundary="preview",
     )
     trace = workflow_runtime.make_trace(
@@ -454,6 +480,7 @@ def _clarification_response(
         state="needs_clarification",
         attempts=trace_attempts,
         context_summary=trace.context_summary,
+        clarification_context=pending_clarification,
     )
 
 
@@ -467,6 +494,42 @@ def _explicit_missing_column(query: str, column_names: list[str]) -> str | None:
             if col not in available:
                 return col
     return None
+
+
+def _resolve_request_clarification(request: ChatRequest) -> ClarificationContext | None:
+    clarification = resolve_context(
+        request.clarification_context,
+        dataset_id=request.dataset_id,
+        original_query=request.query,
+    )
+    if clarification and not validate_scope(
+        clarification,
+        dataset_id=request.dataset_id,
+        original_query=request.query,
+    ):
+        raise WorkflowValidationError(
+            "Clarification context does not belong to this dataset and query.",
+            error_code="clarification_context_scope_mismatch",
+            context={
+                "dataset_id": request.dataset_id,
+                "original_query": request.query,
+                "clarification_dataset_id": clarification.dataset_id,
+                "clarification_original_query": clarification.original_query,
+            },
+        )
+    return clarification
+
+
+def _failed_new_step(*, previous_steps: list, new_steps: list, column_names: list[str]) -> dict | None:
+    if not new_steps:
+        return None
+    for idx, step in enumerate(new_steps):
+        candidate_steps = list(previous_steps) + list(new_steps[: idx + 1])
+        try:
+            validate_workflow(candidate_steps, column_names)
+        except WorkflowValidationError:
+            return step.model_dump()
+    return new_steps[-1].model_dump()
 
 
 def _relevant_steps(rag_ctx) -> list[dict]:
@@ -492,6 +555,7 @@ def _build_trace_after_preview(
     validation_status: str | None,
     preview_result,
     observation: ObservationSummary,
+    clarification: ClarificationContext | None = None,
 ):
     context = workflow_runtime.build_context(
         dataset_id=request.dataset_id,
@@ -502,7 +566,7 @@ def _build_trace_after_preview(
         previous_steps=request.previous_steps,
         current_steps=steps,
         rag_ctx=rag_ctx,
-        clarification_answer=request.clarification_context,
+        clarification_answer=clarification.user_answer if clarification else None,
         execution_boundary=execution_boundary,
     )
     final_attempt = workflow_runtime.make_attempt(

@@ -10,7 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.models.workflow import FilterRowsStep, GroupByStep, RemoveMissingValuesStep, SortValuesStep
+from app.models.workflow import FilterRowsStep, GroupByStep, RemoveMissingValuesStep, SelectColumnsStep, SortValuesStep
 
 client = TestClient(app)
 
@@ -277,6 +277,52 @@ def test_chat_missing_column_validation_asks_clarification():
     assert data["state"] == "needs_clarification"
     assert "nonexistent_col" in data["clarification_question"]
     assert "sales" in data["clarification_question"]
+    assert data["clarification_context"]["original_query"] == "test"
+    assert data["clarification_context"]["question"] == data["clarification_question"]
+    assert data["clarification_context"]["affected_step"]["column"] == "nonexistent_col"
+    assert data["clarification_context"]["status"] == "pending"
+
+
+def test_chat_missing_column_clarification_uses_new_step_when_previous_steps_exist():
+    previous_steps = [RemoveMissingValuesStep(type="remove_missing_values").model_dump()]
+    bad_new_steps = [FilterRowsStep(type="filter_rows", column="nonexistent_col", operator=">", value=0)]
+    did = _upload()
+
+    with patch("app.api.chat.workflow_planner.plan", return_value=bad_new_steps):
+        resp = client.post(
+            "/api/chat",
+            json={
+                "dataset_id": did,
+                "query": "filter the previous result",
+                "previous_steps": previous_steps,
+            },
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["needs_clarification"] is True
+    assert data["clarification_context"]["affected_step"]["type"] == "filter_rows"
+    assert data["clarification_context"]["affected_step"]["column"] == "nonexistent_col"
+
+
+def test_chat_missing_column_clarification_uses_failed_non_first_new_step():
+    bad_new_steps = [
+        SelectColumnsStep(type="select_columns", columns=["region"]),
+        FilterRowsStep(type="filter_rows", column="sales", operator=">", value=100),
+    ]
+    did = _upload()
+
+    with patch("app.api.chat.workflow_planner.plan", return_value=bad_new_steps):
+        resp = client.post(
+            "/api/chat",
+            json={"dataset_id": did, "query": "select region then filter sales"},
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["needs_clarification"] is True
+    assert data["clarification_context"]["affected_step"]["type"] == "filter_rows"
+    assert data["clarification_context"]["affected_step"]["column"] == "sales"
 
 
 def test_chat_explicit_missing_column_asks_clarification_before_planning():
@@ -291,7 +337,63 @@ def test_chat_explicit_missing_column_asks_clarification_before_planning():
     assert data["needs_clarification"] is True
     assert "revenue" in data["clarification_question"]
     assert "sales" in data["clarification_question"]
+    assert data["clarification_context"]["dataset_id"] == did
+    assert data["clarification_context"]["original_query"] == "filter rows where revenue > 100"
+    assert data["clarification_context"]["affected_step"]["column"] == "revenue"
     mock_plan.assert_not_called()
+
+
+def test_chat_clarification_answer_triggers_next_planning_iteration():
+    did = _upload()
+    first = client.post(
+        "/api/chat",
+        json={"dataset_id": did, "query": "filter rows where revenue > 100"},
+    )
+    assert first.status_code == 200
+    clarification_context = first.json()["clarification_context"]
+    clarification_context["user_answer"] = "sales"
+
+    with patch("app.api.chat.workflow_planner.plan", return_value=MOCK_STEPS_GROUP_BY) as mock_plan:
+        with patch("app.api.chat.result_explainer.explain", return_value=_MOCK_EXPLANATION):
+            resp = client.post(
+                "/api/chat",
+                json={
+                    "dataset_id": did,
+                    "query": "filter rows where revenue > 100",
+                    "clarification_context": clarification_context,
+                },
+            )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    planner_query = mock_plan.call_args.kwargs["query"]
+    assert "User clarification: sales" in planner_query
+    assert data["clarification_context"]["status"] == "resolved"
+    assert data["clarification_context"]["user_answer"] == "sales"
+    assert data["clarification_context"]["resolved_parameter"] == "sales"
+
+
+def test_chat_rejects_clarification_context_from_other_dataset():
+    did = _upload()
+    other_did = _upload()
+    first = client.post(
+        "/api/chat",
+        json={"dataset_id": did, "query": "filter rows where revenue > 100"},
+    )
+    clarification_context = first.json()["clarification_context"]
+    clarification_context["user_answer"] = "sales"
+
+    resp = client.post(
+        "/api/chat",
+        json={
+            "dataset_id": other_did,
+            "query": "filter rows where revenue > 100",
+            "clarification_context": clarification_context,
+        },
+    )
+
+    assert resp.status_code == 400
+    assert resp.json()["error_code"] == "clarification_context_scope_mismatch"
 
 
 def test_chat_validation_failure_allows_one_case_repair():
