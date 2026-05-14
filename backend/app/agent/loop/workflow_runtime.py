@@ -4,7 +4,7 @@ from typing import Any
 
 from app.core.exceptions import WorkflowValidationError
 from app.agent.observation.models import ObservationSummary
-from app.agent.loop.runtime_models import (
+from app.models.runtime_trace import (
     AttemptSummary,
     WorkflowAttempt,
     WorkflowContext,
@@ -12,9 +12,10 @@ from app.agent.loop.runtime_models import (
     WorkflowRunState,
     WorkflowTrace,
 )
+from app.agent.validation import workflow_validator as validator_service
 from app.models.rag import RAGContext
-from app.models.workflow import PreviewResponse, WorkflowRequest, WorkflowStep
-from app.agent.execution import validator as validator_service
+from app.models.workflow_steps import WorkflowStep
+from app.models.workflow_transport import PreviewResponse, WorkflowRequest
 
 
 def dataset_hash(content: bytes) -> str:

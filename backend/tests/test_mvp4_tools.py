@@ -17,7 +17,6 @@ from app.models.workflow import (
     TrimTextStep,
 )
 from app.agent.execution.executor import execute
-from app.agent.execution.validator import validate
 from app.agent.observation.observations import (
     detect_duplicates,
     detect_missing_values,
@@ -25,6 +24,7 @@ from app.agent.observation.observations import (
     observation_tools,
     suggest_cleaning_steps,
 )
+from app.agent.validation.workflow_validator import validate
 
 
 BASE_CSV = (

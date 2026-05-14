@@ -5,7 +5,8 @@ from collections.abc import Iterable
 
 from app.agent.observation import risk_rules
 from app.agent.observation.models import ObservationSummary
-from app.models.workflow import PreviewResponse, StepResult
+from app.models.workflow_execution import StepResult
+from app.models.workflow_transport import PreviewResponse
 
 _HIGH_WARNING_RATE = 0.5
 _MIN_WARNINGS_FOR_HIGH_RATE = 2

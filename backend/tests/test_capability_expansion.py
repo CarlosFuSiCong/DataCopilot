@@ -22,7 +22,7 @@ from app.models.workflow import (
     SortValuesStep,
 )
 from app.agent.execution.executor import execute
-from app.agent.execution.validator import validate
+from app.agent.validation.workflow_validator import validate
 
 # ---------------------------------------------------------------------------
 # CSV fixtures

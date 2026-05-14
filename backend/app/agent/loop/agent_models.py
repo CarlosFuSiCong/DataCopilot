@@ -4,7 +4,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, model_validator
 
 from app.agent.observation.models import ObservationSignal as ObservationSignal, ObservationSummary as ObservationSummary
-from app.agent.loop.runtime_models import WorkflowContextSummary, WorkflowTrace
+from app.models.runtime_trace import WorkflowContextSummary, WorkflowTrace
 
 
 DEFAULT_MAX_AGENT_ITERATIONS = 3

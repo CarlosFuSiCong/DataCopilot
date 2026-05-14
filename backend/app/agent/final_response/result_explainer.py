@@ -21,7 +21,7 @@ from openai import OpenAI
 
 from app.core.config import settings
 from app.core.exceptions import PlannerError
-from app.models.workflow import ExecutionResult
+from app.models.workflow_execution import ExecutionResult
 
 logger = logging.getLogger(__name__)
 

@@ -4,8 +4,8 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from app.agent.loop.runtime_models import WorkflowAttempt, WorkflowContextSummary, WorkflowRunState
-from app.models.workflow import WorkflowStep
+from app.models.runtime_trace import WorkflowAttempt, WorkflowContextSummary, WorkflowRunState
+from app.models.workflow_steps import WorkflowStep
 
 
 class RunRecord(BaseModel):

@@ -1,7 +1,7 @@
 """Deterministic policy layer for workflow actions."""
 from app.core.exceptions import PolicyError
 from app.agent.policy.models import ActionPolicyResult, WorkflowAction
-from app.models.workflow import PreviewResponse
+from app.models.workflow_transport import PreviewResponse
 
 
 POLICY_BLOCKED = "policy_blocked"
