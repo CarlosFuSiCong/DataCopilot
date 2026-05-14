@@ -8,6 +8,8 @@ from app.models.runtime_trace import WorkflowContextSummary, WorkflowTrace
 
 
 DEFAULT_MAX_AGENT_ITERATIONS = 3
+DEFAULT_MAX_AGENT_RETRIES = 1
+DEFAULT_MAX_AGENT_RUNTIME_SECONDS = 30.0
 
 
 AgentRunState = Literal[
@@ -26,6 +28,9 @@ AgentActionType = Literal[
     "plan_workflow",
     "preview_workflow",
     "confirm_required",
+    "retry_preview",
+    "replan_workflow",
+    "select_new_tool",
     "stop_with_result",
     "stop_with_error",
 ]
