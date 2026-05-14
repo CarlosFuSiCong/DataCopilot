@@ -25,7 +25,7 @@ from app.models.rag import (
 
 logger = logging.getLogger(__name__)
 
-_APP_DIR = Path(__file__).parent.parent
+_APP_DIR = Path(__file__).parents[2]
 
 # Ordered list of corpus directories. New doc types can be added here.
 _CORPUS_DIRS = [
