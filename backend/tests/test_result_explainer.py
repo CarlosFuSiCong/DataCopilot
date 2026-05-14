@@ -1,4 +1,4 @@
-"""Unit and integration tests for app.services.result_explainer."""
+"""Unit and integration tests for app.agent.final_response.result_explainer."""
 import io
 from unittest.mock import MagicMock, patch
 
@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.agent.final_response.result_explainer import detect_language, explain
 from app.models.workflow import (
     ExecutionResult,
     GroupByStep,
@@ -14,7 +15,6 @@ from app.models.workflow import (
     StepLog,
     StepResult,
 )
-from app.services.result_explainer import detect_language, explain
 
 client = TestClient(app)
 
@@ -133,7 +133,7 @@ def test_detect_language_japanese_is_chinese_family():
 
 def test_explain_returns_string():
     mock_client = _make_mock_client("South 地区销售额最高。")
-    with patch("app.services.result_explainer.settings") as s:
+    with patch("app.agent.final_response.result_explainer.settings") as s:
         s.llm_api_key = "test-key"
         s.llm_model = "gpt-4o-mini"
         s.llm_max_tokens = 512
@@ -145,7 +145,7 @@ def test_explain_returns_string():
 
 def test_explain_passes_language_chinese_to_prompt():
     mock_client = _make_mock_client("解释文本")
-    with patch("app.services.result_explainer.settings") as s:
+    with patch("app.agent.final_response.result_explainer.settings") as s:
         s.llm_api_key = "test-key"
         s.llm_model = "gpt-4o-mini"
         s.llm_max_tokens = 512
@@ -158,7 +158,7 @@ def test_explain_passes_language_chinese_to_prompt():
 
 def test_explain_passes_language_english_to_prompt():
     mock_client = _make_mock_client("South region has the highest sales.")
-    with patch("app.services.result_explainer.settings") as s:
+    with patch("app.agent.final_response.result_explainer.settings") as s:
         s.llm_api_key = "test-key"
         s.llm_model = "gpt-4o-mini"
         s.llm_max_tokens = 512
@@ -170,7 +170,7 @@ def test_explain_passes_language_english_to_prompt():
 
 
 def test_explain_raises_when_no_api_key():
-    with patch("app.services.result_explainer.settings") as s:
+    with patch("app.agent.final_response.result_explainer.settings") as s:
         s.llm_api_key = ""
         with pytest.raises(Exception, match="API key"):
             explain("test", SAMPLE_STEPS, SAMPLE_RESULT, SAMPLE_DATASET_SUMMARY)
@@ -179,7 +179,7 @@ def test_explain_raises_when_no_api_key():
 def test_explain_raises_when_llm_call_fails():
     mock_client = MagicMock()
     mock_client.chat.completions.create.side_effect = Exception("timeout")
-    with patch("app.services.result_explainer.settings") as s:
+    with patch("app.agent.final_response.result_explainer.settings") as s:
         s.llm_api_key = "test-key"
         s.llm_model = "gpt-4o-mini"
         s.llm_max_tokens = 512
@@ -194,7 +194,7 @@ def test_explain_raises_planner_error_on_empty_choices():
     mock_response.choices = []
     mock_client = MagicMock()
     mock_client.chat.completions.create.return_value = mock_response
-    with patch("app.services.result_explainer.settings") as s:
+    with patch("app.agent.final_response.result_explainer.settings") as s:
         s.llm_api_key = "test-key"
         s.llm_model = "gpt-4o-mini"
         s.llm_max_tokens = 512

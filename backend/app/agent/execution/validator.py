@@ -12,7 +12,7 @@ import logging
 
 from app.core.exceptions import WorkflowValidationError
 from app.models.workflow import WorkflowStep
-from app.tools import registry
+from app.agent.tool_selection import registry
 
 logger = logging.getLogger(__name__)
 

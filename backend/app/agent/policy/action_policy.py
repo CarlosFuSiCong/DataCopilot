@@ -1,6 +1,6 @@
 """Deterministic policy layer for workflow actions."""
 from app.core.exceptions import PolicyError
-from app.models.policy import ActionPolicyResult, WorkflowAction
+from app.agent.policy.models import ActionPolicyResult, WorkflowAction
 from app.models.workflow import PreviewResponse
 
 

@@ -1,4 +1,4 @@
-"""Unit tests for app.services.workflow_planner.
+"""Unit tests for app.agent.planning.workflow_planner.
 
 All tests mock the OpenAI client to avoid real API calls.
 """
@@ -10,7 +10,7 @@ import pytest
 from app.core.exceptions import ClarificationNeeded, PlannerError
 from app.models.dataset import ColumnProfile, DatasetProfile
 from app.models.rag import DatasetSummary, RAGContext, RetrievalDebug, RetrievedDoc
-from app.services.workflow_planner import _build_messages, _parse_steps, plan
+from app.agent.planning.workflow_planner import _build_messages, _parse_steps, plan
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -160,7 +160,7 @@ def test_plan_returns_steps_from_llm():
     })
     mock_client = _make_mock_client(llm_response)
 
-    with patch("app.services.workflow_planner.settings") as mock_settings:
+    with patch("app.agent.planning.workflow_planner.settings") as mock_settings:
         mock_settings.llm_api_key = "test-key"
         mock_settings.llm_model = "gpt-4o-mini"
         mock_settings.llm_max_tokens = 512
@@ -173,7 +173,7 @@ def test_plan_returns_steps_from_llm():
 def test_plan_raises_planner_error_when_llm_returns_empty_steps():
     mock_client = _make_mock_client(json.dumps({"steps": []}))
 
-    with patch("app.services.workflow_planner.settings") as mock_settings:
+    with patch("app.agent.planning.workflow_planner.settings") as mock_settings:
         mock_settings.llm_api_key = "test-key"
         mock_settings.llm_model = "gpt-4o-mini"
         mock_settings.llm_max_tokens = 512
@@ -182,7 +182,7 @@ def test_plan_raises_planner_error_when_llm_returns_empty_steps():
 
 
 def test_plan_raises_planner_error_when_no_api_key():
-    with patch("app.services.workflow_planner.settings") as mock_settings:
+    with patch("app.agent.planning.workflow_planner.settings") as mock_settings:
         mock_settings.llm_api_key = ""
         with pytest.raises(PlannerError, match="API key"):
             plan("test", SAMPLE_CTX)
@@ -192,7 +192,7 @@ def test_plan_raises_planner_error_when_llm_call_fails():
     mock_client = MagicMock()
     mock_client.chat.completions.create.side_effect = Exception("connection timeout")
 
-    with patch("app.services.workflow_planner.settings") as mock_settings:
+    with patch("app.agent.planning.workflow_planner.settings") as mock_settings:
         mock_settings.llm_api_key = "test-key"
         mock_settings.llm_model = "gpt-4o-mini"
         mock_settings.llm_max_tokens = 512
@@ -207,7 +207,7 @@ def test_plan_raises_planner_error_on_empty_choices():
     mock_client = MagicMock()
     mock_client.chat.completions.create.return_value = mock_response
 
-    with patch("app.services.workflow_planner.settings") as mock_settings:
+    with patch("app.agent.planning.workflow_planner.settings") as mock_settings:
         mock_settings.llm_api_key = "test-key"
         mock_settings.llm_model = "gpt-4o-mini"
         mock_settings.llm_max_tokens = 512

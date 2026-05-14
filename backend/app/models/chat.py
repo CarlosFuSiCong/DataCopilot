@@ -2,7 +2,7 @@
 from pydantic import BaseModel
 
 from app.models.rag import RAGContext
-from app.models.runtime import WorkflowAttempt, WorkflowContextSummary, WorkflowRunState
+from app.agent.loop.runtime_models import WorkflowAttempt, WorkflowContextSummary, WorkflowRunState
 from app.models.workflow import ExecutionResult, StepResult, WorkflowStep
 
 

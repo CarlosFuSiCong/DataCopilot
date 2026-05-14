@@ -16,9 +16,9 @@ from app.models.workflow import (
     SortValuesStep,
     TrimTextStep,
 )
-from app.services.executor import execute
-from app.services.validator import validate
-from app.tools.observations import (
+from app.agent.execution.executor import execute
+from app.agent.execution.validator import validate
+from app.agent.observation.observations import (
     detect_duplicates,
     detect_missing_values,
     detect_outliers,

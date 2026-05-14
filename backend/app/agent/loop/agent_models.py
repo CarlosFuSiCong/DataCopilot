@@ -3,7 +3,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from app.models.runtime import WorkflowContextSummary, WorkflowTrace
+from app.agent.loop.runtime_models import WorkflowContextSummary, WorkflowTrace
 
 
 DEFAULT_MAX_AGENT_ITERATIONS = 3

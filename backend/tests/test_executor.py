@@ -1,8 +1,8 @@
-"""Unit tests for app.services.executor."""
+"""Unit tests for app.agent.execution.executor."""
 import pytest
 
-from app.services.risk_rules import AFFECTS_MOST_ROWS, EMPTY_OUTPUT, NO_ROWS_MATCHED
-
+from app.agent.execution.executor import execute
+from app.agent.observation.risk_rules import AFFECTS_MOST_ROWS, EMPTY_OUTPUT, NO_ROWS_MATCHED
 from app.core.exceptions import ExecutionError
 from app.models.workflow import (
     FilterRowsStep,
@@ -13,7 +13,6 @@ from app.models.workflow import (
     SelectColumnsStep,
     SortValuesStep,
 )
-from app.services.executor import execute
 
 # ---------------------------------------------------------------------------
 # CSV fixtures

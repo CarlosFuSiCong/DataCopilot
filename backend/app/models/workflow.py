@@ -2,7 +2,7 @@ from typing import Annotated, Literal, Union
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.models.runtime import WorkflowAttempt, WorkflowContextSummary, WorkflowRunState
+from app.agent.loop.runtime_models import WorkflowAttempt, WorkflowContextSummary, WorkflowRunState
 
 
 # ---------------------------------------------------------------------------

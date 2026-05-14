@@ -1,7 +1,7 @@
 """Tests for the MVP5 controlled Agent runtime contract."""
 import pytest
 
-from app.models.agent import (
+from app.agent.loop.agent_models import (
     DEFAULT_MAX_AGENT_ITERATIONS,
     AgentAction,
     AgentDecision,
@@ -11,7 +11,7 @@ from app.models.agent import (
     AgentValidationSummary,
     ObservationSummary,
 )
-from app.models.runtime import WorkflowContext, WorkflowContextSummary, WorkflowTrace
+from app.agent.loop.runtime_models import WorkflowContext, WorkflowContextSummary, WorkflowTrace
 
 
 def _iteration(index: int = 0, *, workflow_trace: WorkflowTrace | None = None) -> AgentIteration:

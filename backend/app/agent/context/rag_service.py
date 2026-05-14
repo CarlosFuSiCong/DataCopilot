@@ -6,7 +6,7 @@ Public surface:
   build_context()  — async; assembles a full RAGContext using the configured
                      retrieval method (keyword or pgvector, set by settings).
 
-Retrieval is delegated to the retriever interface in app.services.retriever.
+Retrieval is delegated to the retriever interface in app.agent.context.retriever.
 The active method is controlled by settings.retrieval_method.
 """
 import json
@@ -126,7 +126,7 @@ async def build_context(
     settings.retrieval_method.
     """
     # Import here to avoid circular import at module load time
-    from app.services.retriever import get_retriever
+    from app.agent.context.retriever import get_retriever
 
     retriever = get_retriever(docs=docs)
     retrieved, debug = await retriever.retrieve(query, top_k=top_k)
