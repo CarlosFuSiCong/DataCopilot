@@ -23,7 +23,7 @@ from app.core.config import settings
 from app.core.exceptions import ClarificationNeeded, PlannerError
 from app.models.rag import RAGContext
 from app.models.workflow import WorkflowRequest, WorkflowStep
-from app.tools import registry
+from app.agent.tool_selection import registry
 
 logger = logging.getLogger(__name__)
 last_raw_output: str | None = None

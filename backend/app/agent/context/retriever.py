@@ -20,7 +20,7 @@ import openai
 from app.core import database
 from app.core.config import settings
 from app.models.rag import RetrievalDebug, RetrievedDoc
-from app.services.rag_service import load_docs
+from app.agent.context.rag_service import load_docs
 
 logger = logging.getLogger(__name__)
 

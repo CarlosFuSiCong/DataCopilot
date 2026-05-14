@@ -13,9 +13,9 @@ import pytest
 import pandas as pd
 
 from app.core.exceptions import ExecutionError, WorkflowValidationError
-from app.services import executor as executor_service
-from app.services import validator as validator_service
-from app.services.validator import simulate_columns
+from app.agent.execution import executor as executor_service
+from app.agent.execution import validator as validator_service
+from app.agent.execution.validator import simulate_columns
 from app.models.workflow import (
     FilterRowsStep,
     GroupByStep,

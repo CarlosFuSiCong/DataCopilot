@@ -6,7 +6,7 @@ Public surface:
   build_context()  — async; assembles a full RAGContext using the configured
                      retrieval method (keyword or pgvector, set by settings).
 
-Retrieval is delegated to the retriever interface in app.services.retriever.
+Retrieval is delegated to the retriever interface in app.agent.context.retriever.
 The active method is controlled by settings.retrieval_method.
 """
 import json
@@ -25,7 +25,7 @@ from app.models.rag import (
 
 logger = logging.getLogger(__name__)
 
-_APP_DIR = Path(__file__).parent.parent
+_APP_DIR = Path(__file__).parents[2]
 
 # Ordered list of corpus directories. New doc types can be added here.
 _CORPUS_DIRS = [
@@ -126,7 +126,7 @@ async def build_context(
     settings.retrieval_method.
     """
     # Import here to avoid circular import at module load time
-    from app.services.retriever import get_retriever
+    from app.agent.context.retriever import get_retriever
 
     retriever = get_retriever(docs=docs)
     retrieved, debug = await retriever.retrieve(query, top_k=top_k)

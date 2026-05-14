@@ -1,4 +1,4 @@
-"""Unit tests for app.services.validator."""
+"""Unit tests for app.agent.execution.validator."""
 import pytest
 
 from app.core.exceptions import WorkflowValidationError
@@ -11,7 +11,7 @@ from app.models.workflow import (
     SortValuesStep,
     GenerateSummaryStep,
 )
-from app.services.validator import validate
+from app.agent.execution.validator import validate
 
 COLUMNS = ["region", "sales", "month"]
 

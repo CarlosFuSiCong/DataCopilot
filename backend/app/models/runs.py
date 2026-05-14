@@ -4,7 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from app.models.runtime import WorkflowAttempt, WorkflowContextSummary, WorkflowRunState
+from app.agent.loop.runtime_models import WorkflowAttempt, WorkflowContextSummary, WorkflowRunState
 from app.models.workflow import WorkflowStep
 
 

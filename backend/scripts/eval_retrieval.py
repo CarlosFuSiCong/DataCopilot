@@ -46,8 +46,8 @@ _BACKEND_DIR = _SCRIPTS_DIR.parent
 sys.path.insert(0, str(_BACKEND_DIR))
 
 from app.core.config import settings  # noqa: E402
-from app.services.rag_service import load_docs  # noqa: E402
-from app.services.retriever import KeywordRetriever, PgvectorRetriever  # noqa: E402
+from app.agent.context.rag_service import load_docs  # noqa: E402
+from app.agent.context.retriever import KeywordRetriever, PgvectorRetriever  # noqa: E402
 
 logging.basicConfig(
     level=logging.WARNING,

@@ -31,8 +31,8 @@ from app.models.workflow import (
     StepResult,
     WorkflowStep,
 )
-from app.services import risk_rules
-from app.tools import registry
+from app.agent.observation import risk_rules
+from app.agent.tool_selection import registry
 
 logger = logging.getLogger(__name__)
 

@@ -23,15 +23,17 @@ import re
 from fastapi import APIRouter
 
 from app.core.exceptions import ClarificationNeeded, ExecutionError, PlannerError, WorkflowValidationError
+from app.agent.context import rag_service
+from app.agent.execution import executor as executor_service
+from app.agent.execution.validator import simulate_columns
+from app.agent.final_response import result_explainer
+from app.agent.loop import workflow_runtime
+from app.agent.planning import workflow_planner
+from app.agent.policy import action_policy
 from app.models.chat import ChatRequest, ChatResponse
 from app.models.workflow import ExecutionResult
-from app.services import dataset_store, executor as executor_service
-from app.services import action_policy
-from app.services import rag_service, result_explainer, run_store
-from app.services import workflow_runtime
-from app.services import workflow_planner
+from app.services import dataset_store, run_store
 from app.services.profiler import profile
-from app.services.validator import simulate_columns
 
 logger = logging.getLogger(__name__)
 

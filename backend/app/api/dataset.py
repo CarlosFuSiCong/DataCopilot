@@ -8,11 +8,12 @@ from fastapi import APIRouter, File, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
 
+from app.agent.execution import executor
 from app.core import database
 from app.core.exceptions import DatasetNotFoundError, ExecutionError, InvalidDatasetError
 from app.models.dataset import DatasetRowsResponse, DiffRowsResponse, UploadResponse
 from app.models.workflow import WorkflowRequest
-from app.services import dataset_store, executor, profiler as profiler_service
+from app.services import dataset_store, profiler as profiler_service
 
 # 50 MB limit for export to protect against very large results in the browser.
 _EXPORT_SIZE_LIMIT_BYTES = 50 * 1024 * 1024
