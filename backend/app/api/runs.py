@@ -17,6 +17,7 @@ from fastapi.responses import Response
 from app.core.exceptions import DatasetNotFoundError, WorkflowValidationError
 from app.models.runs import RerunRequest, RunListResponse, RunRecord
 from app.models.workflow import PreviewResponse
+from app.services import action_policy
 from app.services import dataset_store, executor as executor_service
 from app.services import run_store, validator as validator_service
 from app.services.profiler import get_column_names
@@ -117,6 +118,7 @@ async def rerun(run_id: str, request: RerunRequest) -> PreviewResponse:
         raise
 
     # Return a preview — never auto-execute or persist on rerun directly.
+    action_policy.evaluate_workflow_action("preview_workflow")
     preview_result = executor_service.preview(request.steps, content)
 
     logger.info(

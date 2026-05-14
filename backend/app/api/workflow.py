@@ -11,6 +11,7 @@ from app.models.workflow import (
     WorkflowRequest,
 )
 from app.services import dataset_store, executor as executor_service
+from app.services import action_policy
 from app.services import result_explainer, run_store, validator as validator_service
 from app.services.profiler import get_column_names, profile
 from app.services import workflow_runtime
@@ -30,6 +31,13 @@ async def execute_workflow(request: WorkflowRequest) -> ExecutionResult:
     content = await dataset_store.load(request.dataset_id)
     column_names = get_column_names(content)
     validator_service.validate(request.steps, column_names)
+    preview_result = executor_service.preview(request.steps, content)
+    policy_result = action_policy.evaluate_workflow_action(
+        "execute_workflow",
+        preview_result=preview_result,
+        confirmed=False,
+    )
+    action_policy.enforce_policy(policy_result)
     return executor_service.execute(request.steps, content)
 
 
@@ -40,6 +48,7 @@ async def preview_workflow(request: WorkflowRequest) -> PreviewResponse:
     Returns step_results with risk-rule issues so the client can surface
     warnings and errors before asking the user to confirm execution.
     """
+    action_policy.evaluate_workflow_action("preview_workflow")
     content = await dataset_store.load(request.dataset_id)
     column_names = get_column_names(content)
     try:
@@ -70,6 +79,13 @@ async def confirm_workflow(request: ConfirmRequest) -> ConfirmResponse:
     )
 
     planned_steps = [step.model_dump() for step in steps]
+    preview_result = executor_service.preview(steps, content)
+    policy_result = action_policy.evaluate_workflow_action(
+        "confirm_workflow",
+        preview_result=preview_result,
+        confirmed=True,
+    )
+    action_policy.enforce_policy(policy_result)
     execution_result = executor_service.execute(steps, content)
 
     dataset_profile = profile(content, filename="<dataset>")
@@ -79,7 +95,6 @@ async def confirm_workflow(request: ConfirmRequest) -> ConfirmResponse:
         execution_result=execution_result,
         dataset_summary=dataset_profile.model_dump(),
     )
-    preview_result = executor_service.preview(steps, content)
     context = workflow_runtime.build_context(
         dataset_id=request.dataset_id,
         content=content,
