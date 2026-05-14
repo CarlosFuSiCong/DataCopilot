@@ -42,6 +42,10 @@ class ExecutionError(DataCopilotError):
     """Raised when a workflow step fails at pandas execution time."""
 
 
+class PolicyError(DataCopilotError):
+    """Raised when an action policy blocks a requested operation."""
+
+
 class PlannerError(DataCopilotError):
     """Raised when the LLM planner fails to produce a valid workflow JSON."""
 
