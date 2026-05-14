@@ -123,6 +123,22 @@ def test_execute_generate_summary_sets_flag():
     assert data["has_summary"] is True
 
 
+def test_execute_warning_workflow_is_blocked_by_policy():
+    did = _upload(
+        b"region,sales,month\n"
+        b"North,1200,Jan\n"
+        b"South,850,Jan\n"
+    )
+    resp = _execute(
+        did,
+        [{"type": "filter_rows", "column": "sales", "operator": ">", "value": 9999}],
+    )
+
+    assert resp.status_code == 400
+    assert resp.json()["error_code"] == "policy_blocked"
+    assert resp.json()["context"]["policy"]["decision"] == "requires_confirmation"
+
+
 def test_execute_logs_count_matches_step_count():
     did = _upload()
     steps = [
@@ -462,3 +478,14 @@ def test_confirm_explainer_error_returns_400():
             json={"dataset_id": did, "steps": [{"type": "remove_missing_values"}], "query": "test"},
         )
     assert resp.status_code == 400
+
+
+def test_confirm_warning_workflow_executes_after_explicit_confirmation():
+    did = _upload(ZERO_MATCH_CSV)
+    resp = _confirm(
+        did,
+        [{"type": "filter_rows", "column": "sales", "operator": ">", "value": 9999}],
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["state"] == "executed"

@@ -26,6 +26,7 @@ from app.core.exceptions import ClarificationNeeded, ExecutionError, PlannerErro
 from app.models.chat import ChatRequest, ChatResponse
 from app.models.workflow import ExecutionResult
 from app.services import dataset_store, executor as executor_service
+from app.services import action_policy
 from app.services import rag_service, result_explainer, run_store
 from app.services import workflow_runtime
 from app.services import workflow_planner
@@ -308,11 +309,15 @@ async def chat(request: ChatRequest) -> ChatResponse:
     run_id: str | None = None
     state = "preview_ready"
     execution_boundary = "preview"
+    execution_policy = action_policy.evaluate_workflow_action(
+        "execute_workflow",
+        preview_result=preview_result,
+        confirmed=False,
+    )
 
     if (
         request.auto_confirm
-        and not preview_result.has_warnings
-        and not preview_result.has_errors
+        and execution_policy.decision == "auto_executable"
     ):
         state = "executed"
         execution_boundary = "executed"

@@ -118,6 +118,20 @@ Frontend rendering:
 - Explain that the artifact may have been removed.
 - Suggest re-uploading the dataset or re-executing the workflow.
 
+### `policy_blocked`
+
+Meaning: an action policy blocked a workflow operation before execution.
+
+Typical context:
+
+- `policy`: policy decision, action, reason, and issue codes.
+
+Frontend rendering:
+
+- Show the policy reason.
+- Keep the workflow in preview / confirmation state instead of executing.
+- If issue codes are present, show the related warning or error details.
+
 ## Runtime Trace Display
 
 Run detail responses may also include:
