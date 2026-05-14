@@ -1,6 +1,7 @@
 """Pydantic models for the chat (full pipeline) endpoint."""
 from pydantic import BaseModel
 
+from app.models.clarification_context import ClarificationContext
 from app.models.runtime_trace import WorkflowAttempt, WorkflowContextSummary, WorkflowRunState
 from app.models.rag import RAGContext
 from app.models.workflow_execution import ExecutionResult, StepResult
@@ -19,9 +20,9 @@ class ChatRequest(BaseModel):
     # new steps are appended after these so that the second query operates on the
     # result of the first, enabling multi-turn chaining within one dataset session.
     previous_steps: list[WorkflowStep] = []
-    # User's answer to a clarification question. When present, the planner
-    # receives the original query plus this context to resolve ambiguity.
-    clarification_context: str | None = None
+    # User's answer or structured clarification state. A plain string remains
+    # accepted for the current UI; structured context records run-local scope.
+    clarification_context: str | ClarificationContext | None = None
 
 
 class ChatResponse(BaseModel):
@@ -43,6 +44,7 @@ class ChatResponse(BaseModel):
     # The frontend should show clarification_question and await the user's answer.
     needs_clarification: bool = False
     clarification_question: str | None = None
+    clarification_context: ClarificationContext | None = None
     state: WorkflowRunState = "draft"
     attempts: list[WorkflowAttempt] = []
     context_summary: WorkflowContextSummary | None = None
