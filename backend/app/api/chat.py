@@ -28,6 +28,8 @@ from app.agent.execution import executor as executor_service
 from app.agent.execution.validator import simulate_columns
 from app.agent.final_response import result_explainer
 from app.agent.loop import workflow_runtime
+from app.agent.observation import signal_rules
+from app.agent.observation.models import ObservationSummary
 from app.agent.planning import workflow_planner
 from app.agent.policy import action_policy
 from app.models.chat import ChatRequest, ChatResponse
@@ -67,6 +69,7 @@ def _clarification_response(
     current_steps: list = None,
     attempts: list = None,
     validation_status: str | None = None,
+    observation: ObservationSummary | None = None,
 ) -> ChatResponse:
     steps = current_steps or []
     trace_attempts = attempts or []
@@ -87,6 +90,7 @@ def _clarification_response(
         context=context,
         attempts=trace_attempts,
         validation_status=validation_status,
+        observation=observation,
     )
     return ChatResponse(
         query=request.query,
@@ -162,6 +166,10 @@ async def chat(request: ChatRequest) -> ChatResponse:
 
     if explicit_missing_col:
         available = ", ".join(column_names)
+        observation = signal_rules.from_validation_failure(
+            f"Column '{explicit_missing_col}' is not in this dataset.",
+            workflow_state="needs_clarification",
+        )
         return _clarification_response(
             request=request,
             content=content,
@@ -173,6 +181,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
                 f"Which available column should I use instead? Available columns: {available}."
             ),
             validation_status="failed",
+            observation=observation,
         )
 
     try:
@@ -251,6 +260,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
         # steps ran, not the original dataset columns.
         if "does not exist in the dataset" in msg or "not found" in msg.lower():
             intermediate_cols = simulate_columns(request.previous_steps, column_names)
+            observation = signal_rules.from_validation_failure(msg, workflow_state="needs_clarification")
             failed_attempt = workflow_runtime.make_attempt(
                 attempt_index=0,
                 query=request.query,
@@ -274,10 +284,16 @@ async def chat(request: ChatRequest) -> ChatResponse:
                 current_steps=steps,
                 attempts=[failed_attempt],
                 validation_status="failed",
+                observation=observation,
             )
         raise
 
     preview_result = executor_service.preview(steps, content)
+    observation = signal_rules.from_preview(
+        preview_result,
+        planned_steps=planned_steps,
+        workflow_state="failed" if preview_result.has_errors else None,
+    )
 
     # If preview captured a step-level execution error, surface it with context.
     if preview_result.blocked_at_step is not None and preview_result.has_errors:
@@ -290,7 +306,10 @@ async def chat(request: ChatRequest) -> ChatResponse:
             raise ExecutionError(
                 issue_msg,
                 error_code="missing_column",
-                context={"available_columns": cols_at_failure},
+                context={
+                    "available_columns": cols_at_failure,
+                    "observation": observation.model_dump(),
+                },
             )
         raise ExecutionError(
             issue_msg,
@@ -299,6 +318,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
                 "failed_step_index": preview_result.blocked_at_step,
                 "failed_step_type": blocked.step_type,
                 "available_columns": cols_at_failure,
+                "observation": observation.model_dump(),
                 "suggestion": (
                     "Check that the column names and parameter values match your dataset. "
                     "Use 'select columns' or 'show schema' to inspect available columns."
@@ -354,12 +374,14 @@ async def chat(request: ChatRequest) -> ChatResponse:
             repair_reason=attempts[-1].repair_reason if attempts else None,
         )
         attempts = attempts[:-1] + [final_attempt] if attempts else [final_attempt]
+        observation.workflow_state = state
         trace = workflow_runtime.make_trace(
             state=state,
             context=context,
             attempts=attempts,
             validation_status=validation_status,
             preview_result=preview_result,
+            observation=observation,
         )
 
         # Persist result CSV so the frontend can offer a download link.
@@ -423,12 +445,14 @@ async def chat(request: ChatRequest) -> ChatResponse:
             repair_reason=attempts[-1].repair_reason if attempts else None,
         )
         attempts = attempts[:-1] + [final_attempt] if attempts else [final_attempt]
+        observation.workflow_state = state
         trace = workflow_runtime.make_trace(
             state=state,
             context=context,
             attempts=attempts,
             validation_status=validation_status,
             preview_result=preview_result,
+            observation=observation,
         )
 
     return ChatResponse(
