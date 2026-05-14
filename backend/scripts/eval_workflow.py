@@ -38,10 +38,10 @@ from app.core.exceptions import (  # noqa: E402
     PlannerError,
     WorkflowValidationError,
 )
-from app.agent.context import rag_service  # noqa: E402
-from app.agent.execution import executor as executor_service  # noqa: E402
-from app.agent.planning import workflow_planner  # noqa: E402
-from app.agent.validation import workflow_validator as validator_service  # noqa: E402
+from app.workflow.context import rag_service  # noqa: E402
+from app.workflow.execution import executor as executor_service  # noqa: E402
+from app.workflow.planning import workflow_planner  # noqa: E402
+from app.workflow.validation import workflow_validator as validator_service  # noqa: E402
 from app.models.workflow_steps import WorkflowStep  # noqa: E402
 from app.services.profiler import profile  # noqa: E402
 

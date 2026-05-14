@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 
-from app.agent.tool_selection import registry
+from app.workflow.registry import registry
 
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]

@@ -8,7 +8,7 @@ from fastapi import APIRouter, File, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from app.agent.execution import executor
+from app.workflow.execution import executor
 from app.core import database
 from app.core.exceptions import DatasetNotFoundError, ExecutionError, InvalidDatasetError
 from app.models.dataset import DatasetRowsResponse, DiffRowsResponse, UploadResponse

@@ -1,10 +1,10 @@
 """Unit tests for deterministic observation signal rules."""
 
-from app.agent.loop import workflow_runtime
-from app.agent.loop.runtime_models import WorkflowContextSummary
-from app.agent.observation import signal_rules
-from app.agent.observation.models import ObservationSummary
-from app.agent.observation.risk_rules import AFFECTS_MOST_ROWS, EMPTY_OUTPUT, NO_ROWS_MATCHED
+from app.workflow import runtime as workflow_runtime
+from app.models.runtime_trace import WorkflowContextSummary
+from app.workflow.observation import signal_rules
+from app.workflow.observation.models import ObservationSummary
+from app.workflow.observation.risk_rules import AFFECTS_MOST_ROWS, EMPTY_OUTPUT, NO_ROWS_MATCHED
 from app.models.workflow import PreviewResponse, StepIssue, StepResult
 
 

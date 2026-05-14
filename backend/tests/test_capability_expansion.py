@@ -21,8 +21,8 @@ from app.models.workflow import (
     LimitRowsStep,
     SortValuesStep,
 )
-from app.agent.execution.executor import execute
-from app.agent.validation.workflow_validator import validate
+from app.workflow.execution.executor import execute
+from app.workflow.validation.workflow_validator import validate
 
 # ---------------------------------------------------------------------------
 # CSV fixtures

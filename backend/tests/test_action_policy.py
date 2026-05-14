@@ -2,7 +2,7 @@
 import pytest
 
 from app.core.exceptions import PolicyError
-from app.agent.policy import action_policy
+from app.workflow.policy import action_policy
 from app.models.workflow import PreviewResponse, StepIssue, StepResult
 
 

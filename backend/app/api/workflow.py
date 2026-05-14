@@ -1,10 +1,10 @@
 from fastapi import APIRouter
 
-from app.agent.execution import executor as executor_service
-from app.agent.final_response import result_explainer
-from app.agent.loop import orchestrator
-from app.agent.policy import action_policy
-from app.agent.validation import workflow_validator as validator_service
+from app.workflow.execution import executor as executor_service
+from app.workflow.response import result_explainer
+from app.workflow import service
+from app.workflow.policy import action_policy
+from app.workflow.validation import workflow_validator as validator_service
 from app.core.exceptions import WorkflowValidationError
 from app.models.workflow_execution import ExecutionResult
 from app.models.workflow_responses import ConfirmResponse
@@ -64,4 +64,4 @@ async def confirm_workflow(request: ConfirmRequest) -> ConfirmResponse:
     preview path) and the result explainer is called to generate the
     natural-language explanation.
     """
-    return await orchestrator.confirm_workflow(request)
+    return await service.confirm_workflow(request)

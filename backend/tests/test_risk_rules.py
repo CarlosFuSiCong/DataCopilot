@@ -1,8 +1,8 @@
-"""Unit tests for app.agent.observation.risk_rules."""
+"""Unit tests for app.workflow.observation.risk_rules."""
 import pytest
 
-from app.agent.observation import risk_rules
-from app.agent.observation.risk_rules import (
+from app.workflow.observation import risk_rules
+from app.workflow.observation.risk_rules import (
     AFFECTS_MOST_ROWS,
     AFFECTS_THRESHOLD,
     EMPTY_OUTPUT,

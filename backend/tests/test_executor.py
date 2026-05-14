@@ -1,8 +1,8 @@
-"""Unit tests for app.agent.execution.executor."""
+"""Unit tests for app.workflow.execution.executor."""
 import pytest
 
-from app.agent.execution.executor import execute
-from app.agent.observation.risk_rules import AFFECTS_MOST_ROWS, EMPTY_OUTPUT, NO_ROWS_MATCHED
+from app.workflow.execution.executor import execute
+from app.workflow.observation.risk_rules import AFFECTS_MOST_ROWS, EMPTY_OUTPUT, NO_ROWS_MATCHED
 from app.core.exceptions import ExecutionError
 from app.models.workflow import (
     FilterRowsStep,
