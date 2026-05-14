@@ -3,6 +3,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from app.agent.observation.models import ObservationSummary
+
 
 WorkflowRunState = Literal[
     "draft",
@@ -45,6 +47,7 @@ class WorkflowContextSummary(BaseModel):
     validation_status: str | None = None
     warning_count: int = 0
     error_count: int = 0
+    last_observation: ObservationSummary | None = None
 
 
 class AttemptSummary(BaseModel):

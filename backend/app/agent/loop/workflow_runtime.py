@@ -3,7 +3,7 @@ import hashlib
 from typing import Any
 
 from app.core.exceptions import WorkflowValidationError
-from app.models.rag import RAGContext
+from app.agent.observation.models import ObservationSummary
 from app.agent.loop.runtime_models import (
     AttemptSummary,
     WorkflowAttempt,
@@ -12,6 +12,7 @@ from app.agent.loop.runtime_models import (
     WorkflowRunState,
     WorkflowTrace,
 )
+from app.models.rag import RAGContext
 from app.models.workflow import PreviewResponse, WorkflowRequest, WorkflowStep
 from app.agent.execution import validator as validator_service
 
@@ -100,6 +101,7 @@ def make_context_summary(
     state: WorkflowRunState,
     validation_status: str | None = None,
     preview_result: PreviewResponse | None = None,
+    observation: ObservationSummary | None = None,
 ) -> WorkflowContextSummary:
     warning_count, error_count, _ = _preview_counts(preview_result)
     columns = context.current_schema
@@ -119,6 +121,7 @@ def make_context_summary(
         validation_status=validation_status,
         warning_count=warning_count,
         error_count=error_count,
+        last_observation=observation,
     )
 
 
@@ -129,6 +132,7 @@ def make_trace(
     attempts: list[WorkflowAttempt],
     validation_status: str | None = None,
     preview_result: PreviewResponse | None = None,
+    observation: ObservationSummary | None = None,
 ) -> WorkflowTrace:
     return WorkflowTrace(
         state=state,
@@ -138,9 +142,22 @@ def make_trace(
             state=state,
             validation_status=validation_status,
             preview_result=preview_result,
+            observation=observation,
         ),
         attempts=attempts,
     )
+
+
+def make_next_decision_input(
+    *,
+    context_summary: WorkflowContextSummary,
+    observation: ObservationSummary,
+) -> dict[str, Any]:
+    """Compact deterministic input for the next Agent decision."""
+    return {
+        "workflow_context_summary": context_summary.model_dump(),
+        "observation": observation.model_dump(),
+    }
 
 
 def validate_with_single_repair(

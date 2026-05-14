@@ -6,6 +6,7 @@ from app.agent.execution import executor as executor_service
 from app.agent.execution import validator as validator_service
 from app.agent.final_response import result_explainer
 from app.agent.loop import workflow_runtime
+from app.agent.observation import signal_rules
 from app.agent.policy import action_policy
 from app.core.exceptions import WorkflowValidationError
 from app.models.workflow import (
@@ -82,6 +83,11 @@ async def confirm_workflow(request: ConfirmRequest) -> ConfirmResponse:
 
     planned_steps = [step.model_dump() for step in steps]
     preview_result = executor_service.preview(steps, content)
+    observation = signal_rules.from_preview(
+        preview_result,
+        planned_steps=planned_steps,
+        workflow_state="executed",
+    )
     policy_result = action_policy.evaluate_workflow_action(
         "confirm_workflow",
         preview_result=preview_result,
@@ -123,6 +129,7 @@ async def confirm_workflow(request: ConfirmRequest) -> ConfirmResponse:
         attempts=attempts,
         validation_status=validation_status,
         preview_result=preview_result,
+        observation=observation,
     )
 
     # Persist the result CSV so the frontend can download it via GET /api/runs/{id}/download.

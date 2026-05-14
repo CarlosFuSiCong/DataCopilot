@@ -3,6 +3,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from app.agent.observation.models import ObservationSignal as ObservationSignal, ObservationSummary as ObservationSummary
 from app.agent.loop.runtime_models import WorkflowContextSummary, WorkflowTrace
 
 
@@ -29,15 +30,6 @@ AgentActionType = Literal[
     "stop_with_error",
 ]
 
-ObservationSignal = Literal[
-    "empty_result",
-    "high_warning_rate",
-    "validation_failed",
-    "execution_error",
-    "schema_changed",
-]
-
-
 class AgentDecision(BaseModel):
     decision: AgentActionType
     rationale: str
@@ -55,15 +47,6 @@ class AgentValidationSummary(BaseModel):
     status: Literal["not_run", "passed", "failed", "blocked"] = "not_run"
     error: str | None = None
     details: dict[str, Any] = Field(default_factory=dict)
-
-
-class ObservationSummary(BaseModel):
-    status: Literal["not_observed", "ok", "warning", "error"] = "not_observed"
-    signals: list[ObservationSignal] = Field(default_factory=list)
-    message: str | None = None
-    possible_causes: list[str] = Field(default_factory=list)
-    recommended_next_action: AgentActionType | None = None
-    workflow_state: str | None = None
 
 
 class AgentIteration(BaseModel):
