@@ -11,26 +11,23 @@ from dataclasses import dataclass
 import pandas as pd
 
 from app.core.exceptions import ExecutionError
-from app.models.workflow import (
+from app.models.workflow_execution import ExecutionResult, StepIssue, StepLog, StepResult
+from app.models.workflow_steps import (
     DateExtractStep,
     DeriveColumnStep,
     DropColumnsStep,
-    ExecutionResult,
     FillMissingValuesStep,
     FilterRowsStep,
     GenerateSummaryStep,
     GroupByStep,
     LimitRowsStep,
-    PreviewResponse,
     RemoveMissingValuesStep,
     RenameColumnsStep,
     SelectColumnsStep,
     SortValuesStep,
-    StepIssue,
-    StepLog,
-    StepResult,
     WorkflowStep,
 )
+from app.models.workflow_transport import PreviewResponse
 from app.agent.observation import risk_rules
 from app.agent.tool_selection import registry
 

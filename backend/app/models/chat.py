@@ -1,9 +1,10 @@
 """Pydantic models for the chat (full pipeline) endpoint."""
 from pydantic import BaseModel
 
+from app.models.runtime_trace import WorkflowAttempt, WorkflowContextSummary, WorkflowRunState
 from app.models.rag import RAGContext
-from app.agent.loop.runtime_models import WorkflowAttempt, WorkflowContextSummary, WorkflowRunState
-from app.models.workflow import ExecutionResult, StepResult, WorkflowStep
+from app.models.workflow_execution import ExecutionResult, StepResult
+from app.models.workflow_steps import WorkflowStep
 
 
 class ChatRequest(BaseModel):

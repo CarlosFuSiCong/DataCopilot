@@ -1,341 +1,71 @@
-from typing import Annotated, Literal, Union
+"""Compatibility exports for workflow contracts.
 
-from pydantic import BaseModel, Field, field_validator
+New code should import from the focused modules:
+- app.models.workflow_steps
+- app.models.workflow_execution
+- app.models.workflow_transport
+- app.models.workflow_responses
+"""
 
-from app.agent.loop.runtime_models import WorkflowAttempt, WorkflowContextSummary, WorkflowRunState
+from app.models.workflow_execution import ExecutionResult, StepIssue, StepLog, StepResult
+from app.models.workflow_responses import ConfirmResponse
+from app.models.workflow_steps import (
+    BinColumnStep,
+    CastColumnStep,
+    ConditionalColumnStep,
+    DateDiffStep,
+    DateExtractStep,
+    DeduplicateRowsStep,
+    DeriveColumnStep,
+    DropColumnsStep,
+    ExtractTextStep,
+    FillMissingValuesStep,
+    FilterRowsStep,
+    GenerateSummaryStep,
+    GroupByStep,
+    LimitRowsStep,
+    NormalizeTextStep,
+    PivotTableStep,
+    RemoveMissingValuesStep,
+    RenameColumnsStep,
+    ReplaceValuesStep,
+    SelectColumnsStep,
+    SortValuesStep,
+    TrimTextStep,
+    WorkflowStep,
+)
+from app.models.workflow_transport import ConfirmRequest, PreviewResponse, WorkflowRequest
 
-
-# ---------------------------------------------------------------------------
-# Individual step models — discriminated by the "type" literal field
-# ---------------------------------------------------------------------------
-
-class RemoveMissingValuesStep(BaseModel):
-    type: Literal["remove_missing_values"]
-
-
-class SelectColumnsStep(BaseModel):
-    type: Literal["select_columns"]
-    columns: list[str]
-
-
-_OPERATOR_ALIASES: dict[str, str] = {
-    # symbol variants
-    "==": "=",
-    "<>": "!=",
-    # english words the LLM commonly generates
-    "equals": "=",
-    "eq": "=",
-    "equal": "=",
-    "not_equal": "!=",
-    "neq": "!=",
-    "ne": "!=",
-    "not_equals": "!=",
-    "greater_than": ">",
-    "gt": ">",
-    "greater_than_or_equal": ">=",
-    "gte": ">=",
-    "ge": ">=",
-    "less_than": "<",
-    "lt": "<",
-    "less_than_or_equal": "<=",
-    "lte": "<=",
-    "le": "<=",
-}
-
-
-class FilterRowsStep(BaseModel):
-    type: Literal["filter_rows"]
-    column: str
-    operator: Literal["=", "!=", ">", ">=", "<", "<="]
-    value: Union[int, float, str]
-
-    @field_validator("operator", mode="before")
-    @classmethod
-    def normalize_operator(cls, v: str) -> str:
-        return _OPERATOR_ALIASES.get(v, v)
-
-
-class GroupByStep(BaseModel):
-    type: Literal["group_by"]
-    column: str
-    # Multi-column grouping: when non-empty, used instead of the single `column`.
-    # Kept optional so existing single-column workflows remain valid.
-    columns: list[str] = []
-    target: str
-    agg: Literal["sum", "mean", "count", "min", "max"]
-
-
-class SortValuesStep(BaseModel):
-    type: Literal["sort_values"]
-    column: str
-    ascending: bool = True
-
-
-class RenameColumnsStep(BaseModel):
-    type: Literal["rename_columns"]
-    mapping: dict[str, str]
-
-
-class GenerateSummaryStep(BaseModel):
-    type: Literal["generate_summary"]
-
-
-class LimitRowsStep(BaseModel):
-    type: Literal["limit_rows"]
-    n: int
-
-
-_DERIVE_OPS = Literal["+", "-", "*", "/"]
-_DERIVE_OP_ALIASES: dict[str, str] = {"add": "+", "sub": "-", "mul": "*", "div": "/"}
-
-
-class DeriveColumnStep(BaseModel):
-    type: Literal["derive_column"]
-    new_column: str
-    column: str
-    operator: _DERIVE_OPS
-    # Exactly one of value or other_column must be provided.
-    value: float | None = None
-    other_column: str = ""
-
-    @field_validator("operator", mode="before")
-    @classmethod
-    def normalize_derive_op(cls, v: str) -> str:
-        return _DERIVE_OP_ALIASES.get(v, v)
-
-
-class DateExtractStep(BaseModel):
-    type: Literal["date_extract"]
-    column: str
-    part: Literal["year", "month", "quarter", "day", "weekday"]
-    new_column: str
-
-
-class DropColumnsStep(BaseModel):
-    type: Literal["drop_columns"]
-    columns: list[str]
-
-
-class FillMissingValuesStep(BaseModel):
-    type: Literal["fill_missing_values"]
-    column: str
-    strategy: Literal["constant", "mean", "median", "mode", "ffill", "bfill"]
-    # Required when strategy is "constant"; ignored otherwise.
-    value: Union[float, str, None] = None
-
-
-class DeduplicateRowsStep(BaseModel):
-    type: Literal["deduplicate_rows"]
-    # Empty means use all columns.
-    columns: list[str] = []
-    keep: Literal["first", "last"] = "first"
-
-
-class ReplaceValuesStep(BaseModel):
-    type: Literal["replace_values"]
-    column: str
-    mapping: dict[Union[int, float, str, bool], Union[int, float, str, bool, None]]
-
-
-class CastColumnStep(BaseModel):
-    type: Literal["cast_column"]
-    column: str
-    target_type: Literal["string", "int", "float", "boolean", "datetime"]
-    errors: Literal["raise", "coerce"] = "raise"
-
-
-class ConditionalColumnStep(BaseModel):
-    type: Literal["conditional_column"]
-    new_column: str
-    condition_column: str
-    operator: Literal["=", "!=", ">", ">=", "<", "<="]
-    value: Union[int, float, str]
-    true_value: Union[int, float, str, bool, None]
-    false_value: Union[int, float, str, bool, None]
-
-    @field_validator("operator", mode="before")
-    @classmethod
-    def normalize_operator(cls, v: str) -> str:
-        return _OPERATOR_ALIASES.get(v, v)
-
-
-class BinColumnStep(BaseModel):
-    type: Literal["bin_column"]
-    column: str
-    new_column: str
-    bins: list[float]
-    labels: list[str] = []
-    include_lowest: bool = True
-
-
-class PivotTableStep(BaseModel):
-    type: Literal["pivot_table"]
-    index: list[str]
-    columns: str | None = None
-    values: str
-    agg: Literal["sum", "mean", "count", "min", "max"]
-
-
-class TrimTextStep(BaseModel):
-    type: Literal["trim_text"]
-    column: str
-    collapse_whitespace: bool = False
-
-
-class NormalizeTextStep(BaseModel):
-    type: Literal["normalize_text"]
-    column: str
-    case: Literal["lower", "upper", "title"]
-
-
-class ExtractTextStep(BaseModel):
-    type: Literal["extract_text"]
-    column: str
-    pattern: str
-    new_column: str
-    group: int = 1
-    no_match: str | None = None
-
-
-class DateDiffStep(BaseModel):
-    type: Literal["date_diff"]
-    start_column: str
-    end_column: str
-    new_column: str
-    unit: Literal["days"] = "days"
-    errors: Literal["raise", "coerce"] = "raise"
-
-
-# Discriminated union — Pydantic resolves the correct subtype from "type"
-WorkflowStep = Annotated[
-    Union[
-        RemoveMissingValuesStep,
-        SelectColumnsStep,
-        FilterRowsStep,
-        GroupByStep,
-        SortValuesStep,
-        RenameColumnsStep,
-        GenerateSummaryStep,
-        LimitRowsStep,
-        DeriveColumnStep,
-        DateExtractStep,
-        DropColumnsStep,
-        FillMissingValuesStep,
-        DeduplicateRowsStep,
-        ReplaceValuesStep,
-        CastColumnStep,
-        ConditionalColumnStep,
-        BinColumnStep,
-        PivotTableStep,
-        TrimTextStep,
-        NormalizeTextStep,
-        ExtractTextStep,
-        DateDiffStep,
-    ],
-    Field(discriminator="type"),
+__all__ = [
+    "BinColumnStep",
+    "CastColumnStep",
+    "ConditionalColumnStep",
+    "ConfirmRequest",
+    "ConfirmResponse",
+    "DateDiffStep",
+    "DateExtractStep",
+    "DeduplicateRowsStep",
+    "DeriveColumnStep",
+    "DropColumnsStep",
+    "ExecutionResult",
+    "ExtractTextStep",
+    "FillMissingValuesStep",
+    "FilterRowsStep",
+    "GenerateSummaryStep",
+    "GroupByStep",
+    "LimitRowsStep",
+    "NormalizeTextStep",
+    "PivotTableStep",
+    "PreviewResponse",
+    "RemoveMissingValuesStep",
+    "RenameColumnsStep",
+    "ReplaceValuesStep",
+    "SelectColumnsStep",
+    "SortValuesStep",
+    "StepIssue",
+    "StepLog",
+    "StepResult",
+    "TrimTextStep",
+    "WorkflowRequest",
+    "WorkflowStep",
 ]
-
-
-# ---------------------------------------------------------------------------
-# Request / response models
-# ---------------------------------------------------------------------------
-
-class WorkflowRequest(BaseModel):
-    dataset_id: str
-    steps: list[WorkflowStep]
-
-
-class StepIssue(BaseModel):
-    severity: Literal["warning", "error"]
-    code: str
-    message: str
-
-
-class StepResult(BaseModel):
-    step_index: int
-    step_type: str
-    status: Literal["success", "warning", "error"] = "success"
-    issues: list[StepIssue] = Field(default_factory=list)
-    input_row_count: int
-    output_row_count: int
-    input_column_count: int
-    output_column_count: int
-    # Absolute number of rows removed or added by this step.
-    affected_rows: int = 0
-    match_rate: float | None = None
-    affected_rate: float | None = None
-    preview: list[dict] = Field(default_factory=list)
-    message: str
-
-
-class StepLog(BaseModel):
-    step_index: int
-    step_type: str
-    rows_before: int
-    rows_after: int
-    message: str
-
-
-class ExecutionResult(BaseModel):
-    row_count: int
-    column_count: int
-    columns: list[str]
-    preview: list[dict]
-    step_results: list[StepResult]
-    # Backward-compatible log shape for MVP1 frontend/tests.
-    logs: list[StepLog]
-    # True when the workflow includes a generate_summary step (Task 5 will use this)
-    has_summary: bool
-
-
-class PreviewResponse(BaseModel):
-    """Response for the preview-only execution endpoint.
-
-    The workflow runs through the validator and executor (with risk checks)
-    but the result explainer is never called.  Errors are captured instead of
-    raised so the client can inspect the full partial result.
-    """
-
-    planned_steps: list[dict]
-    step_results: list[StepResult]
-    has_warnings: bool
-    has_errors: bool
-    # Index of the step that caused a blocking error and stopped execution.
-    blocked_at_step: int | None = None
-
-
-class ConfirmRequest(BaseModel):
-    """Request to execute a pre-reviewed workflow and generate an explanation.
-
-    The client sends this after showing the user the preview result and
-    receiving explicit confirmation that the workflow should proceed.
-    """
-
-    dataset_id: str
-    steps: list[WorkflowStep]
-    # Original user query — used by the result explainer for language detection
-    # and grounding the explanation in the user's intent.
-    query: str
-    # When confirming after a rerun, carry the original run's ID so the new
-    # run record can reference it via parent_run_id.
-    parent_run_id: str | None = None
-
-
-class ConfirmResponse(BaseModel):
-    """Response from the confirm execution endpoint.
-
-    Contains the full execution result plus an LLM-generated explanation.
-    Unlike ChatResponse there is no rag_context because the confirm flow
-    receives an already-planned workflow from the client.
-    """
-
-    query: str
-    planned_steps: list[dict]
-    execution_result: ExecutionResult
-    explanation: str
-    # UUID of the persisted result run; used by the frontend to download the
-    # full result CSV via GET /api/runs/{run_id}/download.
-    run_id: str | None = None
-    state: WorkflowRunState = "executed"
-    attempts: list[WorkflowAttempt] = Field(default_factory=list)
-    context_summary: WorkflowContextSummary | None = None

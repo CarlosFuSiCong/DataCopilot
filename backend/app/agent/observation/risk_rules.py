@@ -19,7 +19,7 @@ Error issues stop execution immediately.
 """
 import logging
 
-from app.models.workflow import StepIssue
+from app.models.workflow_execution import StepIssue
 
 logger = logging.getLogger(__name__)
 

@@ -15,11 +15,11 @@ from fastapi import APIRouter, Query
 from fastapi.responses import Response
 
 from app.agent.execution import executor as executor_service
-from app.agent.execution import validator as validator_service
 from app.agent.policy import action_policy
+from app.agent.validation import workflow_validator as validator_service
 from app.core.exceptions import DatasetNotFoundError, WorkflowValidationError
 from app.models.runs import RerunRequest, RunListResponse, RunRecord
-from app.models.workflow import PreviewResponse
+from app.models.workflow_transport import PreviewResponse
 from app.services import dataset_store, run_store
 from app.services.profiler import get_column_names
 

@@ -22,7 +22,8 @@ from pydantic import ValidationError
 from app.core.config import settings
 from app.core.exceptions import ClarificationNeeded, PlannerError
 from app.models.rag import RAGContext
-from app.models.workflow import WorkflowRequest, WorkflowStep
+from app.models.workflow_steps import WorkflowStep
+from app.models.workflow_transport import WorkflowRequest
 from app.agent.tool_selection import registry
 
 logger = logging.getLogger(__name__)
