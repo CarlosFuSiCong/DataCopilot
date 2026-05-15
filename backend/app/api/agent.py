@@ -156,7 +156,14 @@ def _iteration_summaries(record: AgentRunRecord, *, agent_trace=None) -> list[Ag
             AgentIterationSummary(
                 iteration_index=iteration.iteration_index,
                 action=iteration.action.type,
-                agent_state=agent_trace.state if iteration == agent_trace.iterations[-1] else _agent_state(record.events[index]),
+                # Use index bounds to detect synthetic iterations (e.g. cancel) that
+                # have no corresponding event, instead of relying on object equality
+                # which is fragile when multiple iterations share identical field values.
+                agent_state=(
+                    agent_trace.state
+                    if index >= len(record.events)
+                    else _agent_state(record.events[index])
+                ),
                 workflow_state=record.events[index].state if index < len(record.events) else None,
                 stop_reason=iteration.stop_reason,
                 observation_status=iteration.observation.status,
