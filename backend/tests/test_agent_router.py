@@ -207,6 +207,44 @@ def test_agent_cancel_marks_run_cancelled():
     assert data["next_required_user_action"] is None
 
 
+def test_agent_cancel_iteration_summaries_do_not_raise_index_error():
+    """Regression: cancel appends a synthetic iteration with no corresponding event.
+
+    Before the fix, _iteration_summaries used object equality to detect the
+    cancel iteration and fell back to record.events[index] for all others.
+    This is safe when object equality works, but fragile.  The fix uses index
+    bounds checking instead.  This test confirms that:
+    - All non-cancel iterations resolve agent_state from the event.
+    - The cancel iteration resolves agent_state from agent_trace.state.
+    - No IndexError is raised.
+    """
+    did = _upload()
+    first = _start_agent(did, auto_confirm=False)
+    agent_run_id = first.json()["agent_run_id"]
+
+    resp = client.post(
+        f"/api/agent/runs/{agent_run_id}/cancel",
+        json={"reason": "regression test cancel"},
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    summaries = data["iteration_summary"]
+
+    # There should be at least 2 entries: the real event + the cancel iteration.
+    assert len(summaries) >= 2
+
+    # Every non-last entry must not have the cancelled state.
+    for entry in summaries[:-1]:
+        assert entry["agent_state"] != "cancelled"
+
+    # The last entry (the cancel iteration) must be cancelled.
+    assert summaries[-1]["agent_state"] == "cancelled"
+    assert summaries[-1]["stop_reason"] == "regression test cancel"
+    # The cancel iteration has no corresponding workflow event so workflow_state is None.
+    assert summaries[-1]["workflow_state"] is None
+
+
 def test_chat_endpoint_remains_legacy_boundary_without_agent_run_id():
     did = _upload()
     with patch("app.api.chat.workflow_planner.plan", return_value=MOCK_STEPS_GROUP_BY):

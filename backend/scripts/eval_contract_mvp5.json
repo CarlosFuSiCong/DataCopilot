@@ -1,0 +1,144 @@
+{
+  "version": "mvp5",
+  "description": "MVP5 Agent loop evaluation contracts. Each scenario defines a mocked loop state and the expected AgentLoopContext decision output. Scenarios are deterministic — no LLM calls are made.",
+  "scenarios": [
+    {
+      "id": "simple_success",
+      "description": "One-iteration success: ok observation, passed validation, no policy constraint.",
+      "input": {
+        "task": "Filter rows where amount > 100",
+        "plan": [{"type": "filter_rows", "column": "amount", "operator": ">", "value": 100}],
+        "observation_status": "ok",
+        "observation_signals": [],
+        "validation_status": "passed",
+        "policy_decision": null,
+        "retry_count": 0,
+        "max_retries": 1
+      },
+      "expected": {
+        "next_action": "finalize",
+        "agent_action_type": "stop_with_result",
+        "result_status": "verified_result",
+        "stop_reason_not_null": true,
+        "observation_signals_include": []
+      }
+    },
+    {
+      "id": "two_step_analysis",
+      "description": "Two-step workflow completes successfully in one evaluation: ok observation, passed validation.",
+      "input": {
+        "task": "Group by region and sum sales, then show top 5 rows",
+        "plan": [
+          {"type": "group_by", "column": "region", "agg": "sum", "target": "sales"},
+          {"type": "limit_rows", "n": 5}
+        ],
+        "observation_status": "ok",
+        "observation_signals": [],
+        "validation_status": "passed",
+        "policy_decision": null,
+        "retry_count": 0,
+        "max_retries": 1
+      },
+      "expected": {
+        "next_action": "finalize",
+        "agent_action_type": "stop_with_result",
+        "result_status": "verified_result",
+        "stop_reason_not_null": true,
+        "observation_signals_include": []
+      }
+    },
+    {
+      "id": "empty_result_clarification",
+      "description": "Empty result triggers a warning observation with clarify recommendation → agent asks user.",
+      "input": {
+        "task": "Filter rows where status = cancelled",
+        "plan": [{"type": "filter_rows", "column": "status", "operator": "=", "value": "cancelled"}],
+        "observation_status": "warning",
+        "observation_signals": ["empty_result"],
+        "observation_recommended_next_action": "clarify",
+        "observation_message": "Observation found that the workflow can produce an empty result.",
+        "validation_status": "passed",
+        "policy_decision": null,
+        "retry_count": 0,
+        "max_retries": 1
+      },
+      "expected": {
+        "next_action": "ask_user",
+        "agent_action_type": "clarify",
+        "result_status": "warning_result",
+        "stop_reason_not_null": true,
+        "observation_signals_include": ["empty_result"]
+      }
+    },
+    {
+      "id": "missing_required_field_clarification",
+      "description": "Validation failed and observation recommends clarification → agent asks user for missing field.",
+      "input": {
+        "task": "Filter rows where an unspecified column is missing",
+        "plan": [{"type": "filter_rows", "operator": ">", "value": 100}],
+        "observation_status": "warning",
+        "observation_signals": [],
+        "observation_recommended_next_action": "clarify",
+        "observation_message": "Clarification is required.",
+        "validation_status": "failed",
+        "validation_error": "filter_rows step is missing required field 'column'.",
+        "policy_decision": null,
+        "retry_count": 0,
+        "max_retries": 1
+      },
+      "expected": {
+        "next_action": "ask_user",
+        "agent_action_type": "clarify",
+        "result_status": "failed_result",
+        "stop_reason_not_null": true,
+        "observation_signals_include": []
+      }
+    },
+    {
+      "id": "warning_requires_confirmation",
+      "description": "Policy requires confirmation before execution → agent issues confirm_required action.",
+      "input": {
+        "task": "Keep only rows where sales >= 100, removing over 25% of rows",
+        "plan": [{"type": "filter_rows", "column": "sales", "operator": ">=", "value": 100}],
+        "observation_status": "warning",
+        "observation_signals": ["large_row_removal"],
+        "observation_recommended_next_action": "confirm_required",
+        "observation_message": "Observation found that the filter removes a large fraction of input rows.",
+        "validation_status": "passed",
+        "policy_decision": "requires_confirmation",
+        "policy_reason": "This workflow has warnings that must be reviewed and confirmed before execution.",
+        "retry_count": 0,
+        "max_retries": 1
+      },
+      "expected": {
+        "next_action": "ask_user",
+        "agent_action_type": "confirm_required",
+        "result_status": "blocked_result",
+        "stop_reason_not_null": true,
+        "observation_signals_include": ["large_row_removal"]
+      }
+    },
+    {
+      "id": "blocked_action",
+      "description": "Policy explicitly blocks the action → agent stops with error.",
+      "input": {
+        "task": "Execute a workflow that policy has blocked",
+        "plan": [{"type": "filter_rows", "column": "amount", "operator": ">", "value": 0}],
+        "observation_status": "ok",
+        "observation_signals": [],
+        "validation_status": "passed",
+        "policy_decision": "blocked",
+        "policy_reason": "This action is not permitted by the current workflow policy.",
+        "retry_count": 0,
+        "max_retries": 1
+      },
+      "expected": {
+        "next_action": "fail",
+        "agent_action_type": "stop_with_error",
+        "result_status": "blocked_result",
+        "stop_reason_not_null": true,
+        "observation_signals_include": []
+      }
+    }
+  ]
+}
