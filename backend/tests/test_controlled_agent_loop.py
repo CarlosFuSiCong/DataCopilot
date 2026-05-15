@@ -176,6 +176,8 @@ def test_tool_alternatives_map_to_select_new_tool():
 
     assert decision.decision == "select_new_tool"
     assert action.type == "select_new_tool"
+    # select_new_tool must carry the current plan so the tool selector has context.
+    assert action.workflow_steps == _plan()
 
 
 def test_iteration_records_exactly_one_action():
