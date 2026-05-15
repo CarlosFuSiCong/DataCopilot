@@ -1,9 +1,10 @@
 """Tool selector — deterministic layer that ranks candidate tools from retrieved docs.
 
-Uses doc retrieval scores plus an intent-type bonus. No LLM calls.
+Derives intent from the composition of retrieved doc types, then uses that
+derived intent to apply a scoring bonus. No LLM calls, no separate keyword list.
 """
 from app.agent.planning.pipeline_models import ToolSelectionResult
-from app.agent.task_intake.intent import ParsedTaskIntent
+from app.agent.task_intake.intent import ParsedTaskIntent, TaskIntentType
 from app.models.rag import RetrievedDoc
 
 _INSPECT_TOOLS = {"generate_summary", "select_columns", "limit_rows"}
@@ -22,25 +23,53 @@ def select_tools(
     intent: ParsedTaskIntent,
     retrieved_docs: list[RetrievedDoc],
 ) -> ToolSelectionResult:
-    """Rank and return candidate tools from retrieved docs based on intent.
+    """Derive intent from retrieved doc types, then rank candidate tools.
 
-    Tools are ordered by (base retrieval score + intent bonus), highest first.
-    Preserves raw scores for downstream inspection.
+    Intent is determined by which category (transform vs inspect) appears more
+    frequently in the top-k docs. The derived intent is used to apply a scoring
+    bonus to matching tools. Raw scores are preserved for downstream inspection.
+
+    The ParsedTaskIntent argument carries candidate_columns and constraints from
+    the query; its intent field is intentionally ignored here.
     """
-    scores = _score_tools(intent, retrieved_docs)
+    derived_intent = _derive_intent_from_docs(retrieved_docs)
+    scores = _score_tools(derived_intent, retrieved_docs)
     ordered = sorted(scores.items(), key=lambda x: x[1], reverse=True)
     candidate_tools = [tool for tool, _ in ordered]
 
     return ToolSelectionResult(
-        intent=intent.intent,
+        intent=derived_intent,
         candidate_tools=candidate_tools,
         selected_tool=candidate_tools[0] if candidate_tools else None,
         scores={tool: round(score, 4) for tool, score in scores.items()},
     )
 
 
+def _derive_intent_from_docs(docs: list[RetrievedDoc]) -> TaskIntentType:
+    """Count transform vs inspect tools in retrieved docs to vote on intent.
+
+    On a tie, transform_dataset wins because most user queries are data
+    transformation requests. Returns 'unknown' only when no relevant docs exist.
+    """
+    transform_count = 0
+    inspect_count = 0
+    for doc in docs:
+        if doc.doc_type != "transformation" or not doc.type:
+            continue
+        if doc.type in _TRANSFORM_TOOLS:
+            transform_count += 1
+        elif doc.type in _INSPECT_TOOLS:
+            inspect_count += 1
+
+    if transform_count == 0 and inspect_count == 0:
+        return "unknown"
+    if inspect_count > transform_count:
+        return "inspect_dataset"
+    return "transform_dataset"
+
+
 def _score_tools(
-    intent: ParsedTaskIntent,
+    derived_intent: TaskIntentType,
     retrieved_docs: list[RetrievedDoc],
 ) -> dict[str, float]:
     scores: dict[str, float] = {}
@@ -49,14 +78,14 @@ def _score_tools(
             continue
         tool_type = doc.type
         base = float(doc.score)
-        bonus = _intent_bonus(intent.intent, tool_type)
+        bonus = _intent_bonus(derived_intent, tool_type)
         scores[tool_type] = base + bonus
     return scores
 
 
-def _intent_bonus(intent_type: str, tool_type: str) -> float:
-    if intent_type == "inspect_dataset" and tool_type in _INSPECT_TOOLS:
+def _intent_bonus(derived_intent: TaskIntentType, tool_type: str) -> float:
+    if derived_intent == "inspect_dataset" and tool_type in _INSPECT_TOOLS:
         return _INTENT_BONUS
-    if intent_type == "transform_dataset" and tool_type in _TRANSFORM_TOOLS:
+    if derived_intent == "transform_dataset" and tool_type in _TRANSFORM_TOOLS:
         return _INTENT_BONUS
     return 0.0
