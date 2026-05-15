@@ -30,12 +30,16 @@ logger = logging.getLogger(__name__)
 EMPTY_OUTPUT = "empty_output"
 NO_ROWS_MATCHED = "no_rows_matched"
 AFFECTS_MOST_ROWS = "affects_most_rows"
+LARGE_ROW_REMOVAL = "large_row_removal"
 MISSING_COLUMN = "missing_column"
 
 _AFFECTS_THRESHOLD = 0.9
+# Warn when a filter step removes more than this fraction of input rows.
+_BULK_REMOVAL_THRESHOLD = 0.25
 
-# Exported so tests can assert boundary conditions without hard-coding 0.9.
+# Exported so tests can assert boundary conditions without hard-coding.
 AFFECTS_THRESHOLD = _AFFECTS_THRESHOLD
+BULK_REMOVAL_THRESHOLD = _BULK_REMOVAL_THRESHOLD
 
 
 # ---------------------------------------------------------------------------
@@ -71,12 +75,25 @@ def check(
             message="No rows matched this filter condition.",
         ))
 
-    # affects_most_rows: filter keeps > 90% of rows (loose condition)
+    # affects_most_rows: filter keeps > 90% of rows (condition is almost a no-op)
     if match_rate is not None and match_rate > _AFFECTS_THRESHOLD:
         issues.append(StepIssue(
             severity="warning",
             code=AFFECTS_MOST_ROWS,
             message=f"This filter matches {match_rate:.0%} of input rows.",
+        ))
+
+    # large_row_removal: filter removes more than 25% of input rows
+    if (
+        step_type == "filter_rows"
+        and match_rate is not None
+        and match_rate < (1.0 - _BULK_REMOVAL_THRESHOLD)
+    ):
+        removed_rate = 1.0 - match_rate
+        issues.append(StepIssue(
+            severity="warning",
+            code=LARGE_ROW_REMOVAL,
+            message=f"This filter removes {removed_rate:.0%} of input rows.",
         ))
 
     # affects_most_rows: row-reducing step removes > 90% of rows

@@ -80,6 +80,11 @@ SIGNALS that indicate structural ambiguity (ask):
    Exception: "top [N] rows" or "first [N] rows" — literal row slice, use limit_rows.
 3. The operation could mean filter OR group OR sort depending on intent:
    "show sales by region" — filter to one region? group by region? ask which.
+4. The filter condition uses vague or relative threshold language with no explicit number:
+   "abnormally low/high", "unusually small/large", "too low/high", "extreme values",
+   "异常低", "异常高", "过低", "过高", "偏低", "偏高", "特别低", "特别高"
+   → the threshold is a business judgment — ask for the specific numeric value.
+   Exception: if the query already contains an explicit number, use it directly.
 
 SIGNALS that indicate clear intent (act, use defaults for missing numeric values):
 1. The transformation type is explicit: "sort", "filter … where", "rename", "remove nulls",
