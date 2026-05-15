@@ -174,8 +174,19 @@ export interface ChatRequest {
   // Steps from the last confirmed workflow. When present the new query chains
   // onto the prior result instead of starting from the raw dataset.
   previous_steps?: WorkflowStep[]
-  // User's answer to a clarification question, merged into the planner query.
-  clarification_context?: string
+  // User's answer or structured clarification state, merged into the planner query.
+  clarification_context?: string | ClarificationContext
+}
+
+export interface ClarificationContext {
+  dataset_id: string
+  original_query: string
+  question?: string | null
+  user_answer?: string | null
+  resolved_parameter?: string | null
+  affected_step?: Record<string, unknown> | null
+  status: 'pending' | 'resolved'
+  scope_key: string
 }
 
 export interface PreviewResponse {
@@ -202,6 +213,7 @@ export interface ChatResponse {
   // True when the planner needs clarification before producing a workflow.
   needs_clarification?: boolean
   clarification_question?: string | null
+  clarification_context?: ClarificationContext | null
   state?: WorkflowRunState
   attempts?: WorkflowAttempt[]
   context_summary?: WorkflowContextSummary | null

@@ -188,12 +188,30 @@ test('clarification answer continues to workflow preview', async ({ page }) => {
           run_id: null,
           needs_clarification: true,
           clarification_question: "Column 'revenue' is not in this dataset. Which available column should I use instead?",
+          clarification_context: {
+            dataset_id: 'dataset-1',
+            original_query: 'Filter rows where revenue > 1000',
+            question: "Column 'revenue' is not in this dataset. Which available column should I use instead?",
+            user_answer: null,
+            resolved_parameter: null,
+            affected_step: { type: 'filter_rows', column: 'revenue' },
+            status: 'pending',
+            scope_key: 'scope-1',
+          },
           state: 'needs_clarification',
           attempts: [],
         }),
       })
     } else {
       // Second call (with clarification context) → preview_ready.
+      const body = route.request().postDataJSON()
+      expect(body.clarification_context).toMatchObject({
+        dataset_id: 'dataset-1',
+        original_query: 'Filter rows where revenue > 1000',
+        user_answer: 'amount',
+        affected_step: { type: 'filter_rows', column: 'revenue' },
+        status: 'pending',
+      })
       await route.fulfill({
         contentType: 'application/json',
         body: JSON.stringify({ ...previewReadyResponse, query: 'Filter rows where revenue > 1000' }),

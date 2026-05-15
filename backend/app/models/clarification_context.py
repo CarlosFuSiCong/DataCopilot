@@ -1,5 +1,5 @@
-"""Run-local clarification context contracts."""
 import hashlib
+import re
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -101,7 +101,24 @@ def planner_query_with_context(query: str, context: ClarificationContext | None)
     """Append the resolved clarification answer for planner consumption."""
     if not context or not context.user_answer:
         return query
+    rewritten = _query_with_resolved_parameter(query, context)
+    if rewritten != query:
+        return rewritten
     return f"{query}\nUser clarification: {context.user_answer}"
+
+
+def _query_with_resolved_parameter(query: str, context: ClarificationContext) -> str:
+    affected_column = (context.affected_step or {}).get("column")
+    resolved = context.resolved_parameter or context.user_answer
+    if not isinstance(affected_column, str) or not resolved:
+        return query
+
+    pattern = re.compile(rf"\b{re.escape(affected_column)}\b", flags=re.IGNORECASE)
+    rewritten, count = pattern.subn(str(resolved), query)
+    if count > 0:
+        return rewritten
+
+    return query.replace(affected_column, str(resolved))
 
 
 def next_iteration_input(context: ClarificationContext) -> dict[str, Any]:

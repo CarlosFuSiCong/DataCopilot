@@ -176,7 +176,7 @@ def test_agent_continue_answers_clarification_and_runs_next_iteration():
     assert data["agent_state"] == "completed"
     assert [item["action"] for item in data["iteration_summary"]] == ["clarify", "stop_with_result"]
     planner_query = mock_plan.call_args.kwargs["query"]
-    assert "User clarification: sales" in planner_query
+    assert planner_query == "filter rows where sales > 100"
     assert data["workflow_response"]["clarification_context"]["status"] == "resolved"
 
 

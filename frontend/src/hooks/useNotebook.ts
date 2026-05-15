@@ -73,7 +73,13 @@ export function useNotebook(dataset: UploadResponse | null) {
         previous_steps: previousSteps.length > 0 ? previousSteps : undefined,
       })
       if (result.needs_clarification) {
-        appendCell({ id, query, status: 'clarifying', clarificationQuestion: result.clarification_question ?? '' })
+        appendCell({
+          id,
+          query,
+          status: 'clarifying',
+          clarificationQuestion: result.clarification_question ?? '',
+          clarificationContext: result.clarification_context ?? null,
+        })
       } else if (result.execution_result !== null) {
         appendCell({ id, query, status: 'ok', result })
       } else {
@@ -100,12 +106,20 @@ export function useNotebook(dataset: UploadResponse | null) {
       const result = await sendChat({
         dataset_id: dataset.dataset_id,
         query: cell.query,
-        clarification_context: answer,
+        clarification_context: cell.clarificationContext
+          ? { ...cell.clarificationContext, user_answer: answer }
+          : answer,
         previous_steps: previousSteps.length > 0 ? previousSteps : undefined,
       })
       if (result.needs_clarification) {
         // Another round of clarification needed.
-        appendCell({ id, query: cell.query, status: 'clarifying', clarificationQuestion: result.clarification_question ?? '' })
+        appendCell({
+          id,
+          query: cell.query,
+          status: 'clarifying',
+          clarificationQuestion: result.clarification_question ?? '',
+          clarificationContext: result.clarification_context ?? null,
+        })
       } else if (result.execution_result !== null) {
         appendCell({ id, query: cell.query, status: 'ok', result })
       } else {

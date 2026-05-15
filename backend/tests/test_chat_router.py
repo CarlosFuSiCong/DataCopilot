@@ -367,7 +367,7 @@ def test_chat_clarification_answer_triggers_next_planning_iteration():
     assert resp.status_code == 200
     data = resp.json()
     planner_query = mock_plan.call_args.kwargs["query"]
-    assert "User clarification: sales" in planner_query
+    assert planner_query == "filter rows where sales > 100"
     assert data["clarification_context"]["status"] == "resolved"
     assert data["clarification_context"]["user_answer"] == "sales"
     assert data["clarification_context"]["resolved_parameter"] == "sales"

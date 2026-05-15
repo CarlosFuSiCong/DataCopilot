@@ -169,6 +169,29 @@ def test_explain_passes_language_english_to_prompt():
     assert "English" in system_content
 
 
+def test_explain_prompt_includes_effective_request_from_workflow_steps():
+    mock_client = _make_mock_client("The workflow filtered by amount.")
+    steps = [{"type": "filter_rows", "column": "amount", "operator": ">", "value": 1000}]
+    with patch("app.agent.final_response.result_explainer.settings") as s:
+        s.llm_api_key = "test-key"
+        s.llm_model = "gpt-4o-mini"
+        s.llm_max_tokens = 512
+        explain(
+            "Filter rows where revenue > 1000",
+            steps,
+            SAMPLE_RESULT,
+            SAMPLE_DATASET_SUMMARY,
+            client=mock_client,
+        )
+
+    call_args = mock_client.chat.completions.create.call_args
+    system_content = call_args.kwargs["messages"][0]["content"]
+    user_content = call_args.kwargs["messages"][1]["content"]
+    assert "source of truth for column names" in system_content
+    assert "Original user request: Filter rows where revenue > 1000" in user_content
+    assert "Effective executed request: filter rows where amount > 1000" in user_content
+
+
 def test_explain_raises_when_no_api_key():
     with patch("app.agent.final_response.result_explainer.settings") as s:
         s.llm_api_key = ""

@@ -35,6 +35,8 @@ Explain the data result in {language}.
 Rules:
 - Explain only from the provided context. Do not invent fields, numbers, or trends.
 - Briefly describe what each workflow step did.
+- Treat "Workflow steps executed" as the source of truth for column names and operations.
+- If the original user request conflicts with the executed workflow, explain the executed workflow and do not repeat the conflicting wording.
 - Highlight the key findings from the result preview.
 - If the result has zero rows, say so clearly.
 - If the data is insufficient for a conclusion, say so clearly.
@@ -43,7 +45,9 @@ Rules:
 """
 
 _USER_PROMPT = """\
-User request: {user_request}
+Original user request: {user_request}
+
+Effective executed request: {effective_request}
 
 Dataset: {dataset_summary}
 
@@ -70,6 +74,50 @@ def _format_workflow_steps(planned_steps: list[dict]) -> str:
         f"{i + 1}. {json.dumps(s, ensure_ascii=False)}"
         for i, s in enumerate(planned_steps)
     )
+
+
+def _format_effective_request(query: str, planned_steps: list[dict]) -> str:
+    """Summarize the executed workflow so explanation follows validated steps.
+
+    The original query may contain stale wording after a clarification, e.g.
+    "revenue" before the user clarified it should be "amount".  This compact
+    summary gives the explainer a deterministic source of truth.
+    """
+    if not planned_steps:
+        return query
+
+    summaries = []
+    for step in planned_steps:
+        step_type = step.get("type")
+        if step_type == "filter_rows":
+            column = step.get("column")
+            operator = step.get("operator")
+            value = step.get("value")
+            if column and operator and value is not None:
+                summaries.append(f"filter rows where {column} {operator} {value}")
+                continue
+        if step_type == "group_by":
+            column = step.get("column")
+            target = step.get("target")
+            agg = step.get("agg")
+            if column and target and agg:
+                summaries.append(f"group by {column} and {agg} {target}")
+                continue
+        if step_type == "sort_values":
+            column = step.get("column")
+            ascending = step.get("ascending", True)
+            if column:
+                direction = "ascending" if ascending else "descending"
+                summaries.append(f"sort by {column} {direction}")
+                continue
+        if step_type == "limit_rows":
+            n = step.get("n")
+            if n is not None:
+                summaries.append(f"limit to {n} rows")
+                continue
+        summaries.append(json.dumps(step, ensure_ascii=False))
+
+    return "; then ".join(summaries)
 
 
 def _format_step_logs(execution_result: ExecutionResult) -> str:
@@ -115,6 +163,7 @@ def explain(
     system = _SYSTEM_PROMPT.format(language=language)
     user = _USER_PROMPT.format(
         user_request=query,
+        effective_request=_format_effective_request(query, planned_steps),
         dataset_summary=_format_dataset_summary(dataset_summary),
         workflow_steps=_format_workflow_steps(planned_steps),
         row_count=execution_result.row_count,

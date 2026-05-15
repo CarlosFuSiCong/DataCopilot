@@ -83,6 +83,25 @@ def test_resolve_context_drops_whitespace_only_user_answer():
     assert planner_query_with_context("filter revenue", resolved) == "filter revenue"
 
 
+def test_planner_query_rewrites_affected_column_with_resolved_answer():
+    context = new_pending_context(
+        dataset_id="dataset-1",
+        original_query="Filter rows where revenue > 1000",
+        question="Which column should I use?",
+        affected_step={"type": "filter_rows", "column": "revenue"},
+    ).model_copy(update={"user_answer": "amount"})
+    resolved = resolve_context(
+        context,
+        dataset_id="dataset-1",
+        original_query="Filter rows where revenue > 1000",
+    )
+
+    assert resolved is not None
+    assert planner_query_with_context("Filter rows where revenue > 1000", resolved) == (
+        "Filter rows where amount > 1000"
+    )
+
+
 def test_string_clarification_context_is_supported_for_current_ui():
     resolved = resolve_context(
         "sales",
