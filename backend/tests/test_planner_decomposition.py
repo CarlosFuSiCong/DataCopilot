@@ -30,12 +30,9 @@ def _doc(tool_type: str, score: float = 2.0) -> RetrievedDoc:
     )
 
 
-def _transform_intent() -> ParsedTaskIntent:
-    return ParsedTaskIntent(intent="transform_dataset", goal="filter completed orders")
-
-
-def _inspect_intent() -> ParsedTaskIntent:
-    return ParsedTaskIntent(intent="inspect_dataset", goal="show a summary")
+def _intent(goal: str = "test") -> ParsedTaskIntent:
+    # Intent classification is now RAG-derived; parse_intent always returns "unknown".
+    return ParsedTaskIntent(intent="unknown", goal=goal)
 
 
 # ---------------------------------------------------------------------------
@@ -43,26 +40,11 @@ def _inspect_intent() -> ParsedTaskIntent:
 # ---------------------------------------------------------------------------
 
 class TestIntentParser:
-    def test_classifies_filter_query_as_transform(self):
+    def test_always_returns_unknown_intent(self):
+        # Intent is now derived from RAG docs by ToolSelector, not from keywords.
         result = parse_intent("filter rows where sales > 100")
 
-        assert result.parsed.intent == "transform_dataset"
-
-    def test_classifies_group_by_query_as_transform(self):
-        result = parse_intent("group by region and sum sales")
-
-        assert result.parsed.intent == "transform_dataset"
-
-    def test_classifies_show_query_as_inspect(self):
-        result = parse_intent("show summary of the dataset")
-
-        assert result.parsed.intent == "inspect_dataset"
-
-    def test_unknown_query_returns_unknown_intent_with_missing_info(self):
-        result = parse_intent("do something with the data")
-
         assert result.parsed.intent == "unknown"
-        assert result.parsed.missing_information
 
     def test_extracts_candidate_columns_from_query(self):
         result = parse_intent("sort by sales descending", column_names=["sales", "region", "month"])
@@ -93,10 +75,12 @@ class TestIntentParser:
 
         assert result.raw_query == query
 
-    def test_chinese_query_classifies_as_transform(self):
-        result = parse_intent("按地区分组统计销售额")
+    def test_missing_information_is_empty(self):
+        # missing_information is no longer populated by IntentParser;
+        # unknown intent is resolved later by ToolSelector from RAG docs.
+        result = parse_intent("do something with the data")
 
-        assert result.parsed.intent == "transform_dataset"
+        assert result.parsed.missing_information == []
 
 
 # ---------------------------------------------------------------------------
@@ -105,28 +89,38 @@ class TestIntentParser:
 
 class TestToolSelector:
     def test_selects_transform_tool_from_retrieved_docs(self):
-        result = select_tools(_transform_intent(), [_doc("filter_rows", score=3)])
+        result = select_tools(_intent(), [_doc("filter_rows", score=3)])
 
         assert result.selected_tool == "filter_rows"
         assert "filter_rows" in result.candidate_tools
 
-    def test_transform_intent_gives_bonus_to_transform_tools(self):
+    def test_majority_transform_docs_derive_transform_intent(self):
+        # 2 transform docs vs 1 inspect doc → transform_dataset
         result = select_tools(
-            _transform_intent(),
+            _intent(),
+            [_doc("filter_rows", score=2), _doc("sort_values", score=2), _doc("generate_summary", score=2)],
+        )
+
+        assert result.intent == "transform_dataset"
+        assert result.scores["filter_rows"] > result.scores["generate_summary"]
+
+    def test_majority_inspect_docs_derive_inspect_intent(self):
+        # 2 inspect docs vs 1 transform doc → inspect_dataset
+        result = select_tools(
+            _intent(),
+            [_doc("generate_summary", score=2), _doc("select_columns", score=2), _doc("filter_rows", score=2)],
+        )
+
+        assert result.intent == "inspect_dataset"
+        assert result.scores["generate_summary"] > result.scores["filter_rows"]
+
+    def test_tie_defaults_to_transform_intent(self):
+        result = select_tools(
+            _intent(),
             [_doc("filter_rows", score=2), _doc("generate_summary", score=2)],
         )
 
-        assert result.scores["filter_rows"] > result.scores["generate_summary"]
-        assert result.candidate_tools[0] == "filter_rows"
-
-    def test_inspect_intent_gives_bonus_to_inspect_tools(self):
-        result = select_tools(
-            _inspect_intent(),
-            [_doc("generate_summary", score=2), _doc("filter_rows", score=2)],
-        )
-
-        assert result.scores["generate_summary"] > result.scores["filter_rows"]
-        assert result.candidate_tools[0] == "generate_summary"
+        assert result.intent == "transform_dataset"
 
     def test_non_transformation_docs_are_excluded(self):
         failure_doc = RetrievedDoc(
@@ -137,19 +131,21 @@ class TestToolSelector:
             keywords=["empty"],
             score=5,
         )
-        result = select_tools(_transform_intent(), [failure_doc, _doc("filter_rows", score=1)])
+        result = select_tools(_intent(), [failure_doc, _doc("filter_rows", score=1)])
 
         assert "failure_case" not in result.candidate_tools
         assert result.selected_tool == "filter_rows"
 
-    def test_no_docs_returns_empty_result(self):
-        result = select_tools(_transform_intent(), [])
+    def test_no_docs_returns_empty_result_with_unknown_intent(self):
+        result = select_tools(_intent(), [])
 
         assert result.candidate_tools == []
         assert result.selected_tool is None
+        assert result.intent == "unknown"
 
-    def test_result_preserves_intent_and_raw_scores(self):
-        result = select_tools(_transform_intent(), [_doc("sort_values", score=2.5)])
+    def test_result_stores_rag_derived_intent_and_raw_scores(self):
+        # intent field reflects doc composition, not the ParsedTaskIntent input
+        result = select_tools(_intent(), [_doc("sort_values", score=2.5)])
 
         assert result.intent == "transform_dataset"
         assert "sort_values" in result.scores
