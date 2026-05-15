@@ -17,7 +17,36 @@ def _run_row(status: str | None = "success") -> dict:
         "parent_run_id": None,
         "explanation": "done",
         "planned_steps": [{"type": "remove_missing_values"}],
-        "trace": {"attempts": []},
+        "trace": {
+            "state": "executed",
+            "context": {
+                "dataset_id": "dataset-1",
+                "dataset_hash": "abc123",
+                "query": "test query",
+                "dataset_profile": {
+                    "row_count": 2,
+                    "preview": [{"region": "North", "sales": 1200}],
+                },
+                "current_schema": ["region", "sales"],
+                "previous_steps": [],
+                "current_steps": [{"type": "remove_missing_values"}],
+                "execution_boundary": "executed",
+            },
+            "context_summary": {
+                "query": "test query",
+                "dataset_hash": "abc123",
+                "schema_columns": ["region", "sales"],
+                "row_count": 2,
+                "retrieved_docs": [],
+                "planned_step_types": ["remove_missing_values"],
+                "status": "executed",
+                "boundary": "executed",
+                "validation_status": "passed",
+                "warning_count": 0,
+                "error_count": 0,
+            },
+            "attempts": [],
+        },
         "context_summary": {
             "query": "test query",
             "dataset_hash": "abc123",
@@ -53,6 +82,23 @@ def test_to_run_record_preserves_non_legacy_status():
 
     assert record.status == "warning_review"
     assert record.state == "warning_review"
+
+
+def test_to_run_record_defaults_to_compressed_trace_detail():
+    record = _to_run_record(_run_row("success"), include_detail=True)
+
+    assert record.context_summary is not None
+    assert record.attempts == []
+    assert record.workflow_trace is None
+
+
+def test_to_run_record_can_expand_sanitized_workflow_trace():
+    record = _to_run_record(_run_row("success"), include_detail=True, include_trace=True)
+
+    assert record.workflow_trace is not None
+    assert record.workflow_trace.state == "executed"
+    assert "preview" not in record.workflow_trace.context.dataset_profile
+    assert record.workflow_trace.context.current_schema == ["region", "sales"]
 
 
 async def test_list_for_dataset_filters_legacy_success_as_executed(mock_database):

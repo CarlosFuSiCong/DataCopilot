@@ -65,6 +65,8 @@ def test_agent_run_endpoint_returns_contract_fields():
         "agent_run_id",
         "agent_state",
         "iteration_summary",
+        "agent_trace_summary",
+        "agent_trace",
         "workflow_state",
         "next_required_user_action",
         "workflow_response",
@@ -79,8 +81,35 @@ def test_agent_run_auto_confirm_success_completes_without_user_action():
     assert data["agent_state"] == "completed"
     assert data["workflow_state"] == "executed"
     assert data["next_required_user_action"] is None
+    assert data["agent_trace"] is None
+    assert data["agent_trace_summary"]["state"] == "completed"
+    assert data["agent_trace_summary"]["iteration_count"] == 1
     assert data["iteration_summary"][0]["action"] == "stop_with_result"
     assert data["workflow_response"]["execution_result"]["row_count"] == 2
+
+
+def test_agent_run_can_expand_full_agent_trace_without_raw_dataset_rows():
+    did = _upload()
+    with patch("app.api.agent.orchestrator.workflow_planner.plan", return_value=MOCK_STEPS_GROUP_BY):
+        with patch("app.api.agent.orchestrator.result_explainer.explain", return_value=_MOCK_EXPLANATION):
+            resp = client.post(
+                "/api/agent/runs?include_trace=true",
+                json={"dataset_id": did, "query": "按地区统计销售额"},
+            )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    trace = data["agent_trace"]
+    iteration = trace["iterations"][0]
+    assert trace["summary"] == data["agent_trace_summary"]
+    assert iteration["input"]["workflow_context_summary"]["schema_columns"] == ["region", "sales", "month"]
+    assert iteration["decision"]["decision"] == "stop_with_result"
+    assert iteration["action"]["type"] == "stop_with_result"
+    assert iteration["validation"]["status"] == "passed"
+    assert iteration["observation"]["status"] in {"ok", "warning"}
+    assert iteration["observation"]["message"]
+    assert iteration["stop_reason"] == "Workflow completed successfully."
+    assert "preview" not in str(iteration["input"])
 
 
 def test_agent_run_preview_only_requires_confirmation_action():
@@ -173,6 +202,8 @@ def test_agent_cancel_marks_run_cancelled():
     assert data["agent_state"] == "cancelled"
     assert data["iteration_summary"][-1]["agent_state"] == "cancelled"
     assert data["iteration_summary"][-1]["stop_reason"] == "user stopped the run"
+    assert data["agent_trace_summary"]["state"] == "cancelled"
+    assert data["agent_trace_summary"]["last_action"] == "stop_with_error"
     assert data["next_required_user_action"] is None
 
 

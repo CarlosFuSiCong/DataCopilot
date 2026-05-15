@@ -7,6 +7,7 @@ POST /api/runs/{run_id}/rerun              Rerun with (possibly edited) steps.
 GET  /api/runs/{run_id}/download           Download the result CSV file.
 """
 import csv
+import copy
 import io
 import json
 import logging
@@ -33,8 +34,9 @@ def _normalize_run_status(status: str | None) -> str:
     return "executed" if value == "success" else value
 
 
-def _to_run_record(row: dict, include_detail: bool = False) -> RunRecord:
+def _to_run_record(row: dict, include_detail: bool = False, include_trace: bool = False) -> RunRecord:
     status = _normalize_run_status(row.get("status"))
+    trace = row.get("trace")
     return RunRecord(
         run_id=str(row["id"]),
         dataset_id=str(row["dataset_id"]),
@@ -47,8 +49,9 @@ def _to_run_record(row: dict, include_detail: bool = False) -> RunRecord:
         explanation=row.get("explanation") if include_detail else None,
         planned_steps=row.get("planned_steps") if include_detail else None,
         state=status if include_detail else None,
-        attempts=(row.get("trace") or {}).get("attempts") if include_detail and row.get("trace") else None,
+        attempts=(trace or {}).get("attempts") if include_detail and trace else None,
         context_summary=row.get("context_summary") if include_detail else None,
+        workflow_trace=_public_workflow_trace(trace) if include_detail and include_trace and trace else None,
     )
 
 
@@ -65,7 +68,10 @@ async def list_runs(
 
 
 @router.get("/{run_id}", response_model=RunRecord)
-async def get_run(run_id: str) -> RunRecord:
+async def get_run(
+    run_id: str,
+    include_trace: bool = Query(False, description="Include the full sanitized WorkflowTrace."),
+) -> RunRecord:
     """Return full metadata for a single run including explanation and workflow steps."""
     try:
         row = await run_store.get_run(run_id)
@@ -73,7 +79,16 @@ async def get_run(run_id: str) -> RunRecord:
         raise DatasetNotFoundError(
             str(exc), error_code="download_not_found",
         ) from exc
-    return _to_run_record(row, include_detail=True)
+    return _to_run_record(row, include_detail=True, include_trace=include_trace)
+
+
+def _public_workflow_trace(trace: dict) -> dict:
+    """Return WorkflowTrace without raw dataset preview rows."""
+    public_trace = copy.deepcopy(trace)
+    dataset_profile = public_trace.get("context", {}).get("dataset_profile")
+    if isinstance(dataset_profile, dict):
+        dataset_profile.pop("preview", None)
+    return public_trace
 
 
 @router.get("/{run_id}/preview-csv")
