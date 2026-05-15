@@ -3,6 +3,7 @@ from typing import AsyncGenerator
 
 from fastapi import FastAPI
 
+from app.api import agent as agent_router
 from app.api import chat as chat_router
 from app.api import dataset as dataset_router
 from app.api import rag as rag_router
@@ -32,6 +33,7 @@ app.include_router(dataset_router.router, prefix="/api")
 app.include_router(workflow_router.router, prefix="/api")
 app.include_router(rag_router.router, prefix="/api")
 app.include_router(chat_router.router, prefix="/api")
+app.include_router(agent_router.router, prefix="/api")
 app.include_router(runs_router.router, prefix="/api")
 
 
