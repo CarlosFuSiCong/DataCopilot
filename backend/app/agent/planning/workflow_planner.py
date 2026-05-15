@@ -55,8 +55,15 @@ Rules:
   Always include the full list of available columns so the user knows what to choose from.
 
 STRICT FIELD CONSTRAINTS (must be followed exactly, no synonyms or alternatives):
-- filter_rows "operator": MUST be one of exactly: "=", "!=", ">", ">=", "<", "<="
-  Do NOT use: "equals", "eq", "greater_than", "gt", "lt", "gte", "lte", or any word form.
+- filter_rows REQUIRED FIELDS — ALL THREE must always be present, never omit any:
+    "column": the column name from the dataset profile to filter on (e.g. "sales", "region")
+    "operator": MUST be one of exactly: "=", "!=", ">", ">=", "<", "<="
+      Do NOT use: "equals", "eq", "greater_than", "gt", "lt", "gte", "lte", or any word form.
+    "value": the comparison value (number or string)
+  Chinese filter verbs always map to filter_rows — identify the column from the comparison token:
+    "删除所有 X 低于 Y 的行"  → keep rows: {{"type":"filter_rows","column":"X","operator":">=","value":Y}}
+    "只保留 X 是 Y 的数据"    → keep rows: {{"type":"filter_rows","column":"X","operator":"=","value":"Y"}}
+    "过滤出 X 大于 Y 的行"    → keep rows: {{"type":"filter_rows","column":"X","operator":">","value":Y}}
 - group_by "agg": MUST be one of: "sum", "mean", "count", "min", "max"
 - sort_values "ascending": MUST be a boolean — true (ascending) or false (descending). Do NOT use "order", "asc", "desc", or any string.
 
@@ -80,10 +87,17 @@ SIGNALS that indicate structural ambiguity (ask):
    Exception: "top [N] rows" or "first [N] rows" — literal row slice, use limit_rows.
 3. The operation could mean filter OR group OR sort depending on intent:
    "show sales by region" — filter to one region? group by region? ask which.
+4. The filter condition uses vague or relative threshold language with no explicit number:
+   "abnormally low/high", "unusually small/large", "too low/high", "extreme values",
+   "异常低", "异常高", "过低", "过高", "偏低", "偏高", "特别低", "特别高"
+   → the threshold is a business judgment — ask for the specific numeric value.
+   Exception: if the query already contains an explicit number, use it directly.
 
 SIGNALS that indicate clear intent (act, use defaults for missing numeric values):
 1. The transformation type is explicit: "sort", "filter … where", "rename", "remove nulls",
    "fill missing", "group by [column]", "select columns", "show the first N rows".
+   Chinese equivalents: "删除所有 X 低于/高于 Y", "只保留 X 是/大于/小于 Y", "过滤出 X 大于/小于 Y",
+   "按 X 排序", "按 X 分组求 Y", "选择 X 列".
 2. Only a numeric threshold or count is unspecified and a default is safe:
    "show top rows / first few rows" → limit_rows n=10
    "filter large orders" with a numeric column → ask the threshold (one clear op, one missing param).
@@ -187,18 +201,21 @@ def _explicit_missing_column(query: str, ctx: RAGContext) -> str | None:
     """Return an explicitly referenced missing column, if present.
 
     This deterministic guard prevents the LLM from mapping a named missing
-    column such as "sales" to a semantically similar existing column like
-    "amount" when the user wrote a column-like `where ...` condition.
+    column to a semantically similar existing column. Covers both English
+    `where <col>` syntax and Chinese comparison patterns.
     """
     available = {c["name"] for c in ctx.dataset_summary.columns}
+    available_lower = {c["name"].lower() for c in ctx.dataset_summary.columns}
     patterns = [
         r"\bwhere\s+([A-Za-z_][A-Za-z0-9_]*)\b",
+        # Chinese: <col> 大于/小于/等于/高于/低于/不等于 ... (identifier before comparison keyword)
+        r"([A-Za-z_][A-Za-z0-9_]*)\s*(?:大于等于|小于等于|大于|小于|等于|高于|低于|不等于)",
     ]
     for pattern in patterns:
         match = re.search(pattern, query, flags=re.IGNORECASE)
         if match:
             col = match.group(1)
-            if col not in available:
+            if col not in available and col.lower() not in available_lower:
                 return col
     return None
 

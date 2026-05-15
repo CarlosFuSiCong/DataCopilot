@@ -36,6 +36,10 @@ def from_preview(
         signals.append("empty_result")
         possible_causes.extend(_empty_result_causes(preview_result.step_results, planned_steps))
 
+    if _has_large_row_removal(preview_result.step_results):
+        signals.append("large_row_removal")
+        possible_causes.append("a filter step removed a large fraction of input rows")
+
     if _has_high_warning_rate(preview_result.step_results):
         signals.append("high_warning_rate")
         possible_causes.append("multiple workflow steps produced warnings")
@@ -112,6 +116,13 @@ def _has_empty_result(step_results: Iterable[StepResult]) -> bool:
     )
 
 
+def _has_large_row_removal(step_results: Iterable[StepResult]) -> bool:
+    return any(
+        any(issue.code == risk_rules.LARGE_ROW_REMOVAL for issue in result.issues)
+        for result in step_results
+    )
+
+
 def _has_high_warning_rate(step_results: list[StepResult]) -> bool:
     if not step_results:
         return False
@@ -163,6 +174,8 @@ def _message(signals: list[str], preview_result: PreviewResponse) -> str:
         return "Observation found a blocking execution error."
     if "empty_result" in signals:
         return "Observation found that the workflow can produce an empty result."
+    if "large_row_removal" in signals:
+        return "Observation found that the filter removes a large fraction of input rows."
     if signals:
         return "Observation found workflow warnings that should be reviewed."
     return "Observation did not find workflow warnings or errors."

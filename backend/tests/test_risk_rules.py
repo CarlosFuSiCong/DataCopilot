@@ -5,7 +5,9 @@ from app.agent.observation import risk_rules
 from app.agent.observation.risk_rules import (
     AFFECTS_MOST_ROWS,
     AFFECTS_THRESHOLD,
+    BULK_REMOVAL_THRESHOLD,
     EMPTY_OUTPUT,
+    LARGE_ROW_REMOVAL,
     NO_ROWS_MATCHED,
 )
 from app.models.workflow import StepIssue
@@ -132,8 +134,38 @@ def test_empty_output_and_no_rows_matched_both_fire():
     assert NO_ROWS_MATCHED in codes
 
 
+# ---------------------------------------------------------------------------
+# LARGE_ROW_REMOVAL
+# ---------------------------------------------------------------------------
+
+def test_large_row_removal_fires_when_filter_removes_more_than_threshold():
+    # match_rate just below the safe boundary (1 - BULK_REMOVAL_THRESHOLD)
+    match_rate = round(1.0 - BULK_REMOVAL_THRESHOLD - 0.01, 4)
+    issues = _check(match_rate=match_rate, output_row_count=10)
+    assert LARGE_ROW_REMOVAL in _codes(issues)
+
+
+def test_large_row_removal_not_fired_at_boundary():
+    # match_rate exactly at boundary: no removal warning
+    match_rate = round(1.0 - BULK_REMOVAL_THRESHOLD, 4)
+    issues = _check(match_rate=match_rate, output_row_count=10)
+    assert LARGE_ROW_REMOVAL not in _codes(issues)
+
+
+def test_large_row_removal_only_fires_for_filter_rows_step():
+    # Non-filter steps do not trigger LARGE_ROW_REMOVAL even with low match_rate
+    issues = risk_rules.check(
+        step_type="sort_values",
+        output_row_count=2,
+        match_rate=0.2,
+        affected_rate=None,
+    )
+    assert LARGE_ROW_REMOVAL not in [i.code for i in issues]
+
+
 def test_no_issues_for_normal_step():
-    issues = _check(match_rate=0.5, output_row_count=5)
+    # match_rate between 0.75 and 0.9 avoids both LARGE_ROW_REMOVAL and AFFECTS_MOST_ROWS
+    issues = _check(match_rate=0.8, output_row_count=5)
     assert issues == []
 
 

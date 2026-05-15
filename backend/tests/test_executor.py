@@ -390,8 +390,9 @@ def test_remove_missing_removing_most_rows_produces_affects_most_rows_warning():
 
 
 def test_normal_step_has_no_issues():
+    # region != West keeps 4/5 rows (80%): no LARGE_ROW_REMOVAL and no AFFECTS_MOST_ROWS
     result = execute(
-        [FilterRowsStep(type="filter_rows", column="region", operator="=", value="North")],
+        [FilterRowsStep(type="filter_rows", column="region", operator="!=", value="West")],
         BASE_CSV,
     )
     assert result.step_results[0].issues == []

@@ -109,12 +109,13 @@ def test_execute_select_columns_reduces_column_count():
 
 
 def test_execute_filter_rows_reduces_row_count():
+    # sales >= 800 keeps 4/5 rows (80%): no large_row_removal warning so execute is allowed
     did = _upload()
     data = _execute(
         did,
-        [{"type": "filter_rows", "column": "sales", "operator": ">", "value": 1000}],
+        [{"type": "filter_rows", "column": "sales", "operator": ">=", "value": 800}],
     ).json()
-    assert data["row_count"] == 2
+    assert data["row_count"] == 4
 
 
 def test_execute_generate_summary_sets_flag():
@@ -271,10 +272,11 @@ def test_preview_step_result_has_standard_fields():
 
 
 def test_preview_clean_workflow_has_no_warnings_or_errors():
+    # region != West keeps 4/5 rows (80%): clean preview with no warnings
     did = _upload()
     data = _preview(
         did,
-        [{"type": "filter_rows", "column": "region", "operator": "=", "value": "North"}],
+        [{"type": "filter_rows", "column": "region", "operator": "!=", "value": "West"}],
     ).json()
     assert data["has_warnings"] is False
     assert data["has_errors"] is False

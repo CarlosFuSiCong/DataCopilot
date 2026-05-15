@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 ObservationSignal = Literal[
     "empty_result",
+    "large_row_removal",
     "high_warning_rate",
     "validation_failed",
     "execution_error",
