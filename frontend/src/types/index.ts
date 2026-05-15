@@ -244,6 +244,82 @@ export interface ConfirmResponse {
   context_summary?: WorkflowContextSummary | null
 }
 
+// ─── Agent Trace ──────────────────────────────────────────────────────────────
+
+export type AgentRunState =
+  | 'created'
+  | 'running'
+  | 'needs_clarification'
+  | 'waiting_confirmation'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+  | 'max_iterations_reached'
+
+export type AgentActionType =
+  | 'clarify'
+  | 'plan_workflow'
+  | 'preview_workflow'
+  | 'confirm_required'
+  | 'retry_preview'
+  | 'replan_workflow'
+  | 'select_new_tool'
+  | 'stop_with_result'
+  | 'stop_with_error'
+
+export interface AgentDecision {
+  decision: AgentActionType
+  rationale: string
+  confidence: number | null
+  requires_user_input: boolean
+}
+
+export interface AgentAction {
+  type: AgentActionType
+  parameters: Record<string, unknown>
+  workflow_steps: WorkflowStep[]
+}
+
+export interface AgentValidationSummary {
+  status: 'not_run' | 'passed' | 'failed' | 'blocked'
+  error?: string | null
+  details: Record<string, unknown>
+}
+
+export interface ObservationSummary {
+  status: 'ok' | 'warning' | 'error' | 'blocked'
+  message: string
+  recommended_next_action?: string | null
+}
+
+export interface AgentIteration {
+  iteration_index: number
+  input: Record<string, unknown>
+  decision: AgentDecision
+  action: AgentAction
+  validation: AgentValidationSummary
+  observation: ObservationSummary
+  stop_reason: string | null
+}
+
+export interface AgentTraceSummary {
+  state: AgentRunState
+  iteration_count: number
+  max_iterations: number
+  stop_reason: string | null
+  last_action: AgentActionType | null
+  last_observation: ObservationSummary | null
+  workflow_context_summary: WorkflowContextSummary | null
+  full_trace_available: boolean
+}
+
+export interface AgentTrace {
+  state: AgentRunState
+  max_iterations: number
+  summary: AgentTraceSummary
+  iterations: AgentIteration[]
+}
+
 // ─── API errors ───────────────────────────────────────────────────────────────
 
 export interface ApiError {

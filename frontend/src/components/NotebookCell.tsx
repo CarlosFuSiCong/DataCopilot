@@ -7,6 +7,7 @@ import { WorkflowViewer } from './WorkflowViewer'
 import { ResultTable } from './ResultTable'
 import { ExplanationPanel } from './ExplanationPanel'
 import { RAGPanel } from './RAGPanel'
+import { AgentTracePanel } from './AgentTracePanel'
 
 import type { WorkflowStep } from '../types'
 
@@ -578,6 +579,19 @@ export function NotebookCell({ cell, onConfirm, onClarify, onSuggest, onRerun }:
               stepResults={stepResults}
               onRerun={steps => onRerun(steps, cell.result!.query, cell.result?.run_id ?? cell.confirmResult?.run_id)}
             />
+
+            {/* Agent Trace — shown when the backend returned iteration data */}
+            {cell.result!.attempts && cell.result!.attempts.length > 0 && (
+              <AgentTracePanel
+                attempts={cell.result!.attempts}
+                contextSummary={cell.result!.context_summary}
+                workflowState={cell.result!.state}
+                needsClarification={cell.result!.needs_clarification}
+                clarificationQuestion={cell.result!.clarification_question}
+                hasErrors={hasErrors}
+                hasWarnings={hasWarnings}
+              />
+            )}
 
             {ragContext && <RAGPanel ragContext={ragContext} />}
 
