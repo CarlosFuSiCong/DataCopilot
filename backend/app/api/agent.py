@@ -3,9 +3,10 @@
 The legacy /chat endpoint remains the single-turn compatibility path. This
 router adds Agent run/session semantics around the same deterministic pipeline.
 """
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from app.agent.loop import orchestrator
+from app.agent.loop.agent_trace_runtime import make_agent_trace
 from app.agent.loop.agent_models import AgentActionType, AgentRunState
 from app.core.exceptions import DataCopilotError
 from app.models.agent_api import (
@@ -24,7 +25,10 @@ router = APIRouter(prefix="/agent", tags=["agent"])
 
 
 @router.post("/runs", response_model=AgentRunResponse)
-async def start_agent_run(request: AgentRunRequest) -> AgentRunResponse:
+async def start_agent_run(
+    request: AgentRunRequest,
+    include_trace: bool = Query(False, description="Include full AgentTrace iterations."),
+) -> AgentRunResponse:
     record = agent_run_store.create_run(dataset_id=request.dataset_id, query=request.query)
     response = await orchestrator.run_chat(
         ChatRequest(
@@ -36,13 +40,14 @@ async def start_agent_run(request: AgentRunRequest) -> AgentRunResponse:
         )
     )
     agent_run_store.update_run(record, response)
-    return _build_response(record)
+    return _build_response(record, include_trace=include_trace)
 
 
 @router.post("/runs/{agent_run_id}/continue", response_model=AgentRunResponse)
 async def continue_agent_run(
     agent_run_id: str,
     request: AgentContinueRequest,
+    include_trace: bool = Query(False, description="Include full AgentTrace iterations."),
 ) -> AgentRunResponse:
     record = _require_run(agent_run_id)
     if record.cancelled:
@@ -77,17 +82,18 @@ async def continue_agent_run(
         )
     )
     agent_run_store.update_run(record, response)
-    return _build_response(record)
+    return _build_response(record, include_trace=include_trace)
 
 
 @router.post("/runs/{agent_run_id}/cancel", response_model=AgentRunResponse)
 async def cancel_agent_run(
     agent_run_id: str,
     request: AgentCancelRequest | None = None,
+    include_trace: bool = Query(False, description="Include full AgentTrace iterations."),
 ) -> AgentRunResponse:
     record = _require_run(agent_run_id)
     agent_run_store.cancel_run(record, reason=request.reason if request else None)
-    return _build_response(record)
+    return _build_response(record, include_trace=include_trace)
 
 
 def _require_run(agent_run_id: str) -> AgentRunRecord:
@@ -101,22 +107,24 @@ def _require_run(agent_run_id: str) -> AgentRunRecord:
     return record
 
 
-def _build_response(record: AgentRunRecord) -> AgentRunResponse:
+def _build_response(record: AgentRunRecord, *, include_trace: bool = False) -> AgentRunResponse:
     workflow_response = record.workflow_response
+    agent_state = "cancelled" if record.cancelled else _record_state(record)
+    agent_trace = make_agent_trace(
+        state=agent_state,
+        events=record.events,
+        action_for_event=_action_for_response,
+        stop_reason_for_event=_stop_reason,
+        cancelled_reason=record.cancel_reason,
+    )
     if record.cancelled:
         workflow_state = workflow_response.state if workflow_response else None
         return AgentRunResponse(
             agent_run_id=record.agent_run_id,
             agent_state="cancelled",
-            iteration_summary=_iteration_summaries(record) + [
-                AgentIterationSummary(
-                    iteration_index=record.iteration_count,
-                    action="stop_with_error",
-                    agent_state="cancelled",
-                    workflow_state=workflow_state,
-                    stop_reason=record.cancel_reason or "Agent run was cancelled by request.",
-                )
-            ],
+            iteration_summary=_iteration_summaries(record, agent_trace=agent_trace),
+            agent_trace_summary=agent_trace.summary,
+            agent_trace=agent_trace if include_trace else None,
             workflow_state=workflow_state,
             workflow_response=workflow_response,
         )
@@ -126,19 +134,35 @@ def _build_response(record: AgentRunRecord) -> AgentRunResponse:
             agent_run_id=record.agent_run_id,
             agent_state="created",
             iteration_summary=[],
+            agent_trace_summary=agent_trace.summary,
+            agent_trace=agent_trace if include_trace else None,
         )
 
     return AgentRunResponse(
         agent_run_id=record.agent_run_id,
-        agent_state=_agent_state(workflow_response),
-        iteration_summary=_iteration_summaries(record),
+        agent_state=agent_state,
+        iteration_summary=_iteration_summaries(record, agent_trace=agent_trace),
+        agent_trace_summary=agent_trace.summary,
+        agent_trace=agent_trace if include_trace else None,
         workflow_state=workflow_response.state,
         next_required_user_action=_next_user_action(record, workflow_response),
         workflow_response=workflow_response,
     )
 
 
-def _iteration_summaries(record: AgentRunRecord) -> list[AgentIterationSummary]:
+def _iteration_summaries(record: AgentRunRecord, *, agent_trace=None) -> list[AgentIterationSummary]:
+    if agent_trace:
+        return [
+            AgentIterationSummary(
+                iteration_index=iteration.iteration_index,
+                action=iteration.action.type,
+                agent_state=agent_trace.state if iteration == agent_trace.iterations[-1] else _agent_state(record.events[index]),
+                workflow_state=record.events[index].state if index < len(record.events) else None,
+                stop_reason=iteration.stop_reason,
+                observation_status=iteration.observation.status,
+            )
+            for index, iteration in enumerate(agent_trace.iterations)
+        ]
     return [
         AgentIterationSummary(
             iteration_index=index,
@@ -150,6 +174,12 @@ def _iteration_summaries(record: AgentRunRecord) -> list[AgentIterationSummary]:
         )
         for index, response in enumerate(record.events)
     ]
+
+
+def _record_state(record: AgentRunRecord) -> AgentRunState:
+    if not record.workflow_response:
+        return "created"
+    return _agent_state(record.workflow_response)
 
 
 def _agent_state(response: ChatResponse) -> AgentRunState:

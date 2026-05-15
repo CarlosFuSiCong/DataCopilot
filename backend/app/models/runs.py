@@ -4,7 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from app.models.runtime_trace import WorkflowAttempt, WorkflowContextSummary, WorkflowRunState
+from app.models.runtime_trace import WorkflowAttempt, WorkflowContextSummary, WorkflowRunState, WorkflowTrace
 from app.models.workflow_steps import WorkflowStep
 
 
@@ -25,6 +25,7 @@ class RunRecord(BaseModel):
     state: WorkflowRunState | None = None
     attempts: list[WorkflowAttempt] | None = None
     context_summary: WorkflowContextSummary | None = None
+    workflow_trace: WorkflowTrace | None = None
 
 
 class RunListResponse(BaseModel):

@@ -3,7 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.agent.loop.agent_models import AgentActionType, AgentRunState
+from app.agent.loop.agent_models import AgentActionType, AgentRunState, AgentTrace, AgentTraceSummary
 from app.models.chat import ChatResponse
 from app.models.runtime_trace import WorkflowRunState
 from app.models.workflow_steps import WorkflowStep
@@ -50,6 +50,8 @@ class AgentRunResponse(BaseModel):
     agent_run_id: str
     agent_state: AgentRunState
     iteration_summary: list[AgentIterationSummary]
+    agent_trace_summary: AgentTraceSummary
+    agent_trace: AgentTrace | None = None
     workflow_state: WorkflowRunState | None = None
     next_required_user_action: NextRequiredUserAction | None = None
     workflow_response: ChatResponse | None = None
