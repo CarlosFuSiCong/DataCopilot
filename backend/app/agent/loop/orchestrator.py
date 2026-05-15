@@ -486,12 +486,17 @@ def _clarification_response(
 
 def _explicit_missing_column(query: str, column_names: list[str]) -> str | None:
     available = set(column_names)
-    patterns = [r"\bwhere\s+([A-Za-z_][A-Za-z0-9_]*)\b"]
+    available_lower = {c.lower() for c in column_names}
+    patterns = [
+        r"\bwhere\s+([A-Za-z_][A-Za-z0-9_]*)\b",
+        # Chinese: <col> 大于/小于/等于/高于/低于/不等于 ... (identifier before comparison keyword)
+        r"([A-Za-z_][A-Za-z0-9_]*)\s*(?:大于等于|小于等于|大于|小于|等于|高于|低于|不等于)",
+    ]
     for pattern in patterns:
         match = re.search(pattern, query, flags=re.IGNORECASE)
         if match:
             col = match.group(1)
-            if col not in available:
+            if col not in available and col.lower() not in available_lower:
                 return col
     return None
 
