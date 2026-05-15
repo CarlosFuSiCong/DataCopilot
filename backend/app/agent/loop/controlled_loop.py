@@ -199,7 +199,7 @@ def enforce_action_guardrails(
     if policy and action.type != "confirm_required":
         action_policy.enforce_policy(policy)
 
-    if action.type in _WORKFLOW_STEP_ACTIONS:
+    if action.type in _WORKFLOW_STEP_VALIDATE_ACTIONS:
         steps = _parse_steps(action.workflow_steps)
         workflow_validator.validate(steps, column_names)
 
@@ -235,12 +235,22 @@ def map_evaluation_to_action(
     return "stop_with_error"
 
 
+# Actions that attach the current plan to workflow_steps so downstream handlers
+# have plan context.  select_new_tool is included because the tool selector
+# needs the failing plan to choose an alternative.
 _WORKFLOW_STEP_ACTIONS = {
     "plan_workflow",
     "preview_workflow",
     "retry_preview",
     "replan_workflow",
+    "select_new_tool",
 }
+
+# Actions that also require deterministic step-level validation before
+# execution.  select_new_tool is excluded: it carries the *failing* plan as
+# reference context only — validating those steps would always raise an error
+# since they are the steps being replaced.
+_WORKFLOW_STEP_VALIDATE_ACTIONS = _WORKFLOW_STEP_ACTIONS - {"select_new_tool"}
 
 
 def _limit_action(
