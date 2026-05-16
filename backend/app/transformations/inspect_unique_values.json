@@ -1,0 +1,24 @@
+{
+  "doc_type": "transformation",
+  "step_type": "inspect_unique_values",
+  "issue_code": null,
+  "source_path": "transformations/inspect_unique_values.json",
+  "type": "inspect_unique_values",
+  "title": "inspect_unique_values: return top unique values and their counts for a column",
+  "description": "Return the most frequent unique values and their counts for a categorical or low-cardinality column. Useful when a filter returns empty results and the actual values in a column are unknown.",
+  "keywords": [
+    "unique values", "value counts", "categories", "distinct values", "top values",
+    "what values", "possible values", "category list", "inspect values",
+    "唯一值", "取值", "分类值", "类别列表", "值列表", "看看有什么值"
+  ],
+  "parameters": [
+    {"name": "column", "type": "string", "required": true, "description": "Name of the column to inspect."},
+    {"name": "max_values", "type": "integer", "required": false, "description": "Maximum number of unique values to return (default 20, max 200)."}
+  ],
+  "example": {
+    "type": "inspect_unique_values",
+    "column": "region",
+    "max_values": 20
+  },
+  "rag_note": "Use when the user asks 'what values does column X contain?', when a filter produced zero rows (possible value mismatch), or when observation signals suspected_wrong_value."
+}

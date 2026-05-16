@@ -51,6 +51,9 @@ _SUPPORTED_STEPS = [
     "rename_columns", "remove_missing_values", "fill_missing_values",
     "drop_columns", "derive_column", "date_extract", "limit_rows",
     "generate_summary",
+    "profile_column", "inspect_unique_values", "summarize_numeric_column",
+    "compare_groups", "correlation_summary", "distribution_summary",
+    "suggest_analysis_steps",
 ]
 _EXAMPLE_QUERIES = [
     "Filter rows where amount > 1000",
