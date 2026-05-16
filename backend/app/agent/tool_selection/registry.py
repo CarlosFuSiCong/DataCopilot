@@ -17,25 +17,32 @@ from app.core.exceptions import ExecutionError, WorkflowValidationError
 from app.models.workflow_steps import (
     BinColumnStep,
     CastColumnStep,
+    CompareGroupsStep,
     ConditionalColumnStep,
+    CorrelationSummaryStep,
     DateDiffStep,
     DateExtractStep,
     DeduplicateRowsStep,
     DeriveColumnStep,
+    DistributionSummaryStep,
     DropColumnsStep,
     ExtractTextStep,
     FillMissingValuesStep,
     FilterRowsStep,
     GenerateSummaryStep,
     GroupByStep,
+    InspectUniqueValuesStep,
     LimitRowsStep,
     NormalizeTextStep,
     PivotTableStep,
+    ProfileColumnStep,
     ReplaceValuesStep,
     RemoveMissingValuesStep,
     RenameColumnsStep,
     SelectColumnsStep,
     SortValuesStep,
+    SuggestAnalysisStepsStep,
+    SummarizeNumericColumnStep,
     TrimTextStep,
     WorkflowStep,
 )
@@ -866,6 +873,248 @@ def _execute_date_diff(step: WorkflowStep, df: pd.DataFrame) -> tuple[pd.DataFra
     )
 
 
+# --------------------------------------------------------------------------- #
+# Analytical / diagnostic tool helpers (Task 7)
+# --------------------------------------------------------------------------- #
+
+def _validate_single_analytic_column(step_type: str):
+    """Factory: return a validator that checks a single `column` field exists."""
+    def _validate(step: WorkflowStep, col_set: set[str], label: str) -> None:
+        col = getattr(step, "column", None)
+        if col:
+            _require_columns([col], col_set, label)
+    return _validate
+
+
+def _validate_profile_column(step: WorkflowStep, col_set: set[str], label: str) -> None:
+    assert isinstance(step, ProfileColumnStep)
+    _require_columns([step.column], col_set, label)
+
+
+def _execute_profile_column(step: WorkflowStep, df: pd.DataFrame) -> tuple[pd.DataFrame, str, StepMetrics]:
+    assert isinstance(step, ProfileColumnStep)
+    col = step.column
+    if col not in df.columns:
+        raise ExecutionError(f"profile_column: column '{col}' not found. Available: {_available(df)}")
+    series = df[col]
+    total = len(series)
+    non_null = int(series.notna().sum())
+    missing_pct = round(100.0 * (total - non_null) / total, 1) if total else 0.0
+    unique_count = int(series.nunique(dropna=True))
+    top_vals = series.value_counts(dropna=True).head(5)
+    top_str = ", ".join(f"{v}({c})" for v, c in top_vals.items())
+    rows: list[tuple] = [
+        ("column", col),
+        ("dtype", str(series.dtype)),
+        ("total_rows", total),
+        ("non_null_count", non_null),
+        ("missing_pct", f"{missing_pct}%"),
+        ("unique_count", unique_count),
+        ("top_values", top_str),
+    ]
+    if pd.api.types.is_numeric_dtype(series):
+        rows.append(("min", series.min()))
+        rows.append(("max", series.max()))
+        rows.append(("mean", round(float(series.mean()), 4) if non_null > 0 else None))
+    result = pd.DataFrame(rows, columns=["stat", "value"])
+    msg = f"Profile of '{col}': {series.dtype}, {missing_pct}% missing, {unique_count} unique values."
+    return result, msg, StepMetrics(affected_rate=0.0)
+
+
+def _validate_inspect_unique_values(step: WorkflowStep, col_set: set[str], label: str) -> None:
+    assert isinstance(step, InspectUniqueValuesStep)
+    _require_columns([step.column], col_set, label)
+
+
+def _execute_inspect_unique_values(step: WorkflowStep, df: pd.DataFrame) -> tuple[pd.DataFrame, str, StepMetrics]:
+    assert isinstance(step, InspectUniqueValuesStep)
+    col = step.column
+    if col not in df.columns:
+        raise ExecutionError(f"inspect_unique_values: column '{col}' not found. Available: {_available(df)}")
+    counts = df[col].value_counts(dropna=False).head(step.max_values).reset_index()
+    counts.columns = ["value", "count"]
+    if len(df) > 0:
+        counts["pct"] = (counts["count"] / len(df) * 100).round(1)
+    else:
+        counts["pct"] = 0.0
+    msg = f"Top {len(counts)} unique values in '{col}' (of {df[col].nunique(dropna=False)} total)."
+    return counts, msg, StepMetrics(affected_rate=0.0)
+
+
+def _execute_summarize_numeric_column(step: WorkflowStep, df: pd.DataFrame) -> tuple[pd.DataFrame, str, StepMetrics]:
+    assert isinstance(step, SummarizeNumericColumnStep)
+    col = step.column
+    if col not in df.columns:
+        raise ExecutionError(f"summarize_numeric_column: column '{col}' not found. Available: {_available(df)}")
+    if not pd.api.types.is_numeric_dtype(df[col]):
+        raise ExecutionError(f"summarize_numeric_column: column '{col}' is not numeric (dtype={df[col].dtype}).")
+    series = df[col].dropna()
+    if series.empty:
+        raise ExecutionError(f"summarize_numeric_column: column '{col}' has no non-null values.")
+    q25 = float(series.quantile(0.25))
+    q75 = float(series.quantile(0.75))
+    iqr = q75 - q25
+    lower = q25 - 1.5 * iqr
+    upper = q75 + 1.5 * iqr
+    outlier_count = int(((series < lower) | (series > upper)).sum())
+    rows: list[tuple] = [
+        ("count", int(series.count())),
+        ("mean", round(float(series.mean()), 4)),
+        ("median", round(float(series.median()), 4)),
+        ("std", round(float(series.std()), 4)),
+        ("min", float(series.min())),
+        ("q25", q25),
+        ("q75", q75),
+        ("max", float(series.max())),
+        ("outlier_count_iqr", outlier_count),
+    ]
+    result = pd.DataFrame(rows, columns=["stat", "value"])
+    msg = (
+        f"Numeric summary of '{col}': "
+        f"mean={rows[1][1]}, median={rows[2][1]}, "
+        f"{outlier_count} IQR outliers."
+    )
+    return result, msg, StepMetrics(affected_rate=0.0)
+
+
+def _validate_compare_groups(step: WorkflowStep, col_set: set[str], label: str) -> None:
+    assert isinstance(step, CompareGroupsStep)
+    _require_columns([step.group_column, step.value_column], col_set, label)
+
+
+def _execute_compare_groups(step: WorkflowStep, df: pd.DataFrame) -> tuple[pd.DataFrame, str, StepMetrics]:
+    assert isinstance(step, CompareGroupsStep)
+    for col in (step.group_column, step.value_column):
+        if col not in df.columns:
+            raise ExecutionError(f"compare_groups: column '{col}' not found. Available: {_available(df)}")
+    if not pd.api.types.is_numeric_dtype(df[step.value_column]):
+        raise ExecutionError(
+            f"compare_groups: value_column '{step.value_column}' is not numeric "
+            f"(dtype={df[step.value_column].dtype})."
+        )
+    grouped = (
+        df.groupby(step.group_column)[step.value_column]
+        .agg([step.agg, "count"])
+        .reset_index()
+    )
+    grouped.columns = [step.group_column, step.agg, "count"]
+    grouped = grouped.sort_values(step.agg, ascending=False).reset_index(drop=True)
+    msg = (
+        f"Compared '{step.value_column}' by '{step.group_column}' "
+        f"({step.agg}): {len(grouped)} groups."
+    )
+    return grouped, msg, StepMetrics(affected_rate=0.0)
+
+
+def _validate_correlation_summary(step: WorkflowStep, col_set: set[str], label: str) -> None:
+    assert isinstance(step, CorrelationSummaryStep)
+    if step.columns:
+        _require_columns(step.columns, col_set, label)
+
+
+def _execute_correlation_summary(step: WorkflowStep, df: pd.DataFrame) -> tuple[pd.DataFrame, str, StepMetrics]:
+    assert isinstance(step, CorrelationSummaryStep)
+    if step.columns:
+        for col in step.columns:
+            if col not in df.columns:
+                raise ExecutionError(f"correlation_summary: column '{col}' not found. Available: {_available(df)}")
+        num_df = df[step.columns].select_dtypes(include="number")
+    else:
+        num_df = df.select_dtypes(include="number")
+    if num_df.shape[1] < 2:
+        raise ExecutionError(
+            "correlation_summary: at least 2 numeric columns are required. "
+            f"Found: {list(num_df.columns)}"
+        )
+    corr = num_df.corr(numeric_only=True).round(4)
+    stacked = corr.stack().reset_index()
+    stacked.columns = ["col_a", "col_b", "correlation"]
+    pairs = stacked[stacked["col_a"] < stacked["col_b"]].copy()
+    pairs = pairs.sort_values("correlation", key=lambda s: s.abs(), ascending=False).reset_index(drop=True)
+    msg = f"Correlations between {list(num_df.columns)}: {len(pairs)} pairs computed."
+    return pairs, msg, StepMetrics(affected_rate=0.0)
+
+
+def _execute_distribution_summary(step: WorkflowStep, df: pd.DataFrame) -> tuple[pd.DataFrame, str, StepMetrics]:
+    assert isinstance(step, DistributionSummaryStep)
+    col = step.column
+    if col not in df.columns:
+        raise ExecutionError(f"distribution_summary: column '{col}' not found. Available: {_available(df)}")
+    if not pd.api.types.is_numeric_dtype(df[col]):
+        raise ExecutionError(f"distribution_summary: column '{col}' is not numeric (dtype={df[col].dtype}).")
+    series = df[col].dropna()
+    if series.empty:
+        raise ExecutionError(f"distribution_summary: column '{col}' has no non-null values.")
+    q25 = float(series.quantile(0.25))
+    q75 = float(series.quantile(0.75))
+    iqr = q75 - q25
+    lower = q25 - 1.5 * iqr
+    upper = q75 + 1.5 * iqr
+    outlier_count = int(((series < lower) | (series > upper)).sum())
+    skewness = round(float(series.skew()), 4)
+    if abs(skewness) < 0.5:
+        skew_label = "symmetric"
+    elif skewness > 0:
+        skew_label = "right-skewed"
+    else:
+        skew_label = "left-skewed"
+    rows: list[tuple] = [
+        ("count", int(series.count())),
+        ("min", float(series.min())),
+        ("q25", q25),
+        ("median", round(float(series.median()), 4)),
+        ("q75", q75),
+        ("max", float(series.max())),
+        ("std", round(float(series.std()), 4)),
+        ("skewness", skewness),
+        ("skew_label", skew_label),
+        ("outlier_count_iqr", outlier_count),
+    ]
+    result = pd.DataFrame(rows, columns=["stat", "value"])
+    msg = (
+        f"Distribution of '{col}': {skew_label} "
+        f"(skew={skewness}), {outlier_count} IQR outliers."
+    )
+    return result, msg, StepMetrics(affected_rate=0.0)
+
+
+def _execute_suggest_analysis_steps(step: WorkflowStep, df: pd.DataFrame) -> tuple[pd.DataFrame, str, StepMetrics]:
+    suggestions: list[str] = []
+    numeric_cols = df.select_dtypes(include="number").columns.tolist()
+    cat_cols = [
+        c for c in df.columns
+        if c not in numeric_cols and df[c].nunique(dropna=True) <= 30
+    ]
+    missing_cols = [c for c in df.columns if df[c].isnull().any()]
+    if numeric_cols:
+        suggestions.append(
+            f"Use summarize_numeric_column on '{numeric_cols[0]}' to inspect its distribution."
+        )
+    if cat_cols and numeric_cols:
+        suggestions.append(
+            f"Use compare_groups with group_column='{cat_cols[0]}' and "
+            f"value_column='{numeric_cols[0]}' to compare groups."
+        )
+    if len(numeric_cols) >= 2:
+        suggestions.append(
+            "Use correlation_summary to explore numeric column relationships."
+        )
+    if missing_cols:
+        suggestions.append(
+            f"Columns with missing values: {missing_cols}. "
+            "Consider remove_missing_values or fill_missing_values."
+        )
+    if cat_cols:
+        suggestions.append(
+            f"Use inspect_unique_values on '{cat_cols[0]}' to see actual category values."
+        )
+    if not suggestions:
+        msg = "No specific analysis suggestions for this dataset."
+    else:
+        msg = "Suggested next steps:\n" + "\n".join(f"- {s}" for s in suggestions)
+    return df, msg, StepMetrics(affected_rate=0.0)
+
+
 _REGISTRY: dict[str, ToolSpec] = {
     "remove_missing_values": ToolSpec(
         type="remove_missing_values",
@@ -1089,5 +1338,71 @@ _REGISTRY: dict[str, ToolSpec] = {
         advance_columns=_advance_add_new_column,
         examples=[{"type": "date_diff", "start_column": "order_date", "end_column": "ship_date", "new_column": "ship_days", "unit": "days"}],
         risk_profile={"can_change_columns": True},
+    ),
+    # ------------------------------------------------------------------ #
+    # Analytical / diagnostic tools (Task 7)
+    # ------------------------------------------------------------------ #
+    "profile_column": ToolSpec(
+        type="profile_column",
+        description="Return a stat/value profile of a single column: dtype, missing%, unique count, top values, min/max.",
+        input_schema=_schema(ProfileColumnStep),
+        validate=_validate_profile_column,
+        execute=_execute_profile_column,
+        examples=[{"type": "profile_column", "column": "amount"}],
+        risk_profile={},
+    ),
+    "inspect_unique_values": ToolSpec(
+        type="inspect_unique_values",
+        description="Return the top unique values and their counts for a column.",
+        input_schema=_schema(InspectUniqueValuesStep),
+        validate=_validate_inspect_unique_values,
+        execute=_execute_inspect_unique_values,
+        examples=[{"type": "inspect_unique_values", "column": "region", "max_values": 20}],
+        risk_profile={},
+    ),
+    "summarize_numeric_column": ToolSpec(
+        type="summarize_numeric_column",
+        description="Return count, mean, median, std, min/max, quartiles, and IQR outlier count for a numeric column.",
+        input_schema=_schema(SummarizeNumericColumnStep),
+        validate=_validate_single_analytic_column("summarize_numeric_column"),
+        execute=_execute_summarize_numeric_column,
+        examples=[{"type": "summarize_numeric_column", "column": "sales"}],
+        risk_profile={},
+    ),
+    "compare_groups": ToolSpec(
+        type="compare_groups",
+        description="Compare a numeric column across groups of a categorical column using an aggregation function.",
+        input_schema=_schema(CompareGroupsStep),
+        validate=_validate_compare_groups,
+        execute=_execute_compare_groups,
+        examples=[{"type": "compare_groups", "group_column": "region", "value_column": "sales", "agg": "mean"}],
+        risk_profile={},
+    ),
+    "correlation_summary": ToolSpec(
+        type="correlation_summary",
+        description="Return pairwise Pearson correlations between numeric columns, sorted by absolute value.",
+        input_schema=_schema(CorrelationSummaryStep),
+        validate=_validate_correlation_summary,
+        execute=_execute_correlation_summary,
+        examples=[{"type": "correlation_summary", "columns": []}],
+        risk_profile={},
+    ),
+    "distribution_summary": ToolSpec(
+        type="distribution_summary",
+        description="Return quartiles, skewness, and IQR-based outlier count for a numeric column.",
+        input_schema=_schema(DistributionSummaryStep),
+        validate=_validate_single_analytic_column("distribution_summary"),
+        execute=_execute_distribution_summary,
+        examples=[{"type": "distribution_summary", "column": "price"}],
+        risk_profile={},
+    ),
+    "suggest_analysis_steps": ToolSpec(
+        type="suggest_analysis_steps",
+        description="Inspect the dataset schema and emit next-step suggestions as a message. Does not modify data.",
+        input_schema=_schema(SuggestAnalysisStepsStep),
+        validate=_validate_noop,
+        execute=_execute_suggest_analysis_steps,
+        examples=[{"type": "suggest_analysis_steps"}],
+        risk_profile={},
     ),
 }

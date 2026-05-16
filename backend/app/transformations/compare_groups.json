@@ -1,0 +1,26 @@
+{
+  "doc_type": "transformation",
+  "step_type": "compare_groups",
+  "issue_code": null,
+  "source_path": "transformations/compare_groups.json",
+  "type": "compare_groups",
+  "title": "compare_groups: compare a numeric column across groups of a categorical column",
+  "description": "Group rows by a categorical column and aggregate a numeric column (sum, mean, count, min, max). Returns a sorted comparison table. Use to understand differences between groups.",
+  "keywords": [
+    "compare groups", "group comparison", "by region", "per category", "breakdown",
+    "average by", "sum by", "total by", "compare across",
+    "分组比较", "按类别", "各组", "对比", "分组统计", "各区域"
+  ],
+  "parameters": [
+    {"name": "group_column", "type": "string", "required": true, "description": "Categorical column to group by."},
+    {"name": "value_column", "type": "string", "required": true, "description": "Numeric column to aggregate."},
+    {"name": "agg", "type": "string", "required": false, "description": "Aggregation function: sum, mean, count, min, max (default mean)."}
+  ],
+  "example": {
+    "type": "compare_groups",
+    "group_column": "region",
+    "value_column": "sales",
+    "agg": "mean"
+  },
+  "rag_note": "value_column must be numeric. Returns one row per group sorted by the aggregated value descending. Useful for exploratory analysis before deeper filtering or ranking."
+}

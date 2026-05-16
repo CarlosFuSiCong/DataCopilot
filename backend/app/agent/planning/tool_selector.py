@@ -7,7 +7,12 @@ from app.agent.planning.pipeline_models import ToolSelectionResult
 from app.agent.task_intake.intent import ParsedTaskIntent, TaskIntentType
 from app.models.rag import RetrievedDoc
 
-_INSPECT_TOOLS = {"generate_summary", "select_columns", "limit_rows"}
+_INSPECT_TOOLS = {
+    "generate_summary", "select_columns", "limit_rows",
+    "profile_column", "inspect_unique_values", "summarize_numeric_column",
+    "compare_groups", "correlation_summary", "distribution_summary",
+    "suggest_analysis_steps",
+}
 _TRANSFORM_TOOLS = {
     "filter_rows", "group_by", "sort_values", "rename_columns",
     "remove_missing_values", "fill_missing_values", "drop_columns",

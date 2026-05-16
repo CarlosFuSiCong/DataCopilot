@@ -1,0 +1,22 @@
+{
+  "doc_type": "transformation",
+  "step_type": "summarize_numeric_column",
+  "issue_code": null,
+  "source_path": "transformations/summarize_numeric_column.json",
+  "type": "summarize_numeric_column",
+  "title": "summarize_numeric_column: return descriptive statistics for a numeric column",
+  "description": "Return count, mean, median, std, min, Q1, Q3, max, and IQR-based outlier count for a numeric column. Does not modify the dataset. Use to understand numeric distributions and spot anomalies.",
+  "keywords": [
+    "numeric summary", "statistics", "mean", "median", "std", "quartile",
+    "outliers", "min max", "describe", "distribution statistics",
+    "数值统计", "均值", "中位数", "标准差", "四分位", "异常值", "统计摘要"
+  ],
+  "parameters": [
+    {"name": "column", "type": "string", "required": true, "description": "Name of the numeric column to summarize."}
+  ],
+  "example": {
+    "type": "summarize_numeric_column",
+    "column": "sales"
+  },
+  "rag_note": "Returns a stat/value DataFrame. Column must be numeric. Use before aggregating or filtering on numeric thresholds to understand the value range."
+}
