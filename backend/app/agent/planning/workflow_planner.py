@@ -19,12 +19,13 @@ from dataclasses import dataclass
 from openai import OpenAI
 from pydantic import ValidationError
 
+from app.agent.nlu.slot_models import SlotExtractionResult
+from app.agent.tool_selection import registry
 from app.core.config import settings
 from app.core.exceptions import ClarificationNeeded, PlannerError
 from app.models.rag import RAGContext
 from app.models.workflow_steps import WorkflowStep
 from app.models.workflow_transport import WorkflowRequest
-from app.agent.tool_selection import registry
 
 logger = logging.getLogger(__name__)
 last_raw_output: str | None = None
@@ -117,10 +118,66 @@ Relevant docs (transformations, failure cases, correction guidance, workflow exa
 """
 
 _USER_PROMPT = """\
-User request: {user_request}
+{slot_hints}User request: {user_request}
 
 Generate the workflow JSON.
 """
+
+# Slot operators that map to the planner's filter_rows operator set.
+_SLOT_TO_PLANNER_OP: dict[str, str] = {
+    "eq": "=",
+    "ne": "!=",
+    "gt": ">",
+    "gte": ">=",
+    "lt": "<",
+    "lte": "<=",
+}
+
+# Minimum slot confidence required to inject hints into the planner prompt.
+_SLOT_HINT_MIN_CONFIDENCE = 0.7
+
+
+def _format_slot_hints(slot_context: SlotExtractionResult) -> str:
+    """Return a pre-validated slot block for the planner user prompt.
+
+    Returns an empty string when there is nothing useful to inject (unknown
+    intent, low confidence, or no concrete slot values).
+    """
+    if slot_context.intent == "unknown":
+        return ""
+    if slot_context.confidence < _SLOT_HINT_MIN_CONFIDENCE:
+        return ""
+
+    slots = slot_context.slots
+    lines: list[str] = [f"  intent: {slot_context.intent}"]
+
+    if slots.column:
+        lines.append(f"  column: {slots.column}")
+    if slots.operator:
+        planner_op = _SLOT_TO_PLANNER_OP.get(slots.operator)
+        if planner_op:
+            lines.append(f"  operator: {planner_op}")
+    if slots.value is not None:
+        lines.append(f"  value: {slots.value}")
+    if slots.target_column:
+        lines.append(f"  target_column: {slots.target_column}")
+    if slots.aggregation:
+        lines.append(f"  aggregation: {slots.aggregation}")
+    if slots.sort_direction:
+        ascending = "true" if slots.sort_direction == "asc" else "false"
+        lines.append(f"  ascending: {ascending}")
+    if slots.limit is not None:
+        lines.append(f"  limit: {slots.limit}")
+
+    if len(lines) <= 1:
+        return ""
+
+    body = "\n".join(lines)
+    return (
+        "Pre-validated slot extraction (validated against dataset schema — "
+        "use these values directly, do not re-derive column or operator):\n"
+        f"{body}\n\n"
+    )
 
 
 def _format_supported_transformations() -> str:
@@ -184,13 +241,13 @@ def _format_retrieved_docs(ctx: RAGContext) -> str:
     return "\n".join(parts) if parts else "none"
 
 
-def _build_messages(query: str, ctx: RAGContext) -> list[dict]:
+def _build_messages(query: str, ctx: RAGContext, slot_hints: str = "") -> list[dict]:
     system = _SYSTEM_PROMPT.format(
         supported_transformations=_format_supported_transformations(),
         dataset_profile=_format_dataset_profile(ctx),
         retrieved_docs=_format_retrieved_docs(ctx),
     )
-    user = _USER_PROMPT.format(user_request=query)
+    user = _USER_PROMPT.format(slot_hints=slot_hints, user_request=query)
     return [
         {"role": "system", "content": system},
         {"role": "user", "content": user},
@@ -305,10 +362,16 @@ def _extract_step_type(steps_raw: list, step_index: int | None) -> str | None:
     return None
 
 
-def plan_with_trace(query: str, ctx: RAGContext, client: OpenAI | None = None) -> PlannerResult:
+def plan_with_trace(
+    query: str,
+    ctx: RAGContext,
+    client: OpenAI | None = None,
+    slot_context: SlotExtractionResult | None = None,
+) -> PlannerResult:
     """Call the LLM to produce a workflow for the given query and RAG context.
 
     Pass `client` explicitly in tests to inject a mock.
+    Pass `slot_context` to inject pre-validated slot hints into the prompt.
     Raises PlannerError when the LLM output cannot be parsed or is empty.
     """
     missing_col = _explicit_missing_column(query, ctx)
@@ -330,8 +393,10 @@ def plan_with_trace(query: str, ctx: RAGContext, client: OpenAI | None = None) -
             base_url=settings.llm_base_url,
         )
 
-    messages = _build_messages(query, ctx)
-    logger.info("Calling LLM planner model=%s query=%r", settings.llm_model, query)
+    slot_hints = _format_slot_hints(slot_context) if slot_context else ""
+    messages = _build_messages(query, ctx, slot_hints=slot_hints)
+    logger.info("Calling LLM planner model=%s query=%r slot_intent=%s", settings.llm_model, query,
+                slot_context.intent if slot_context else "none")
 
     try:
         response = client.chat.completions.create(
@@ -358,6 +423,11 @@ def plan_with_trace(query: str, ctx: RAGContext, client: OpenAI | None = None) -
     return PlannerResult(steps=steps, raw_output=raw)
 
 
-def plan(query: str, ctx: RAGContext, client: OpenAI | None = None) -> list[WorkflowStep]:
+def plan(
+    query: str,
+    ctx: RAGContext,
+    client: OpenAI | None = None,
+    slot_context: SlotExtractionResult | None = None,
+) -> list[WorkflowStep]:
     """Return only workflow steps for callers/tests that do not need trace data."""
-    return plan_with_trace(query=query, ctx=ctx, client=client).steps
+    return plan_with_trace(query=query, ctx=ctx, client=client, slot_context=slot_context).steps

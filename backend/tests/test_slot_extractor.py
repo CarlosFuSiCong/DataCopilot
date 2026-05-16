@@ -251,3 +251,45 @@ class TestExtractSlots:
         extract_slots("q", client=client)
         call_kwargs = client.chat.completions.create.call_args.kwargs
         assert call_kwargs.get("temperature") == 0
+
+
+# --------------------------------------------------------------------------- #
+# Bug 2 regression: missing API key must produce a clear parse_error
+# --------------------------------------------------------------------------- #
+
+class TestMissingApiKey:
+    def test_no_api_key_returns_parse_error_not_silent_fallback(self):
+        """extract_slots must set parse_error when LLM_API_KEY is absent.
+
+        Regression: previously extract_slots created the OpenAI client
+        unconditionally; a missing key caused a silent auth failure that was
+        swallowed by the broad except clause, producing intent='unknown' with
+        no indication of the real problem.
+        """
+        with patch("app.agent.nlu.slot_extractor.settings") as mock_settings:
+            mock_settings.llm_api_key = None
+            output = extract_slots("filter amount > 1000")
+
+        assert output.parse_error is not None
+        assert "LLM_API_KEY" in output.parse_error or "api key" in output.parse_error.lower()
+
+    def test_no_api_key_result_intent_is_unknown(self):
+        with patch("app.agent.nlu.slot_extractor.settings") as mock_settings:
+            mock_settings.llm_api_key = None
+            output = extract_slots("filter amount > 1000")
+
+        assert output.result.intent == "unknown"
+
+    def test_no_api_key_does_not_call_openai(self):
+        """No OpenAI client should be created when the API key is missing."""
+        with patch("app.agent.nlu.slot_extractor.settings") as mock_settings:
+            mock_settings.llm_api_key = None
+            with patch("app.agent.nlu.slot_extractor.OpenAI") as mock_openai:
+                extract_slots("test query")
+        mock_openai.assert_not_called()
+
+    def test_configured_api_key_does_not_trigger_error(self):
+        """When the key is set, no parse_error should come from the key check."""
+        client = _make_client(_slot_json())
+        output = extract_slots("filter amount > 1000", client=client)
+        assert output.parse_error is None
