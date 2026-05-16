@@ -534,7 +534,12 @@ def _failed_new_step(*, previous_steps: list, new_steps: list, column_names: lis
             validate_workflow(candidate_steps, column_names)
         except WorkflowValidationError:
             return step.model_dump()
-    return new_steps[-1].model_dump()
+    # The incremental prefix search covers previous_steps + new_steps on the
+    # final iteration, which is the same call that already failed.  Reaching
+    # here means no prefix isolated the failure (e.g. non-deterministic
+    # validator or unexpected state).  Returning None is the only honest
+    # answer — there is no justification for blaming the last step.
+    return None
 
 
 def _relevant_steps(rag_ctx) -> list[dict]:
