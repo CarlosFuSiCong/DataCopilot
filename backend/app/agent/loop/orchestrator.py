@@ -38,6 +38,14 @@ logger = logging.getLogger(__name__)
 # discarded by the planner's hint formatter (0.5 validation + 0.7 hint = broken).
 _SLOT_MIN_CONFIDENCE = 0.7
 
+# Maps slot extraction intent to the workflow step type it corresponds to.
+# Used to build accurate affected_step context when slot validation needs clarification.
+_INTENT_TO_STEP_TYPE: dict[str, str] = {
+    "filter": "filter_rows",
+    "sort": "sort_values",
+    "group_aggregate": "group_by",
+}
+
 _SUPPORTED_STEPS = [
     "filter_rows", "select_columns", "group_by", "sort_values",
     "rename_columns", "remove_missing_values", "fill_missing_values",
@@ -592,9 +600,11 @@ def _run_slot_extraction(
     if validation.needs_clarification:
         question = validation.clarification_question or "Please clarify your request."
         slots = slot_output.result.slots
+        intent = slot_output.result.intent
         affected_step: dict | None = None
-        if slots.column:
-            affected_step = {"type": "filter_rows", "column": slots.column}
+        step_type = _INTENT_TO_STEP_TYPE.get(intent)
+        if step_type and slots.column:
+            affected_step = {"type": step_type, "column": slots.column}
         observation = signal_rules.from_validation_failure(
             question, workflow_state="needs_clarification"
         )

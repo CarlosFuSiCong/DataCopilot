@@ -243,6 +243,89 @@ class TestRunSlotExtraction:
         result = self._call(mock_extract=MagicMock(side_effect=RuntimeError("network error")))
         assert result is None
 
+    def test_clarification_signal_affected_step_filter_intent(self):
+        """Bug regression: affected_step.type must be 'filter_rows' for filter intent."""
+        from app.agent.loop.orchestrator import _SlotClarificationSignal
+        result = self._call(
+            mock_extract=MagicMock(
+                return_value=MagicMock(
+                    parse_error=None,
+                    result=_result(intent="filter", column="amount"),
+                )
+            ),
+            mock_validate=MagicMock(
+                return_value=MagicMock(
+                    is_valid=False, needs_clarification=True, blocked=False,
+                    clarification_question="Did you mean 'revenue'?",
+                )
+            ),
+        )
+        assert isinstance(result, _SlotClarificationSignal)
+        assert result.affected_step is not None
+        assert result.affected_step["type"] == "filter_rows"
+
+    def test_clarification_signal_affected_step_sort_intent(self):
+        """Bug regression: affected_step.type must be 'sort_values' for sort intent."""
+        from app.agent.loop.orchestrator import _SlotClarificationSignal
+        result = self._call(
+            mock_extract=MagicMock(
+                return_value=MagicMock(
+                    parse_error=None,
+                    result=_result(intent="sort", column="date", operator=None, value=None, sort_direction="desc"),
+                )
+            ),
+            mock_validate=MagicMock(
+                return_value=MagicMock(
+                    is_valid=False, needs_clarification=True, blocked=False,
+                    clarification_question="Did you mean 'created_at'?",
+                )
+            ),
+        )
+        assert isinstance(result, _SlotClarificationSignal)
+        assert result.affected_step is not None
+        assert result.affected_step["type"] == "sort_values"
+
+    def test_clarification_signal_affected_step_group_aggregate_intent(self):
+        """Bug regression: affected_step.type must be 'group_by' for group_aggregate intent."""
+        from app.agent.loop.orchestrator import _SlotClarificationSignal
+        result = self._call(
+            mock_extract=MagicMock(
+                return_value=MagicMock(
+                    parse_error=None,
+                    result=_result(intent="group_aggregate", column="region", operator=None, value=None, aggregation="sum"),
+                )
+            ),
+            mock_validate=MagicMock(
+                return_value=MagicMock(
+                    is_valid=False, needs_clarification=True, blocked=False,
+                    clarification_question="Did you mean 'territory'?",
+                )
+            ),
+        )
+        assert isinstance(result, _SlotClarificationSignal)
+        assert result.affected_step is not None
+        assert result.affected_step["type"] == "group_by"
+
+    def test_clarification_signal_affected_step_none_for_limit_intent(self):
+        """Limit intent has no column; affected_step should be None."""
+        from app.agent.loop.orchestrator import _SlotClarificationSignal
+        result = self._call(
+            mock_extract=MagicMock(
+                return_value=MagicMock(
+                    parse_error=None,
+                    result=_result(intent="limit", column=None, operator=None, value=None, limit=10),
+                )
+            ),
+            mock_validate=MagicMock(
+                return_value=MagicMock(
+                    is_valid=False, needs_clarification=True, blocked=False,
+                    clarification_question="How many rows?",
+                )
+            ),
+        )
+        assert isinstance(result, _SlotClarificationSignal)
+        assert result.affected_step is None
+
 
 # --------------------------------------------------------------------------- #
 # Chat router integration
