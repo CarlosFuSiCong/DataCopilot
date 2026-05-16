@@ -224,6 +224,12 @@ def extract_slots(query: str, *, client: OpenAI | None = None) -> SlotExtractorO
         Never raises; all errors are captured in .parse_error.
     """
     if client is None:
+        if not settings.llm_api_key:
+            return SlotExtractorOutput(
+                result=_empty_result(query),
+                raw_llm_output="",
+                parse_error="LLM API key is not configured. Set LLM_API_KEY in your .env file.",
+            )
         client = OpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url)
 
     messages = [
