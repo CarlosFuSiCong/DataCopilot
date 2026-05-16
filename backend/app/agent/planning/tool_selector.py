@@ -77,9 +77,10 @@ def _score_tools(
         if doc.doc_type != "transformation" or not doc.type:
             continue
         tool_type = doc.type
-        base = float(doc.score)
-        bonus = _intent_bonus(derived_intent, tool_type)
-        scores[tool_type] = base + bonus
+        candidate = float(doc.score) + _intent_bonus(derived_intent, tool_type)
+        # Keep the highest score when multiple docs reference the same tool type.
+        if candidate > scores.get(tool_type, 0.0):
+            scores[tool_type] = candidate
     return scores
 
 
