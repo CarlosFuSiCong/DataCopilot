@@ -82,6 +82,42 @@ class TestIntentParser:
 
         assert result.parsed.missing_information == []
 
+    def test_candidate_column_no_false_positive_substring_match(self):
+        # "age" must not match inside "message", "stage", or "usage".
+        result = parse_intent(
+            "summarize the message for each stage of usage",
+            column_names=["age"],
+        )
+
+        assert "age" not in result.parsed.candidate_columns
+
+    def test_candidate_column_matches_whole_word(self):
+        # "age" must match when it appears as a standalone word.
+        result = parse_intent(
+            "filter rows where age > 30",
+            column_names=["age", "message"],
+        )
+
+        assert "age" in result.parsed.candidate_columns
+        assert "message" not in result.parsed.candidate_columns
+
+    def test_candidate_column_underscore_name_matches_whole_word(self):
+        # Underscore columns like "sales_total" should not match "sales".
+        result = parse_intent(
+            "sort by sales descending",
+            column_names=["sales_total"],
+        )
+
+        assert "sales_total" not in result.parsed.candidate_columns
+
+    def test_candidate_column_underscore_name_matches_exactly(self):
+        result = parse_intent(
+            "sort by sales_total descending",
+            column_names=["sales_total", "sales"],
+        )
+
+        assert "sales_total" in result.parsed.candidate_columns
+
 
 # ---------------------------------------------------------------------------
 # ToolSelector
@@ -149,6 +185,27 @@ class TestToolSelector:
 
         assert result.intent == "transform_dataset"
         assert "sort_values" in result.scores
+
+    def test_duplicate_tool_type_keeps_highest_score(self):
+        # Bug regression: earlier occurrences must not be silently overwritten.
+        # Two filter_rows docs — the higher score must win.
+        result = select_tools(
+            _intent(),
+            [_doc("filter_rows", score=3.0), _doc("filter_rows", score=1.0)],
+        )
+
+        assert result.selected_tool == "filter_rows"
+        # Score must reflect the higher doc (3.0 + 0.5 bonus) not the lower (1.0 + 0.5).
+        assert result.scores["filter_rows"] == pytest.approx(3.5)
+
+    def test_duplicate_tool_type_second_higher_score_wins(self):
+        # Same check with the higher doc coming second.
+        result = select_tools(
+            _intent(),
+            [_doc("filter_rows", score=1.0), _doc("filter_rows", score=3.0)],
+        )
+
+        assert result.scores["filter_rows"] == pytest.approx(3.5)
 
 
 # ---------------------------------------------------------------------------

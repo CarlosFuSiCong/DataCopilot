@@ -49,7 +49,12 @@ def parse_intent(
 
 def _find_candidate_columns(query: str, column_names: list[str]) -> list[str]:
     lowered_query = query.lower()
-    return [col for col in column_names if col.lower() in lowered_query]
+    matched = []
+    for col in column_names:
+        pattern = r"\b" + re.escape(col.lower()) + r"\b"
+        if re.search(pattern, lowered_query):
+            matched.append(col)
+    return matched
 
 
 def _extract_constraints(query: str) -> list[str]:
