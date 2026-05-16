@@ -102,6 +102,65 @@ def test_planner_query_rewrites_affected_column_with_resolved_answer():
     )
 
 
+def test_planner_query_does_not_replace_partial_word_match():
+    # Bug regression: "amount" must NOT match inside "amount_total".
+    context = new_pending_context(
+        dataset_id="dataset-1",
+        original_query="filter amount_total > 500",
+        question="Which column?",
+        affected_step={"type": "filter_rows", "column": "amount"},
+    ).model_copy(update={"user_answer": "revenue"})
+    resolved = resolve_context(
+        context,
+        dataset_id="dataset-1",
+        original_query="filter amount_total > 500",
+    )
+
+    result = planner_query_with_context("filter amount_total > 500", resolved)
+    assert "amount_total" in result, "partial word must not be replaced"
+    assert "revenue_total" not in result, "partial replacement must not occur"
+
+
+def test_planner_query_does_not_replace_column_embedded_in_another_word():
+    # Bug regression: "amount" must NOT match inside "unamount".
+    context = new_pending_context(
+        dataset_id="dataset-1",
+        original_query="filter unamount > 0",
+        question="Which column?",
+        affected_step={"type": "filter_rows", "column": "amount"},
+    ).model_copy(update={"user_answer": "sales"})
+    resolved = resolve_context(
+        context,
+        dataset_id="dataset-1",
+        original_query="filter unamount > 0",
+    )
+
+    result = planner_query_with_context("filter unamount > 0", resolved)
+    assert "unamount" in result, "prefix-embedded column must not be replaced"
+    assert "unsales" not in result, "prefix-embedded replacement must not occur"
+
+
+def test_planner_query_falls_back_to_appended_clarification_when_no_word_boundary():
+    # When the affected column is not found with word boundaries, the context
+    # must NOT use str.replace; instead append as a clarification note.
+    context = new_pending_context(
+        dataset_id="dataset-1",
+        original_query="show me data",
+        question="Which column?",
+        affected_step={"type": "filter_rows", "column": "revenue"},
+    ).model_copy(update={"user_answer": "amount"})
+    resolved = resolve_context(
+        context,
+        dataset_id="dataset-1",
+        original_query="show me data",
+    )
+
+    result = planner_query_with_context("show me data", resolved)
+    # Column "revenue" is absent → no in-place substitution; answer appended.
+    assert "amount" in result
+    assert "show me data" in result
+
+
 def test_string_clarification_context_is_supported_for_current_ui():
     resolved = resolve_context(
         "sales",

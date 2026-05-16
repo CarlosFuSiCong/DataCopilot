@@ -119,14 +119,7 @@ def _iteration_input(response: ChatResponse) -> dict:
         "query": response.query,
         "workflow_context_summary": response.context_summary.model_dump() if response.context_summary else None,
         "clarification_context": (
-            {
-                "status": response.clarification_context.status,
-                "question": response.clarification_context.question,
-                "user_answer": response.clarification_context.user_answer,
-                "resolved_parameter": response.clarification_context.resolved_parameter,
-                "affected_step": response.clarification_context.affected_step,
-                "scope_key": response.clarification_context.scope_key,
-            }
+            response.clarification_context.model_dump()
             if response.clarification_context
             else None
         ),

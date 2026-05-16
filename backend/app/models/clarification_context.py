@@ -118,7 +118,9 @@ def _query_with_resolved_parameter(query: str, context: ClarificationContext) ->
     if count > 0:
         return rewritten
 
-    return query.replace(affected_column, str(resolved))
+    # Do not fall back to str.replace: without word boundaries a column name
+    # like "amount" would match inside "amount_total" or "unamount".
+    return query
 
 
 def next_iteration_input(context: ClarificationContext) -> dict[str, Any]:
