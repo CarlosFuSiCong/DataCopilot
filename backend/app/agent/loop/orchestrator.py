@@ -7,6 +7,9 @@ from app.agent.execution import executor as executor_service
 from app.agent.final_response import result_explainer
 from app.agent.loop.agent_models import DEFAULT_MAX_AGENT_ITERATIONS, AgentTrace, AgentTraceSummary
 from app.agent.loop import workflow_runtime
+from app.agent.nlu.slot_extractor import SlotExtractorOutput, extract_slots
+from app.agent.nlu.slot_models import SlotExtractionResult
+from app.agent.nlu.slot_validator import validate_slots
 from app.agent.observation import signal_rules
 from app.agent.observation.models import ObservationSummary
 from app.agent.planning import workflow_planner
@@ -28,6 +31,12 @@ from app.services import dataset_store, run_store
 from app.services.profiler import get_column_names, profile
 
 logger = logging.getLogger(__name__)
+
+# Minimum slot extraction confidence required to use slot context in planning.
+# Must stay in sync with workflow_planner._SLOT_HINT_MIN_CONFIDENCE (both = 0.7).
+# A single threshold avoids the gap where slots are validated but then silently
+# discarded by the planner's hint formatter (0.5 validation + 0.7 hint = broken).
+_SLOT_MIN_CONFIDENCE = 0.7
 
 _SUPPORTED_STEPS = [
     "filter_rows", "select_columns", "group_by", "sort_values",
@@ -116,9 +125,26 @@ async def run_chat(request: ChatRequest) -> ChatResponse:
             affected_step={"type": "filter_rows", "column": explicit_missing_col},
         )
 
+    # Slot extraction layer: run before planner to validate column/operator/value.
+    # Skipped when the user is responding to a clarification (they already answered).
+    slot_context = _run_slot_extraction(request.query, dataset_profile, clarification)
+    if isinstance(slot_context, _SlotClarificationSignal):
+        return _clarification_response(
+            request=request,
+            content=content,
+            dataset_profile=dataset_profile,
+            column_names=column_names,
+            rag_ctx=rag_ctx,
+            question=slot_context.question,
+            validation_status="failed",
+            observation=slot_context.observation,
+            affected_step=slot_context.affected_step,
+        )
+    # slot_context is now SlotExtractionResult | None
+
     try:
         workflow_planner.last_raw_output = None
-        new_steps = workflow_planner.plan(query=planner_query, ctx=rag_ctx)
+        new_steps = workflow_planner.plan(query=planner_query, ctx=rag_ctx, slot_context=slot_context)
         planner_raw_output = workflow_planner.last_raw_output
     except ClarificationNeeded as exc:
         logger.info("Clarification needed for query=%r: %s", request.query, exc.question)
@@ -523,6 +549,77 @@ def _resolve_request_clarification(request: ChatRequest) -> ClarificationContext
             },
         )
     return clarification
+
+
+def _run_slot_extraction(
+    query: str,
+    dataset_profile,
+    clarification: ClarificationContext | None,
+):
+    """Run slot extraction and schema validation before planning.
+
+    Returns:
+      - SlotExtractionResult         when extraction succeeded and validation passed.
+      - _SlotClarificationSignal     when slot validation requires user clarification.
+      - None                         when the slot path should be bypassed (fallback to planner-only).
+
+    Fallback conditions:
+      - User is answering a clarification (skip to avoid double-processing).
+      - LLM extraction fails, parse_error is set, or intent is unknown.
+      - Extracted confidence is below the minimum threshold.
+      - Slot validation is blocked (unsupported intent) — let planner decide.
+    """
+    if clarification and clarification.user_answer:
+        return None
+
+    try:
+        slot_output = extract_slots(query)
+    except Exception:
+        logger.debug("Slot extraction raised an exception; falling back to planner-only path.")
+        return None
+
+    if slot_output.parse_error or slot_output.result.intent == "unknown":
+        return None
+    if slot_output.result.confidence < _SLOT_MIN_CONFIDENCE:
+        return None
+
+    validation = validate_slots(slot_output.result, dataset_profile)
+
+    if validation.blocked:
+        # Unsupported intent — let the planner handle or reject it.
+        return None
+
+    if validation.needs_clarification:
+        question = validation.clarification_question or "Please clarify your request."
+        slots = slot_output.result.slots
+        affected_step: dict | None = None
+        if slots.column:
+            affected_step = {"type": "filter_rows", "column": slots.column}
+        observation = signal_rules.from_validation_failure(
+            question, workflow_state="needs_clarification"
+        )
+        return _SlotClarificationSignal(
+            question=question,
+            affected_step=affected_step,
+            observation=observation,
+        )
+
+    if validation.is_valid:
+        return slot_output.result
+
+    # Partially valid or other status — bypass slot path, let planner handle.
+    return None
+
+
+class _SlotClarificationSignal:
+    """Sentinel returned by _run_slot_extraction when slot validation needs user input."""
+
+    __slots__ = ("question", "affected_step", "observation")
+
+    def __init__(self, *, question: str, affected_step: dict | None, observation: ObservationSummary):
+        self.question = question
+        self.affected_step = affected_step
+        self.observation = observation
 
 
 def _failed_new_step(*, previous_steps: list, new_steps: list, column_names: list[str]) -> dict | None:
