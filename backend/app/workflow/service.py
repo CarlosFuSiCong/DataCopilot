@@ -23,6 +23,8 @@ from app.core.exceptions import ClarificationNeeded, ExecutionError, PlannerErro
 from app.models.chat import ChatRequest, ChatResponse
 from app.models.clarification_context import (
     ClarificationContext,
+    broad_analysis_choices,
+    ambiguous_request_question,
     resolve_context,
     validate_scope,
 )
@@ -116,6 +118,33 @@ async def run_chat(request: ChatRequest) -> ChatResponse:
                         "Prediction, ML models, and visualizations are not supported."
                     ),
                 },
+            )
+
+        if route_decision.route == "clarification" and route_decision.query_type in (
+            "broad_analysis_request", "ambiguous_request"
+        ):
+            _min_rag = _build_minimal_rag_ctx(request.query, dataset_profile, column_names, method="classifier")
+            if route_decision.query_type == "broad_analysis_request":
+                choices = broad_analysis_choices(column_names, dataset_profile)
+                question = (
+                    "Your request covers a lot of ground. "
+                    "Here are some focused analysis directions — pick one to start, "
+                    "or describe what you'd like in more detail."
+                )
+                ctype = "broad_analysis_request"
+            else:
+                choices = None
+                question = ambiguous_request_question(column_names)
+                ctype = "planning"
+            return _clarification_response(
+                request=request,
+                content=content,
+                dataset_profile=dataset_profile,
+                column_names=column_names,
+                rag_ctx=_min_rag,
+                question=question,
+                clarification_type=ctype,
+                choices=choices,
             )
 
     # ---------------------------------------------------------------------------
