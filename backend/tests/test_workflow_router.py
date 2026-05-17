@@ -112,9 +112,9 @@ def test_execute_filter_rows_reduces_row_count():
     did = _upload()
     data = _execute(
         did,
-        [{"type": "filter_rows", "column": "sales", "operator": ">", "value": 1000}],
+        [{"type": "filter_rows", "column": "region", "operator": "!=", "value": "West"}],
     ).json()
-    assert data["row_count"] == 2
+    assert data["row_count"] == 4
 
 
 def test_execute_generate_summary_sets_flag():
@@ -274,7 +274,7 @@ def test_preview_clean_workflow_has_no_warnings_or_errors():
     did = _upload()
     data = _preview(
         did,
-        [{"type": "filter_rows", "column": "region", "operator": "=", "value": "North"}],
+        [{"type": "filter_rows", "column": "region", "operator": "!=", "value": "West"}],
     ).json()
     assert data["has_warnings"] is False
     assert data["has_errors"] is False
