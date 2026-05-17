@@ -51,6 +51,9 @@ class WorkflowContextSummary(BaseModel):
     # Tool suggestions derived from observation signals (Task 8).
     # Each entry has tool_type, signal, and reason fields.
     tool_suggestions: list[dict[str, str]] = Field(default_factory=list)
+    # Analyst flow suggestions produced when suggest_analysis_steps runs (Task 9).
+    # Each entry is a serialised AnalystStepSuggestion dict.
+    analyst_flow_suggestions: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class AttemptSummary(BaseModel):
