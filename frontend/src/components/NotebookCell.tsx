@@ -373,6 +373,13 @@ function ClarificationPanel({
   const [draft, setDraft] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const answered = !!cell.clarificationAnswer
+  const affectedStep = cell.clarificationContext?.affected_step
+  const clarificationLabel = cell.clarificationType === 'slot_validation'
+    ? 'slot validation'
+    : 'clarification needed'
+  const clarificationAccent = cell.clarificationType === 'slot_validation'
+    ? 'var(--color-yellow)'
+    : 'var(--color-blue)'
 
   function handleSubmit() {
     const trimmed = draft.trim()
@@ -383,8 +390,38 @@ function ClarificationPanel({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        <span style={{
+          width: 'fit-content',
+          border: `1px solid ${clarificationAccent}`,
+          borderRadius: 999,
+          padding: '2px 8px',
+          fontFamily: 'var(--font-mono)',
+          fontSize: '0.7rem',
+          color: clarificationAccent,
+          background: 'var(--color-surface-1)',
+        }}>
+          {clarificationLabel}
+        </span>
+        {affectedStep?.type && (
+          <span style={{
+            width: 'fit-content',
+            border: '1px solid var(--color-border)',
+            borderRadius: 999,
+            padding: '2px 8px',
+            fontFamily: 'var(--font-mono)',
+            fontSize: '0.7rem',
+            color: 'var(--color-text-muted)',
+            background: 'var(--color-surface-1)',
+          }}>
+            {String(affectedStep.type)}
+            {typeof affectedStep.column === 'string' ? ` · ${affectedStep.column}` : ''}
+          </span>
+        )}
+      </div>
+
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-        <span style={{ color: 'var(--color-blue)', fontSize: '1rem', lineHeight: 1, flexShrink: 0 }}>?</span>
+        <span style={{ color: clarificationAccent, fontSize: '1rem', lineHeight: 1, flexShrink: 0 }}>?</span>
         <p style={{
           margin: 0,
           fontFamily: 'var(--font-mono)',
@@ -531,7 +568,10 @@ export function NotebookCell({ cell, onConfirm, onClarify, onSuggest, onRerun }:
 
         {/* Clarification state */}
         {cell.status === 'clarifying' && (
-          <OutputBlock label="clarification" accent="var(--color-blue)">
+          <OutputBlock
+            label={cell.clarificationType === 'slot_validation' ? 'slot validation' : 'clarification'}
+            accent={cell.clarificationType === 'slot_validation' ? 'var(--color-yellow)' : 'var(--color-blue)'}
+          >
             <ClarificationPanel cell={cell} onSubmit={answer => onClarify(cell, answer)} />
           </OutputBlock>
         )}

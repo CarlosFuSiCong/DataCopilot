@@ -175,7 +175,18 @@ export interface ChatRequest {
   // onto the prior result instead of starting from the raw dataset.
   previous_steps?: WorkflowStep[]
   // User's answer to a clarification question, merged into the planner query.
-  clarification_context?: string
+  clarification_context?: string | ClarificationContext
+}
+
+export interface ClarificationContext {
+  dataset_id: string
+  original_query: string
+  question?: string | null
+  user_answer?: string | null
+  resolved_parameter?: string | null
+  affected_step?: WorkflowStep | null
+  status: 'pending' | 'resolved'
+  scope_key: string
 }
 
 export interface PreviewResponse {
@@ -202,6 +213,8 @@ export interface ChatResponse {
   // True when the planner needs clarification before producing a workflow.
   needs_clarification?: boolean
   clarification_question?: string | null
+  clarification_type?: 'slot_validation' | 'planning' | string | null
+  clarification_context?: ClarificationContext | null
   state?: WorkflowRunState
   attempts?: WorkflowAttempt[]
   context_summary?: WorkflowContextSummary | null
