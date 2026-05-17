@@ -68,6 +68,28 @@ def _build_minimal_rag_ctx(
 # Ask mode
 # ---------------------------------------------------------------------------
 
+def _detect_mentioned_column(query: str, column_names: list[str]) -> str | None:
+    """Return the first column name that appears in the query (case-insensitive)."""
+    query_lower = query.lower()
+    for col in column_names:
+        if col.lower() in query_lower:
+            return col
+    return None
+
+
+def _ask_mode_sub_type(query: str, column_names: list[str]) -> str:
+    """Classify the Ask Mode sub-type from query text."""
+    q = query.lower()
+    if any(kw in q for kw in ("how many rows", "row count", "how many records", "行数", "多少行")):
+        return "dataset_overview"
+    if any(kw in q for kw in ("overview", "describe", "summary", "about this", "dataset", "数据集", "概览")):
+        return "dataset_overview"
+    col = _detect_mentioned_column(query, column_names)
+    if col:
+        return "column_detail"
+    return "schema_overview"
+
+
 def _ask_mode_response(
     *,
     request: ChatRequest,
@@ -76,16 +98,38 @@ def _ask_mode_response(
     route_decision,
 ) -> ChatResponse:
     """Return a read-only answer about the dataset without invoking the planner."""
-    col_lines = []
-    for col in dataset_profile.columns:
-        missing = f", missing={col.missing_count}" if col.missing_count else ""
-        col_lines.append(f"  - {col.name} ({col.dtype}{missing})")
-    cols_text = "\n".join(col_lines)
+    sub_type = _ask_mode_sub_type(request.query, column_names)
+    mentioned_col = _detect_mentioned_column(request.query, column_names)
 
-    answer = (
-        f"Dataset has {dataset_profile.row_count} rows and {len(column_names)} columns:\n"
-        f"{cols_text}"
-    )
+    if sub_type == "column_detail" and mentioned_col:
+        col_info = next((c for c in dataset_profile.columns if c.name == mentioned_col), None)
+        if col_info:
+            missing_pct = f"{col_info.missing_pct:.1f}" if col_info.missing_pct else "0.0"
+            answer = (
+                f"Column '{mentioned_col}':\n"
+                f"  - dtype: {col_info.dtype}\n"
+                f"  - missing: {col_info.missing_count} ({missing_pct}%)\n"
+            )
+        else:
+            answer = f"Column '{mentioned_col}' not found in this dataset."
+    elif sub_type == "dataset_overview":
+        col_lines = [f"  - {c.name} ({c.dtype})" for c in dataset_profile.columns]
+        answer = (
+            f"Dataset overview:\n"
+            f"  - Rows: {dataset_profile.row_count}\n"
+            f"  - Columns: {len(column_names)}\n"
+            f"  - Column list:\n" + "\n".join(f"    {ln}" for ln in col_lines)
+        )
+    else:
+        # schema_overview — full column list with missing info
+        col_lines = []
+        for col in dataset_profile.columns:
+            missing = f", missing={col.missing_count}" if col.missing_count else ""
+            col_lines.append(f"  - {col.name} ({col.dtype}{missing})")
+        answer = (
+            f"Dataset has {dataset_profile.row_count} rows and {len(column_names)} columns:\n"
+            + "\n".join(col_lines)
+        )
 
     minimal_rag = RAGContext(
         query=request.query,
@@ -116,6 +160,9 @@ def _ask_mode_response(
         rag_context=minimal_rag,
         explanation=answer,
         state="executed",
+        is_read_only=True,
+        ask_mode_type=sub_type,
+        evidence_source="schema",
         route_decision=route_decision.model_dump() if route_decision else None,
     )
 
