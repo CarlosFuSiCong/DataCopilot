@@ -1,0 +1,242 @@
+{
+  "version": "mvp6",
+  "description": "MVP6 evaluation contracts. Scenarios are deterministic — no LLM calls are made. Each scenario declares a component ('slot_validation', 'observation_tool_suggestion', 'analyst_flow', or 'agent_loop') and the inputs and expected outputs for that component. Reports record slot_result, validation_status, selected_tool, observation_signal, and iteration_count.",
+  "scenarios": [
+    {
+      "id": "slot_extraction_success",
+      "component": "slot_validation",
+      "description": "High-confidence filter slot with valid column and operator passes schema validation.",
+      "input": {
+        "intent": "filter",
+        "slots": {
+          "column": "amount",
+          "operator": "gt",
+          "value": "1000"
+        },
+        "confidence": 0.9,
+        "query_locale": "en",
+        "schema_columns": ["amount", "status", "region"]
+      },
+      "expected": {
+        "is_valid": true,
+        "needs_clarification": false,
+        "status": "valid",
+        "blocked": false
+      }
+    },
+    {
+      "id": "missing_slot_clarification",
+      "component": "slot_validation",
+      "description": "Filter slot missing required 'operator' field triggers clarification instead of planning.",
+      "input": {
+        "intent": "filter",
+        "slots": {
+          "column": "amount",
+          "value": "1000"
+        },
+        "confidence": 0.85,
+        "query_locale": "en",
+        "schema_columns": ["amount", "status", "region"]
+      },
+      "expected": {
+        "is_valid": false,
+        "needs_clarification": true,
+        "status": "missing_required_slot",
+        "clarification_question_not_empty": true
+      }
+    },
+    {
+      "id": "ambiguous_column_clarification",
+      "component": "slot_validation",
+      "description": "Filter slot with a column name that fuzzy-matches multiple columns triggers ambiguous clarification with candidate list.",
+      "input": {
+        "intent": "filter",
+        "slots": {
+          "column": "amnt",
+          "operator": "gt",
+          "value": "1000"
+        },
+        "confidence": 0.85,
+        "query_locale": "en",
+        "schema_columns": ["amount", "status", "region"]
+      },
+      "expected": {
+        "is_valid": false,
+        "needs_clarification": true,
+        "status": "ambiguous_column",
+        "has_candidate_columns": true
+      }
+    },
+    {
+      "id": "multilingual_query",
+      "component": "slot_validation",
+      "description": "Chinese column name with operator 'gt' (大于 mapping) and valid schema passes validation.",
+      "input": {
+        "intent": "filter",
+        "slots": {
+          "column": "金额",
+          "operator": "gt",
+          "value": "1000"
+        },
+        "confidence": 0.85,
+        "query_locale": "zh",
+        "schema_columns": ["金额", "状态", "地区"]
+      },
+      "expected": {
+        "is_valid": true,
+        "needs_clarification": false,
+        "status": "valid",
+        "blocked": false
+      }
+    },
+    {
+      "id": "unsupported_intent_blocked",
+      "component": "slot_validation",
+      "description": "Unknown intent 'unknown' is blocked immediately without entering the planner.",
+      "input": {
+        "intent": "unknown",
+        "slots": {},
+        "confidence": 0.4,
+        "query_locale": "en",
+        "schema_columns": ["amount", "status"]
+      },
+      "expected": {
+        "is_valid": false,
+        "needs_clarification": false,
+        "blocked": true,
+        "status": "unsupported_intent"
+      }
+    },
+    {
+      "id": "observation_driven_inspect_tool",
+      "component": "observation_tool_suggestion",
+      "description": "Empty result observation signal produces suggestions for inspect_unique_values and profile_column tools.",
+      "input": {
+        "observation_signals": ["empty_result"]
+      },
+      "expected": {
+        "suggestion_count_min": 1,
+        "suggestion_tool_types_include": ["inspect_unique_values", "profile_column"]
+      }
+    },
+    {
+      "id": "analyst_flow_explore_path",
+      "component": "analyst_flow",
+      "description": "Dataset with numeric and categorical columns (no quality signals) selects the 'explore' demo path.",
+      "input": {
+        "columns": [
+          {"name": "sales", "dtype": "float64", "missing_count": 0},
+          {"name": "region", "dtype": "object", "missing_count": 0}
+        ],
+        "observation_signals": []
+      },
+      "expected": {
+        "demo_path": "explore",
+        "first_tool_type": "profile_column",
+        "suggestion_count_min": 2
+      }
+    },
+    {
+      "id": "analyst_flow_quality_path",
+      "component": "analyst_flow",
+      "description": "Dataset with quality observation signals selects the 'quality' demo path.",
+      "input": {
+        "columns": [
+          {"name": "amount", "dtype": "float64", "missing_count": 5},
+          {"name": "category", "dtype": "object", "missing_count": 0}
+        ],
+        "observation_signals": ["data_quality_issue"]
+      },
+      "expected": {
+        "demo_path": "quality",
+        "first_tool_type": "profile_column",
+        "suggestion_count_min": 2
+      }
+    },
+    {
+      "id": "analyst_flow_minimal_path",
+      "component": "analyst_flow",
+      "description": "Dataset with only categorical columns (no numeric) and no quality signals selects the 'minimal' demo path.",
+      "input": {
+        "columns": [
+          {"name": "region", "dtype": "object", "missing_count": 0},
+          {"name": "category", "dtype": "category", "missing_count": 0}
+        ],
+        "observation_signals": []
+      },
+      "expected": {
+        "demo_path": "minimal",
+        "first_tool_type": "suggest_analysis_steps",
+        "suggestion_count_min": 1
+      }
+    },
+    {
+      "id": "agent_loop_slot_success_finalizes",
+      "component": "agent_loop",
+      "description": "Passed validation + ok observation after slot extraction succeeds → agent finalizes the workflow.",
+      "input": {
+        "task": "Filter rows where amount > 1000",
+        "plan": [{"type": "filter_rows", "column": "amount", "operator": ">", "value": 1000}],
+        "observation_status": "ok",
+        "observation_signals": [],
+        "validation_status": "passed",
+        "policy_decision": null,
+        "retry_count": 0,
+        "max_retries": 1
+      },
+      "expected": {
+        "next_action": "finalize",
+        "agent_action_type": "stop_with_result",
+        "result_status": "verified_result",
+        "stop_reason_not_null": true,
+        "observation_signals_include": []
+      }
+    },
+    {
+      "id": "agent_loop_quality_observation_clarify",
+      "component": "agent_loop",
+      "description": "Data quality observation with clarify recommendation → agent asks the user.",
+      "input": {
+        "task": "Filter rows where status = active",
+        "plan": [{"type": "filter_rows", "column": "status", "operator": "=", "value": "active"}],
+        "observation_status": "warning",
+        "observation_signals": ["data_quality_issue"],
+        "observation_recommended_next_action": "clarify",
+        "observation_message": "Data quality issue detected; clarification recommended.",
+        "validation_status": "passed",
+        "policy_decision": null,
+        "retry_count": 0,
+        "max_retries": 1
+      },
+      "expected": {
+        "next_action": "ask_user",
+        "agent_action_type": "clarify",
+        "result_status": "warning_result",
+        "stop_reason_not_null": true,
+        "observation_signals_include": ["data_quality_issue"]
+      }
+    },
+    {
+      "id": "agent_loop_inspect_tool_step_finalizes",
+      "component": "agent_loop",
+      "description": "Profile column step with passed validation and ok observation finalizes successfully.",
+      "input": {
+        "task": "Profile the sales column",
+        "plan": [{"type": "profile_column", "column": "sales"}],
+        "observation_status": "ok",
+        "observation_signals": [],
+        "validation_status": "passed",
+        "policy_decision": null,
+        "retry_count": 0,
+        "max_retries": 1
+      },
+      "expected": {
+        "next_action": "finalize",
+        "agent_action_type": "stop_with_result",
+        "result_status": "verified_result",
+        "stop_reason_not_null": true,
+        "observation_signals_include": []
+      }
+    }
+  ]
+}
