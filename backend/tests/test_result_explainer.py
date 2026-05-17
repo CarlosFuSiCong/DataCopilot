@@ -277,3 +277,99 @@ def test_chat_explanation_is_string():
                    return_value="South region leads with total sales of 1750."):
             data = client.post("/api/chat", json={"dataset_id": did, "query": "sales by region"}).json()
     assert isinstance(data["explanation"], str)
+
+
+# ---------------------------------------------------------------------------
+# Regression tests for _format_effective_request (Bug fix: if/elif/else)
+# ---------------------------------------------------------------------------
+from app.agent.final_response.result_explainer import _format_effective_request
+
+
+class TestFormatEffectiveRequest:
+    def test_complete_filter_rows_is_human_readable(self):
+        steps = [{"type": "filter_rows", "column": "amount", "operator": ">", "value": 100}]
+        result = _format_effective_request("q", steps)
+        assert result == "filter rows where amount > 100"
+        assert "{" not in result
+
+    def test_incomplete_filter_rows_does_not_also_produce_json_alongside_other_steps(self):
+        """Recognized type with missing fields must not mix JSON and human-readable in same output."""
+        steps = [
+            {"type": "filter_rows", "column": "amount", "operator": ">", "value": 100},
+            {"type": "filter_rows", "column": None, "operator": None, "value": None},
+        ]
+        result = _format_effective_request("q", steps)
+        parts = result.split("; then ")
+        assert len(parts) == 2
+        assert "filter rows where amount > 100" == parts[0]
+        # Second step is incomplete — should produce JSON, NOT repeat the human-readable summary
+        assert "filter rows where" not in parts[1]
+
+    def test_incomplete_filter_rows_falls_back_to_json_not_duplicated(self):
+        """An incomplete filter_rows step should produce exactly one entry (JSON), not two."""
+        steps = [{"type": "filter_rows", "column": "amount"}]
+        result = _format_effective_request("q", steps)
+        assert result.count("filter rows where") == 0
+        assert "filter_rows" in result
+
+    def test_complete_group_by_is_human_readable(self):
+        steps = [{"type": "group_by", "column": "region", "target": "sales", "agg": "sum"}]
+        result = _format_effective_request("q", steps)
+        assert result == "group by region and sum sales"
+        assert "{" not in result
+
+    def test_incomplete_group_by_falls_back_to_json_not_duplicated(self):
+        """group_by missing target must produce exactly one entry (JSON), not a human-readable+JSON pair."""
+        steps = [{"type": "group_by", "column": "region"}]
+        result = _format_effective_request("q", steps)
+        assert result.count("group by") == 0
+        assert "group_by" in result
+
+    def test_complete_sort_values_is_human_readable(self):
+        steps = [{"type": "sort_values", "column": "amount", "ascending": False}]
+        result = _format_effective_request("q", steps)
+        assert result == "sort by amount descending"
+        assert "{" not in result
+
+    def test_incomplete_sort_values_falls_back_to_json(self):
+        steps = [{"type": "sort_values", "column": None}]
+        result = _format_effective_request("q", steps)
+        assert "sort by" not in result
+        assert "sort_values" in result
+
+    def test_complete_limit_rows_is_human_readable(self):
+        steps = [{"type": "limit_rows", "n": 10}]
+        result = _format_effective_request("q", steps)
+        assert result == "limit to 10 rows"
+        assert "{" not in result
+
+    def test_unrecognized_step_type_uses_json(self):
+        steps = [{"type": "unknown_step", "foo": "bar"}]
+        result = _format_effective_request("q", steps)
+        assert "unknown_step" in result
+
+    def test_mixed_complete_and_incomplete_produces_consistent_output(self):
+        """Complete filter + incomplete group_by — each step produces exactly one summary."""
+        steps = [
+            {"type": "filter_rows", "column": "status", "operator": "=", "value": "active"},
+            {"type": "group_by", "column": "region"},  # missing target and agg
+        ]
+        result = _format_effective_request("q", steps)
+        parts = result.split("; then ")
+        assert len(parts) == 2
+        # First step: human-readable
+        assert parts[0] == "filter rows where status = active"
+        # Second step: JSON fallback — should appear exactly once and not duplicate
+        assert parts[1].count("group_by") == 1
+
+    def test_empty_steps_returns_query(self):
+        assert _format_effective_request("my query", []) == "my query"
+
+    def test_multiple_complete_steps_joined_correctly(self):
+        steps = [
+            {"type": "filter_rows", "column": "amount", "operator": ">", "value": 100},
+            {"type": "sort_values", "column": "amount", "ascending": True},
+            {"type": "limit_rows", "n": 5},
+        ]
+        result = _format_effective_request("q", steps)
+        assert result == "filter rows where amount > 100; then sort by amount ascending; then limit to 5 rows"

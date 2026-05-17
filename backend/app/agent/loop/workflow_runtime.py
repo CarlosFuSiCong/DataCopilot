@@ -3,8 +3,10 @@ import hashlib
 from typing import Any
 
 from app.core.exceptions import WorkflowValidationError
+from app.agent.analyst.flow_planner import AnalystFlowPlan, plan_analyst_flow
 from app.agent.observation.models import ObservationSummary
 from app.agent.planning.tool_selector import suggest_tools_from_observation
+from app.models.dataset import DatasetProfile
 from app.models.runtime_trace import (
     AttemptSummary,
     WorkflowAttempt,
@@ -113,6 +115,10 @@ def make_context_summary(
         if observation and observation.signals
         else []
     )
+    planned_types = [step.get("type", "?") for step in context.current_steps]
+    analyst_flow_suggestions = _build_analyst_flow_suggestions(
+        context.dataset_profile, planned_types, observation
+    )
     return WorkflowContextSummary(
         query=context.query,
         dataset_hash=context.dataset_hash,
@@ -122,7 +128,7 @@ def make_context_summary(
             str(doc.get("title") or doc.get("type") or doc.get("source_path"))
             for doc in context.retrieved_docs
         ],
-        planned_step_types=[step.get("type", "?") for step in context.current_steps],
+        planned_step_types=planned_types,
         status=state,
         boundary=context.execution_boundary,
         validation_status=validation_status,
@@ -130,6 +136,7 @@ def make_context_summary(
         error_count=error_count,
         last_observation=observation,
         tool_suggestions=tool_suggestions,
+        analyst_flow_suggestions=analyst_flow_suggestions,
     )
 
 
@@ -329,3 +336,25 @@ def _preview_counts(
     if preview_result.has_warnings:
         return warnings, errors, "warning"
     return warnings, errors, "passed"
+
+
+def _build_analyst_flow_suggestions(
+    dataset_profile_dict: dict[str, Any],
+    planned_types: list[str],
+    observation: ObservationSummary | None,
+) -> list[dict[str, Any]]:
+    """Build analyst flow suggestions when suggest_analysis_steps is in the plan.
+
+    Only activates when the planned workflow includes suggest_analysis_steps,
+    which signals that the user is in an exploratory mode and benefits from
+    a structured multi-step flow.  Returns serialised AnalystStepSuggestion
+    dicts for inclusion in WorkflowContextSummary.
+    """
+    if "suggest_analysis_steps" not in planned_types:
+        return []
+    try:
+        profile = DatasetProfile(**dataset_profile_dict)
+        plan: AnalystFlowPlan = plan_analyst_flow(profile, observation)
+        return [s.model_dump() for s in plan.suggestions[: plan.max_steps]]
+    except Exception:
+        return []

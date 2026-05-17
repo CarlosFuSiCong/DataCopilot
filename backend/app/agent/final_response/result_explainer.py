@@ -95,27 +95,32 @@ def _format_effective_request(query: str, planned_steps: list[dict]) -> str:
             value = step.get("value")
             if column and operator and value is not None:
                 summaries.append(f"filter rows where {column} {operator} {value}")
-                continue
-        if step_type == "group_by":
+            else:
+                summaries.append(json.dumps(step, ensure_ascii=False))
+        elif step_type == "group_by":
             column = step.get("column")
             target = step.get("target")
             agg = step.get("agg")
             if column and target and agg:
                 summaries.append(f"group by {column} and {agg} {target}")
-                continue
-        if step_type == "sort_values":
+            else:
+                summaries.append(json.dumps(step, ensure_ascii=False))
+        elif step_type == "sort_values":
             column = step.get("column")
             ascending = step.get("ascending", True)
             if column:
                 direction = "ascending" if ascending else "descending"
                 summaries.append(f"sort by {column} {direction}")
-                continue
-        if step_type == "limit_rows":
+            else:
+                summaries.append(json.dumps(step, ensure_ascii=False))
+        elif step_type == "limit_rows":
             n = step.get("n")
             if n is not None:
                 summaries.append(f"limit to {n} rows")
-                continue
-        summaries.append(json.dumps(step, ensure_ascii=False))
+            else:
+                summaries.append(json.dumps(step, ensure_ascii=False))
+        else:
+            summaries.append(json.dumps(step, ensure_ascii=False))
 
     return "; then ".join(summaries)
 
