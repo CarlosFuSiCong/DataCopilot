@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.workflow.planning.route_decision import RouteDecision
 from app.workflow.response.result_explainer import detect_language, explain
 from app.models.workflow import (
     ExecutionResult,
@@ -231,26 +232,37 @@ def _upload() -> str:
     return resp.json()["dataset_id"]
 
 
+_MOCK_LLM_ROUTE = RouteDecision(
+    route="llm_planner",
+    query_type="aggregation",
+    confidence=0.9,
+    reason="mocked",
+)
+
+
 def test_chat_response_includes_explanation_field():
     did = _upload()
-    with patch("app.api.chat.workflow_planner.plan", return_value=MOCK_STEPS):
-        with patch("app.api.chat.result_explainer.explain", return_value="North 最高。"):
-            data = client.post("/api/chat", json={"dataset_id": did, "query": "test"}).json()
+    with patch("app.workflow.service.classify", return_value=_MOCK_LLM_ROUTE):
+        with patch("app.api.chat.workflow_planner.plan", return_value=MOCK_STEPS):
+            with patch("app.api.chat.result_explainer.explain", return_value="North 最高。"):
+                data = client.post("/api/chat", json={"dataset_id": did, "query": "test"}).json()
     assert "explanation" in data
 
 
 def test_chat_explanation_contains_mock_text():
     did = _upload()
-    with patch("app.api.chat.workflow_planner.plan", return_value=MOCK_STEPS):
-        with patch("app.api.chat.result_explainer.explain", return_value="North 最高。"):
-            data = client.post("/api/chat", json={"dataset_id": did, "query": "test"}).json()
+    with patch("app.workflow.service.classify", return_value=_MOCK_LLM_ROUTE):
+        with patch("app.api.chat.workflow_planner.plan", return_value=MOCK_STEPS):
+            with patch("app.api.chat.result_explainer.explain", return_value="North 最高。"):
+                data = client.post("/api/chat", json={"dataset_id": did, "query": "test"}).json()
     assert data["explanation"] == "North 最高。"
 
 
 def test_chat_explanation_is_string():
     did = _upload()
-    with patch("app.api.chat.workflow_planner.plan", return_value=MOCK_STEPS):
-        with patch("app.api.chat.result_explainer.explain",
-                   return_value="South region leads with total sales of 1750."):
-            data = client.post("/api/chat", json={"dataset_id": did, "query": "sales by region"}).json()
+    with patch("app.workflow.service.classify", return_value=_MOCK_LLM_ROUTE):
+        with patch("app.api.chat.workflow_planner.plan", return_value=MOCK_STEPS):
+            with patch("app.api.chat.result_explainer.explain",
+                       return_value="South region leads with total sales of 1750."):
+                data = client.post("/api/chat", json={"dataset_id": did, "query": "sales by region"}).json()
     assert isinstance(data["explanation"], str)

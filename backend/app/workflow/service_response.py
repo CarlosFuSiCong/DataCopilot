@@ -185,6 +185,7 @@ def _clarification_response(
     observation: ObservationSummary | None = None,
     affected_step: dict | None = None,
     clarification_type: str = "planning",
+    choices: list[dict] | None = None,
 ) -> ChatResponse:
     steps = current_steps or []
     trace_attempts = attempts or []
@@ -193,6 +194,8 @@ def _clarification_response(
         original_query=request.query,
         question=question,
         affected_step=affected_step,
+        clarification_type=clarification_type,
+        choices=choices,
     )
     context = workflow_runtime.build_context(
         dataset_id=request.dataset_id,
@@ -224,6 +227,7 @@ def _clarification_response(
         clarification_question=question,
         clarification_type=clarification_type,
         clarification_context=clarification,
+        clarification_choices=choices,
         state="needs_clarification",
         attempts=trace_attempts,
         context_summary=trace.context_summary,

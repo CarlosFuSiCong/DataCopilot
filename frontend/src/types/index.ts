@@ -187,6 +187,16 @@ export interface ClarificationContext {
   affected_step?: WorkflowStep | null
   status: 'pending' | 'resolved'
   scope_key: string
+  clarification_type?: string | null
+  choices?: ClarificationChoice[] | null
+}
+
+export interface ClarificationChoice {
+  id: string
+  label: string
+  description: string
+  query: string
+  tool?: string | null
 }
 
 export interface PreviewResponse {
@@ -215,9 +225,15 @@ export interface ChatResponse {
   clarification_question?: string | null
   clarification_type?: 'slot_validation' | 'planning' | string | null
   clarification_context?: ClarificationContext | null
+  // Suggested analysis directions for broad / ambiguous requests (rendered as buttons).
+  clarification_choices?: ClarificationChoice[] | null
   state?: WorkflowRunState
   attempts?: WorkflowAttempt[]
   context_summary?: WorkflowContextSummary | null
+  // Read-only analytical result fields (task 3).
+  is_read_only?: boolean
+  ask_mode_type?: string | null
+  evidence_source?: string | null
 }
 
 // ─── Run history ──────────────────────────────────────────────────────────────

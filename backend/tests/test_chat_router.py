@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.models.workflow import FilterRowsStep, GroupByStep, RemoveMissingValuesStep, SortValuesStep
+from app.workflow.planning.route_decision import RouteDecision
 
 client = TestClient(app)
 
@@ -49,21 +50,35 @@ def _upload(csv_bytes: bytes = BASE_CSV) -> str:
 
 def _chat(did: str, query: str = "test", auto_confirm: bool = True) -> dict:
     """Call /api/chat with planner mocked to MOCK_STEPS_GROUP_BY (no warnings)."""
-    with patch("app.api.chat.workflow_planner.plan", return_value=MOCK_STEPS_GROUP_BY):
-        with patch("app.api.chat.result_explainer.explain", return_value=_MOCK_EXPLANATION):
-            return client.post(
-                "/api/chat",
-                json={"dataset_id": did, "query": query, "auto_confirm": auto_confirm},
-            )
+    mock_route = RouteDecision(
+        route="llm_planner",
+        query_type="aggregation",
+        confidence=0.9,
+        reason="mocked",
+    )
+    with patch("app.workflow.service.classify", return_value=mock_route):
+        with patch("app.api.chat.workflow_planner.plan", return_value=MOCK_STEPS_GROUP_BY):
+            with patch("app.api.chat.result_explainer.explain", return_value=_MOCK_EXPLANATION):
+                return client.post(
+                    "/api/chat",
+                    json={"dataset_id": did, "query": query, "auto_confirm": auto_confirm},
+                )
 
 
 def _chat_with_warnings(did: str, auto_confirm: bool = True) -> dict:
     """Call /api/chat with planner mocked to steps that produce warnings."""
-    with patch("app.api.chat.workflow_planner.plan", return_value=MOCK_STEPS_ZERO_MATCH):
-        return client.post(
-            "/api/chat",
-            json={"dataset_id": did, "query": "test", "auto_confirm": auto_confirm},
-        )
+    mock_route = RouteDecision(
+        route="llm_planner",
+        query_type="filtering",
+        confidence=0.9,
+        reason="mocked",
+    )
+    with patch("app.workflow.service.classify", return_value=mock_route):
+        with patch("app.api.chat.workflow_planner.plan", return_value=MOCK_STEPS_ZERO_MATCH):
+            return client.post(
+                "/api/chat",
+                json={"dataset_id": did, "query": "test", "auto_confirm": auto_confirm},
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -268,9 +283,16 @@ def test_chat_planner_error_returns_400():
 def test_chat_missing_column_validation_asks_clarification():
     bad_steps = [FilterRowsStep(type="filter_rows", column="nonexistent_col", operator=">", value=0)]
     did = _upload()
-    with patch("app.api.chat.workflow_planner.plan", return_value=bad_steps):
-        with patch("app.api.chat.result_explainer.explain", return_value=_MOCK_EXPLANATION):
-            resp = client.post("/api/chat", json={"dataset_id": did, "query": "test"})
+    mock_route = RouteDecision(
+        route="llm_planner",
+        query_type="filtering",
+        confidence=0.9,
+        reason="mocked",
+    )
+    with patch("app.workflow.service.classify", return_value=mock_route):
+        with patch("app.api.chat.workflow_planner.plan", return_value=bad_steps):
+            with patch("app.api.chat.result_explainer.explain", return_value=_MOCK_EXPLANATION):
+                resp = client.post("/api/chat", json={"dataset_id": did, "query": "test"})
     assert resp.status_code == 200
     data = resp.json()
     assert data["needs_clarification"] is True
