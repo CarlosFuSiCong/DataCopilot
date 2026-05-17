@@ -1,4 +1,6 @@
 """Pydantic models for the chat (full pipeline) endpoint."""
+from typing import Any
+
 from pydantic import BaseModel
 
 from app.models.clarification_context import ClarificationContext
@@ -49,3 +51,5 @@ class ChatResponse(BaseModel):
     state: WorkflowRunState = "draft"
     attempts: list[WorkflowAttempt] = []
     context_summary: WorkflowContextSummary | None = None
+    # RouteDecision from the query classifier; included for traceability.
+    route_decision: dict[str, Any] | None = None

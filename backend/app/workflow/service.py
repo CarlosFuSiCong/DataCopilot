@@ -9,6 +9,7 @@ from app.workflow import runtime as workflow_runtime
 from app.workflow.observation import signal_rules
 from app.workflow.observation.models import ObservationSummary
 from app.workflow.planning import workflow_planner
+from app.workflow.planning.query_classifier import classify
 from app.workflow.policy import action_policy
 from app.workflow.validation.workflow_validator import simulate_columns
 from app.core.exceptions import ClarificationNeeded, ExecutionError, PlannerError, WorkflowValidationError
@@ -20,6 +21,7 @@ from app.models.clarification_context import (
     resolve_context,
     validate_scope,
 )
+from app.models.rag import DatasetSummary, RAGContext, RetrievalDebug
 from app.models.workflow_execution import ExecutionResult
 from app.models.workflow_responses import ConfirmResponse
 from app.models.workflow_transport import ConfirmRequest
@@ -65,6 +67,45 @@ async def run_chat(request: ChatRequest) -> ChatResponse:
     dataset_profile = profile(content, filename="<cached>")
     column_names = [col.name for col in dataset_profile.columns]
     clarification = _resolve_request_clarification(request)
+
+    # --- Query type classification (Task 1) ---
+    # Skip classifier when user is answering a clarification question so that
+    # the resolved query passes through to the planner without re-routing.
+    route_decision = None
+    if not (clarification and clarification.user_answer):
+        route_decision = classify(request.query, column_names)
+        logger.info(
+            "RouteDecision: query=%r type=%s route=%s confidence=%.2f reason=%r evidence=%s",
+            request.query,
+            route_decision.query_type,
+            route_decision.route,
+            route_decision.confidence,
+            route_decision.reason,
+            route_decision.evidence,
+        )
+
+        if route_decision.route == "ask_mode":
+            return _ask_mode_response(
+                request=request,
+                dataset_profile=dataset_profile,
+                column_names=column_names,
+                route_decision=route_decision,
+            )
+
+        if route_decision.route == "unsupported":
+            raise WorkflowValidationError(
+                f"This type of request is not supported: {route_decision.reason}",
+                error_code="unsupported_request",
+                context={
+                    "query_type": route_decision.query_type,
+                    "evidence": route_decision.evidence,
+                    "suggestion": (
+                        "DataCopilot supports filtering, sorting, aggregation, profiling, "
+                        "diagnosis, comparison, and data cleaning. "
+                        "Prediction, ML models, and visualizations are not supported."
+                    ),
+                },
+            )
 
     explicit_missing_col = (
         None
@@ -172,6 +213,17 @@ async def run_chat(request: ChatRequest) -> ChatResponse:
                 validation_status="failed",
                 observation=observation,
                 affected_step={"type": step_type, "column": missing_col} if step_type and missing_col else None,
+            )
+        complex_hint = _detect_complex_tool_hint(request.query, column_names)
+        if complex_hint:
+            return _clarification_response(
+                request=request,
+                content=content,
+                dataset_profile=dataset_profile,
+                column_names=column_names,
+                rag_ctx=rag_ctx,
+                question=complex_hint,
+                clarification_type="planning",
             )
         relevant = _relevant_steps(rag_ctx)
         planner_hint = msg if msg != "The request cannot be handled with the supported transformations." else None
@@ -365,6 +417,7 @@ async def run_chat(request: ChatRequest) -> ChatResponse:
         state=state,
         attempts=attempts,
         context_summary=trace.context_summary,
+        route_decision=route_decision.model_dump() if route_decision else None,
     )
 
 
@@ -458,6 +511,58 @@ async def confirm_workflow(request: ConfirmRequest) -> ConfirmResponse:
         state="executed",
         attempts=attempts,
         context_summary=trace.context_summary,
+    )
+
+
+def _ask_mode_response(
+    *,
+    request: ChatRequest,
+    dataset_profile,
+    column_names: list[str],
+    route_decision,
+) -> ChatResponse:
+    """Return a read-only answer about the dataset without invoking the planner."""
+    col_lines = []
+    for col in dataset_profile.columns:
+        missing = f", missing={col.missing_count}" if col.missing_count else ""
+        col_lines.append(f"  - {col.name} ({col.dtype}{missing})")
+    cols_text = "\n".join(col_lines)
+
+    answer = (
+        f"Dataset has {dataset_profile.row_count} rows and {len(column_names)} columns:\n"
+        f"{cols_text}"
+    )
+
+    minimal_rag = RAGContext(
+        query=request.query,
+        retrieved_docs=[],
+        dataset_summary=DatasetSummary(
+            filename="<ask_mode>",
+            row_count=dataset_profile.row_count,
+            column_count=len(column_names),
+            columns=[
+                {
+                    "name": c.name,
+                    "dtype": c.dtype,
+                    "missing_count": c.missing_count,
+                    "missing_pct": c.missing_pct,
+                }
+                for c in dataset_profile.columns
+            ],
+        ),
+        debug=RetrievalDebug(method="ask_mode", query_tokens=[], all_scores={}),
+    )
+
+    return ChatResponse(
+        query=request.query,
+        planned_steps=[],
+        step_results=[],
+        has_warnings=False,
+        has_errors=False,
+        rag_context=minimal_rag,
+        explanation=answer,
+        state="executed",
+        route_decision=route_decision.model_dump() if route_decision else None,
     )
 
 
@@ -643,6 +748,75 @@ def _detect_step_type_from_query(query: str) -> str | None:
         return "group_by"
     if _FILTER_PATTERN.search(query):
         return "filter_rows"
+    return None
+
+
+_COMPLEX_TOOL_PATTERNS: list[tuple[re.Pattern, str, str]] = [
+    (
+        re.compile(r"\bpivot\b|pivot\s*table|crosstab|透视|交叉表", re.IGNORECASE),
+        "pivot_table",
+        (
+            "To create a pivot table I need a few details: "
+            "(1) Which column(s) should form the row index? "
+            "(2) Which column should become the new column headers (optional)? "
+            "(3) Which numeric column should be aggregated as values? "
+            "(4) What aggregation function: sum, mean, count, min, or max?"
+        ),
+    ),
+    (
+        re.compile(r"\btrim\b|\bstrip\s+(whitespace|spaces?)\b|去除空格|修剪", re.IGNORECASE),
+        "trim_text",
+        "To trim text, which column should I apply the trim to?",
+    ),
+    (
+        re.compile(
+            r"\bextract\b.*\b(pattern|regex|text|part)\b"
+            r"|\b(parse|pull\s+out|extract)\b.*\bcolumn\b"
+            r"|提取.*列|正则提取",
+            re.IGNORECASE,
+        ),
+        "extract_text",
+        (
+            "To extract text using a pattern I need: "
+            "(1) the source column, "
+            "(2) a regex pattern (e.g. r'(\\d+)'), and "
+            "(3) a name for the new column that will hold the extracted value."
+        ),
+    ),
+    (
+        re.compile(
+            r"\bdate\s*(diff|difference|gap|between|delta)\b"
+            r"|\bdays?\s+between\b"
+            r"|\bhow\s+many\s+days\b"
+            r"|日期差|相差天数",
+            re.IGNORECASE,
+        ),
+        "date_diff",
+        (
+            "To calculate the date difference I need: "
+            "(1) the start date column, "
+            "(2) the end date column, and "
+            "(3) a name for the new column that will hold the result (in days)."
+        ),
+    ),
+]
+
+
+def _detect_complex_tool_hint(query: str, column_names: list[str]) -> str | None:
+    """Return a targeted clarification message when the query likely intends a
+    complex tool (pivot_table, trim_text, extract_text, date_diff) but the
+    planner could not build a complete workflow.
+
+    Returns None when no complex tool pattern matches.
+    """
+    available = ", ".join(column_names)
+    for pattern, tool_type, base_question in _COMPLEX_TOOL_PATTERNS:
+        if pattern.search(query):
+            suffix = f" Available columns: {available}." if available else ""
+            logger.info(
+                "Complex tool hint triggered: tool=%s query=%r", tool_type, query
+            )
+            return base_question + suffix
     return None
 
 
