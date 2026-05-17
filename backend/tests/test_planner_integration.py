@@ -149,7 +149,7 @@ class TestConfidenceThresholdAlignment:
         in workflow_planner.  If they diverge, slots in the gap are validated
         and returned but then silently discarded by _format_slot_hints.
         """
-        from app.workflow.service import _SLOT_MIN_CONFIDENCE
+        from app.workflow.service_nlu import _SLOT_MIN_CONFIDENCE
         from app.workflow.planning.workflow_planner import _SLOT_HINT_MIN_CONFIDENCE
         assert _SLOT_MIN_CONFIDENCE == _SLOT_HINT_MIN_CONFIDENCE, (
             f"Threshold mismatch: orchestrator uses {_SLOT_MIN_CONFIDENCE}, "
@@ -164,20 +164,20 @@ class TestConfidenceThresholdAlignment:
 
 class TestRunSlotExtraction:
     def _call(self, query="filter amount > 1000", clarification=None, *, mock_extract=None, mock_validate=None):
-        from app.workflow.service import _run_slot_extraction
+        from app.workflow.service_nlu import _run_slot_extraction
         from app.services.profiler import profile
 
         dummy_profile = profile(
             b"amount,region\n100,North\n200,South\n",
             filename="test.csv",
         )
-        with patch("app.workflow.service.extract_slots", mock_extract or MagicMock(
+        with patch("app.workflow.service_nlu.extract_slots", mock_extract or MagicMock(
             return_value=MagicMock(
                 parse_error=None,
                 result=_result(),
             )
         )):
-            with patch("app.workflow.service.validate_slots", mock_validate or MagicMock(
+            with patch("app.workflow.service_nlu.validate_slots", mock_validate or MagicMock(
                 return_value=MagicMock(is_valid=True, needs_clarification=False, blocked=False)
             )):
                 return _run_slot_extraction(query, dummy_profile, clarification)
@@ -227,7 +227,7 @@ class TestRunSlotExtraction:
         assert result is None
 
     def test_returns_clarification_signal_when_needs_clarification(self):
-        from app.workflow.service import _SlotClarificationSignal
+        from app.workflow.service_nlu import _SlotClarificationSignal
         result = self._call(mock_validate=MagicMock(
             return_value=MagicMock(
                 is_valid=False,
@@ -245,7 +245,7 @@ class TestRunSlotExtraction:
 
     def test_clarification_signal_affected_step_filter_intent(self):
         """Bug regression: affected_step.type must be 'filter_rows' for filter intent."""
-        from app.workflow.service import _SlotClarificationSignal
+        from app.workflow.service_nlu import _SlotClarificationSignal
         result = self._call(
             mock_extract=MagicMock(
                 return_value=MagicMock(
@@ -266,7 +266,7 @@ class TestRunSlotExtraction:
 
     def test_clarification_signal_affected_step_sort_intent(self):
         """Bug regression: affected_step.type must be 'sort_values' for sort intent."""
-        from app.workflow.service import _SlotClarificationSignal
+        from app.workflow.service_nlu import _SlotClarificationSignal
         result = self._call(
             mock_extract=MagicMock(
                 return_value=MagicMock(
@@ -287,7 +287,7 @@ class TestRunSlotExtraction:
 
     def test_clarification_signal_affected_step_group_aggregate_intent(self):
         """Bug regression: affected_step.type must be 'group_by' for group_aggregate intent."""
-        from app.workflow.service import _SlotClarificationSignal
+        from app.workflow.service_nlu import _SlotClarificationSignal
         result = self._call(
             mock_extract=MagicMock(
                 return_value=MagicMock(
@@ -308,7 +308,7 @@ class TestRunSlotExtraction:
 
     def test_clarification_signal_affected_step_none_for_limit_intent(self):
         """Limit intent has no column; affected_step should be None."""
-        from app.workflow.service import _SlotClarificationSignal
+        from app.workflow.service_nlu import _SlotClarificationSignal
         result = self._call(
             mock_extract=MagicMock(
                 return_value=MagicMock(
@@ -371,8 +371,8 @@ class TestChatRouterSlotIntegration:
         did = _upload()
         missing_result = _result(intent="filter", column="revenue", confidence=0.85)
         output = MagicMock(parse_error=None, result=missing_result)
-        with patch("app.workflow.service.extract_slots", return_value=output):
-            with patch("app.workflow.service.validate_slots") as mock_val:
+        with patch("app.workflow.service_nlu.extract_slots", return_value=output):
+            with patch("app.workflow.service_nlu.validate_slots") as mock_val:
                 mock_val.return_value = MagicMock(
                     is_valid=False,
                     needs_clarification=True,
@@ -393,7 +393,7 @@ class TestChatRouterSlotIntegration:
         """When extract_slots raises, the planner-only path still returns a result."""
         did = _upload()
         mock_steps = [_MOCK_STEPS]
-        with patch("app.workflow.service.extract_slots", side_effect=RuntimeError("no LLM")):
+        with patch("app.workflow.service_nlu.extract_slots", side_effect=RuntimeError("no LLM")):
             with patch("app.api.chat.workflow_planner.plan", return_value=mock_steps):
                 with patch("app.api.chat.result_explainer.explain", return_value="ok"):
                     resp = _http.post(
@@ -414,8 +414,8 @@ class TestChatRouterSlotIntegration:
 
         extraction = _result(intent="filter", confidence=0.9)
         output = MagicMock(parse_error=None, result=extraction)
-        with patch("app.workflow.service.extract_slots", return_value=output):
-            with patch("app.workflow.service.validate_slots") as mock_val:
+        with patch("app.workflow.service_nlu.extract_slots", return_value=output):
+            with patch("app.workflow.service_nlu.validate_slots") as mock_val:
                 mock_val.return_value = MagicMock(
                     is_valid=True, needs_clarification=False, blocked=False
                 )
@@ -435,8 +435,8 @@ class TestChatRouterSlotIntegration:
         extraction = _result(intent="filter", confidence=0.3)
         output = MagicMock(parse_error=None, result=extraction)
         mock_steps = [_MOCK_STEPS]
-        with patch("app.workflow.service.extract_slots", return_value=output):
-            with patch("app.workflow.service.validate_slots") as mock_val:
+        with patch("app.workflow.service_nlu.extract_slots", return_value=output):
+            with patch("app.workflow.service_nlu.validate_slots") as mock_val:
                 with patch("app.api.chat.workflow_planner.plan", return_value=mock_steps):
                     with patch("app.api.chat.result_explainer.explain", return_value="ok"):
                         resp = _http.post(
