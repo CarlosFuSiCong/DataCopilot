@@ -100,12 +100,14 @@ export function useNotebook(dataset: UploadResponse | null) {
     appendCell({ ...cell, clarificationAnswer: answer })
 
     const id = nextId()
-    appendCell({ id, query: cell.query, status: 'loading' })
+    // Show the clarification answer as the display query so the new cell
+    // reflects what the user actually typed, not the stale original query.
+    appendCell({ id, query: answer, status: 'loading' })
 
     try {
       const result = await sendChat({
         dataset_id: dataset.dataset_id,
-        query: cell.query,
+        query: cell.query,   // backend still receives the original query
         clarification_context: cell.clarificationContext
           ? { ...cell.clarificationContext, user_answer: answer }
           : answer,
@@ -115,18 +117,18 @@ export function useNotebook(dataset: UploadResponse | null) {
         // Another round of clarification needed.
         appendCell({
           id,
-          query: cell.query,
+          query: answer,
           status: 'clarifying',
           clarificationQuestion: result.clarification_question ?? '',
           clarificationContext: result.clarification_context ?? null,
         })
       } else if (result.execution_result !== null) {
-        appendCell({ id, query: cell.query, status: 'ok', result })
+        appendCell({ id, query: answer, status: 'ok', result })
       } else {
-        appendCell({ id, query: cell.query, status: 'preview', result })
+        appendCell({ id, query: answer, status: 'preview', result })
       }
     } catch (err) {
-      appendCell(errorCell({ id, query: cell.query }, err))
+      appendCell(errorCell({ id, query: answer }, err))
     }
   }
 
