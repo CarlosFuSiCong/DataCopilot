@@ -121,6 +121,7 @@ async def run_chat(request: ChatRequest) -> ChatResponse:
             f"Column '{explicit_missing_col}' is not in this dataset.",
             workflow_state="needs_clarification",
         )
+        step_type = _detect_step_type_from_query(request.query)
         return _clarification_response(
             request=request,
             content=content,
@@ -133,7 +134,7 @@ async def run_chat(request: ChatRequest) -> ChatResponse:
             ),
             validation_status="failed",
             observation=observation,
-            affected_step={"type": "filter_rows", "column": explicit_missing_col},
+            affected_step={"type": step_type, "column": explicit_missing_col} if step_type else None,
         )
 
     # Slot extraction layer: run before planner to validate column/operator/value.
@@ -168,8 +169,36 @@ async def run_chat(request: ChatRequest) -> ChatResponse:
             question=exc.question,
         )
     except PlannerError as exc:
+        exc_msg = str(exc)
+        # When the planner identifies a missing column, route to clarification
+        # instead of surfacing empty_workflow — the user needs to name a column,
+        # not be told the operation is unsupported.
+        if "does not exist in the dataset" in exc_msg or (
+            "column" in exc_msg.lower() and "not found" in exc_msg.lower()
+        ):
+            available = ", ".join(column_names)
+            observation = signal_rules.from_validation_failure(
+                exc_msg, workflow_state="needs_clarification"
+            )
+            missing_col = _extract_column_from_error(exc_msg)
+            step_type = _detect_step_type_from_query(request.query)
+            affected_step = {"type": step_type, "column": missing_col} if step_type and missing_col else None
+            return _clarification_response(
+                request=request,
+                content=content,
+                dataset_profile=dataset_profile,
+                column_names=column_names,
+                rag_ctx=rag_ctx,
+                question=(
+                    f"{exc_msg} Which available column should I use instead? "
+                    f"Available columns: {available}."
+                ),
+                validation_status="failed",
+                observation=observation,
+                affected_step=affected_step,
+            )
         relevant = _relevant_steps(rag_ctx)
-        planner_hint = str(exc) if str(exc) != "The request cannot be handled with the supported transformations." else None
+        planner_hint = exc_msg if exc_msg != "The request cannot be handled with the supported transformations." else None
         raise WorkflowValidationError(
             "The planner could not build a workflow for this query. "
             "The request may be outside the supported transformation scope.",
@@ -526,8 +555,12 @@ def _explicit_missing_column(query: str, column_names: list[str]) -> str | None:
     available_lower = {c.lower() for c in column_names}
     patterns = [
         r"\bwhere\s+([A-Za-z_][A-Za-z0-9_]*)\b",
+        # "sort by X", "order by X", "sorted by X"
+        r"(?:sort(?:ed)?\s+by|order\s+by)\s+([A-Za-z_][A-Za-z0-9_]*)\b",
         # Chinese: <col> 大于/小于/等于/高于/低于/不等于 ... (identifier before comparison keyword)
         r"([A-Za-z_][A-Za-z0-9_]*)\s*(?:大于等于|小于等于|大于|小于|等于|高于|低于|不等于)",
+        # Chinese sort: 按 <col> 排序/降序/升序
+        r"(?:按|根据)\s*([A-Za-z_][A-Za-z0-9_]*)\s*(?:排序|降序|升序|排列)",
     ]
     for pattern in patterns:
         match = re.search(pattern, query, flags=re.IGNORECASE)
@@ -658,6 +691,42 @@ def _relevant_steps(rag_ctx) -> list[dict]:
         for doc in rag_ctx.retrieved_docs
         if doc.doc_type == "transformation" and doc.type
     ]
+
+
+def _extract_column_from_error(msg: str) -> str | None:
+    """Extract the column name from a planner/validator error message.
+
+    Handles messages like: "Column 'revenue' does not exist in the dataset."
+    """
+    match = re.search(r"[Cc]olumn ['\"]?([A-Za-z_][A-Za-z0-9_]*)['\"]?", msg)
+    return match.group(1) if match else None
+
+
+_SORT_PATTERN = re.compile(
+    r"(?:sort(?:ed)?\s+by|order\s+by|按|根据).*", re.IGNORECASE
+)
+_GROUP_PATTERN = re.compile(
+    r"(?:group\s+by|grouped\s+by|汇总|分组)", re.IGNORECASE
+)
+_FILTER_PATTERN = re.compile(
+    r"(?:\bwhere\b|filter|过滤|删除|移除|保留)", re.IGNORECASE
+)
+
+
+def _detect_step_type_from_query(query: str) -> str | None:
+    """Heuristically infer the most likely step type from the query text.
+
+    Returns one of the recognised step type strings, or None if ambiguous.
+    Used to populate affected_step when triggering clarification so the UI
+    can label the clarification panel accurately (slot validation vs generic).
+    """
+    if _SORT_PATTERN.search(query):
+        return "sort_values"
+    if _GROUP_PATTERN.search(query):
+        return "group_by"
+    if _FILTER_PATTERN.search(query):
+        return "filter_rows"
+    return None
 
 
 def _build_trace_after_preview(
