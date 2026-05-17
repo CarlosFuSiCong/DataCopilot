@@ -266,6 +266,77 @@ function IterationRow({ attempt, isLast }: { attempt: WorkflowAttempt; isLast: b
   )
 }
 
+// ─── Context summary sections ─────────────────────────────────────────────────
+
+function MonoBadge({ label, color }: { label: string; color: string }) {
+  return (
+    <span style={{
+      display: 'inline-block',
+      padding: '1px 6px', borderRadius: 3,
+      fontFamily: 'var(--font-mono)', fontSize: '0.65rem',
+      color, border: `1px solid ${color}`,
+      background: `${color}14`,
+      whiteSpace: 'nowrap',
+    }}>
+      {label}
+    </span>
+  )
+}
+
+function ObservationSignalsRow({ signals }: { signals: string[] }) {
+  if (!signals || signals.length === 0) return null
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 4 }}>
+      <span style={{
+        fontFamily: 'var(--font-mono)', fontSize: '0.70rem',
+        color: 'var(--color-text-muted)', minWidth: 90, flexShrink: 0,
+      }}>
+        obs. signals
+      </span>
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+        {signals.map((s, i) => (
+          <MonoBadge key={i} label={s} color="var(--color-yellow)" />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ToolSuggestionsRow({ suggestions }: { suggestions: WorkflowContextSummary['tool_suggestions'] }) {
+  if (!suggestions || suggestions.length === 0) return null
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 4 }}>
+      <span style={{
+        fontFamily: 'var(--font-mono)', fontSize: '0.70rem',
+        color: 'var(--color-text-muted)',
+      }}>
+        tool selection rationale
+      </span>
+      {suggestions.map((s, i) => (
+        <div
+          key={i}
+          style={{
+            display: 'flex', alignItems: 'flex-start', gap: 8,
+            paddingLeft: 8,
+            borderLeft: '2px solid var(--color-border)',
+          }}
+        >
+          <MonoBadge label={s.tool_type} color="var(--color-accent)" />
+          <span style={{
+            fontFamily: 'var(--font-mono)', fontSize: '0.70rem',
+            color: 'var(--color-text-soft)', lineHeight: 1.5, flex: 1,
+          }}>
+            {s.reason}
+          </span>
+          {s.signal && (
+            <MonoBadge label={s.signal} color="var(--color-yellow)" />
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ─── Main panel ───────────────────────────────────────────────────────────────
 
 interface AgentTracePanelProps {
@@ -281,6 +352,7 @@ interface AgentTracePanelProps {
 
 export function AgentTracePanel({
   attempts,
+  contextSummary,
   workflowState,
   needsClarification,
   clarificationQuestion,
@@ -294,6 +366,9 @@ export function AgentTracePanel({
   const derivedStopReason = stopReason ?? deriveStopReason(
     workflowState, needsClarification, clarificationQuestion, hasErrors
   )
+
+  const obsSignals = contextSummary?.last_observation?.signals ?? []
+  const toolSuggestions = contextSummary?.tool_suggestions ?? []
 
   if (attempts.length === 0) return null
 
@@ -335,6 +410,13 @@ export function AgentTracePanel({
         }}>
           {attempts.length} iter{attempts.length !== 1 ? 's' : ''}
         </span>
+
+        {/* Observation signal count */}
+        {obsSignals.length > 0 && (
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.70rem', color: 'var(--color-yellow)' }}>
+            ◆ {obsSignals.length} signal{obsSignals.length !== 1 ? 's' : ''}
+          </span>
+        )}
 
         {/* Warning/error count */}
         {hasErrors && (
@@ -397,6 +479,30 @@ export function AgentTracePanel({
               {derivedStopReason}
             </div>
           )}
+
+          {/* Observation signals from context summary */}
+          <ObservationSignalsRow signals={obsSignals} />
+
+          {/* Observation message */}
+          {contextSummary?.last_observation?.message && (
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 4 }}>
+              <span style={{
+                fontFamily: 'var(--font-mono)', fontSize: '0.70rem',
+                color: 'var(--color-text-muted)', minWidth: 90, flexShrink: 0,
+              }}>
+                observation
+              </span>
+              <span style={{
+                fontFamily: 'var(--font-mono)', fontSize: '0.72rem',
+                color: 'var(--color-text-soft)', lineHeight: 1.5,
+              }}>
+                {contextSummary.last_observation.message}
+              </span>
+            </div>
+          )}
+
+          {/* Observation-driven tool selection rationale */}
+          <ToolSuggestionsRow suggestions={toolSuggestions} />
 
           {/* Iteration list */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>

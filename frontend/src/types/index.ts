@@ -132,6 +132,25 @@ export interface WorkflowContextSummary {
   validation_status?: string | null
   warning_count: number
   error_count: number
+  // MVP6 additions
+  last_observation?: ObservationSummary | null
+  tool_suggestions?: ToolSuggestion[]
+  analyst_flow_suggestions?: AnalystStepSuggestion[]
+}
+
+export interface ToolSuggestion {
+  tool_type: string
+  signal: string
+  reason: string
+}
+
+export interface AnalystStepSuggestion {
+  tool_type: string
+  rationale: string
+  evidence: string[]
+  parameters: Record<string, unknown>
+  confirmation_question: string
+  is_destructive: boolean
 }
 
 // ─── RAG ─────────────────────────────────────────────────────────────────────
@@ -302,6 +321,9 @@ export interface ObservationSummary {
   status: 'ok' | 'warning' | 'error' | 'blocked'
   message: string
   recommended_next_action?: string | null
+  signals?: string[]
+  diagnostic_explanation?: string | null
+  candidate_fixes?: string[]
 }
 
 export interface AgentIteration {
