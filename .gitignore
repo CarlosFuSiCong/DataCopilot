@@ -10,7 +10,6 @@ sample_data/
 # Versioned project contracts and lightweight engineering docs
 !project-docs/
 !project-docs/*.md
-project-docs/error-taxonomy.md
 
 # Local environment and generated files
 .env
