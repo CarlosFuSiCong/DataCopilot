@@ -94,7 +94,8 @@ export function useNotebook(dataset: UploadResponse | null) {
     appendCell({ ...cell, clarificationAnswer: answer })
 
     const id = nextId()
-    appendCell({ id, query: cell.query, status: 'loading' })
+    // Display the user's clarification answer as the follow-up cell query.
+    appendCell({ id, query: answer, status: 'loading' })
 
     try {
       const result = await sendChat({
@@ -105,14 +106,14 @@ export function useNotebook(dataset: UploadResponse | null) {
       })
       if (result.needs_clarification) {
         // Another round of clarification needed.
-        appendCell({ id, query: cell.query, status: 'clarifying', clarificationQuestion: result.clarification_question ?? '' })
+        appendCell({ id, query: answer, status: 'clarifying', clarificationQuestion: result.clarification_question ?? '' })
       } else if (result.execution_result !== null) {
-        appendCell({ id, query: cell.query, status: 'ok', result })
+        appendCell({ id, query: answer, status: 'ok', result })
       } else {
-        appendCell({ id, query: cell.query, status: 'preview', result })
+        appendCell({ id, query: answer, status: 'preview', result })
       }
     } catch (err) {
-      appendCell(errorCell({ id, query: cell.query }, err))
+      appendCell(errorCell({ id, query: answer }, err))
     }
   }
 

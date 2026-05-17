@@ -104,8 +104,32 @@ async def run_chat(request: ChatRequest) -> ChatResponse:
             question=exc.question,
         )
     except PlannerError as exc:
+        msg = str(exc)
+        if "does not exist in the dataset" in msg or "not found" in msg.lower():
+            missing_col = _extract_column_from_error(msg) or _explicit_missing_column(request.query, column_names)
+            available = ", ".join(column_names)
+            observation = signal_rules.from_validation_failure(
+                msg,
+                workflow_state="needs_clarification",
+            )
+            question = (
+                f"Column '{missing_col}' is not in this dataset. "
+                f"Which available column should I use instead? Available columns: {available}."
+                if missing_col
+                else f"{msg} Which available column should I use instead? Available columns: {available}."
+            )
+            return _clarification_response(
+                request=request,
+                content=content,
+                dataset_profile=dataset_profile,
+                column_names=column_names,
+                rag_ctx=rag_ctx,
+                question=question,
+                validation_status="failed",
+                observation=observation,
+            )
         relevant = _relevant_steps(rag_ctx)
-        planner_hint = str(exc) if str(exc) != "The request cannot be handled with the supported transformations." else None
+        planner_hint = msg if msg != "The request cannot be handled with the supported transformations." else None
         raise WorkflowValidationError(
             "The planner could not build a workflow for this query. "
             "The request may be outside the supported transformation scope.",
@@ -443,14 +467,26 @@ def _clarification_response(
 
 def _explicit_missing_column(query: str, column_names: list[str]) -> str | None:
     available = set(column_names)
-    patterns = [r"\bwhere\s+([A-Za-z_][A-Za-z0-9_]*)\b"]
+    available_lower = {c.lower() for c in column_names}
+    identifier = r"([\w]+)"
+    patterns = [
+        r"\bwhere\s+" + identifier + r"\b",
+        r"(?:sort(?:ed)?\s+by|order\s+by)\s+" + identifier + r"\b",
+        identifier + r"\s*(?:大于等于|小于等于|不等于|大于|小于|等于|高于|低于)",
+        r"(?:按|根据)\s*" + identifier + r"\s*(?:排序|降序|升序|排列)",
+    ]
     for pattern in patterns:
         match = re.search(pattern, query, flags=re.IGNORECASE)
         if match:
             col = match.group(1)
-            if col not in available:
+            if col not in available and col.lower() not in available_lower:
                 return col
     return None
+
+
+def _extract_column_from_error(msg: str) -> str | None:
+    match = re.search(r"[Cc]olumn ['\"]?([\w]+)['\"]?", msg)
+    return match.group(1) if match else None
 
 
 def _relevant_steps(rag_ctx) -> list[dict]:
