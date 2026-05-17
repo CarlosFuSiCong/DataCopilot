@@ -213,3 +213,135 @@ def test_plan_raises_planner_error_on_empty_choices():
         mock_settings.llm_max_tokens = 512
         with pytest.raises(PlannerError, match="unexpected response structure"):
             plan("test", SAMPLE_CTX, client=mock_client)
+
+
+# ---------------------------------------------------------------------------
+# Focused planner tests: pivot_table, trim_text, extract_text, date_diff
+# ---------------------------------------------------------------------------
+
+
+class TestComplexToolParsing:
+    """Verify _parse_steps handles complex transformation types correctly.
+
+    These tests cover the contract between the LLM output and the step models:
+    valid responses parse cleanly; missing required fields raise ClarificationNeeded
+    rather than an opaque PlannerError.
+    """
+
+    # --- pivot_table ---
+
+    def test_parse_valid_pivot_table(self):
+        raw = json.dumps({"steps": [
+            {"type": "pivot_table", "index": ["region"], "values": "amount", "agg": "sum"}
+        ]})
+        steps = _parse_steps(raw)
+        assert steps[0].type == "pivot_table"
+
+    def test_parse_pivot_table_with_columns_field(self):
+        raw = json.dumps({"steps": [
+            {"type": "pivot_table", "index": ["region"], "columns": "category", "values": "amount", "agg": "mean"}
+        ]})
+        steps = _parse_steps(raw)
+        assert steps[0].type == "pivot_table"
+
+    def test_pivot_table_missing_index_asks_clarification(self):
+        raw = json.dumps({"steps": [{"type": "pivot_table", "values": "amount", "agg": "sum"}]})
+        with pytest.raises(ClarificationNeeded, match="index"):
+            _parse_steps(raw)
+
+    def test_pivot_table_missing_values_asks_clarification(self):
+        raw = json.dumps({"steps": [{"type": "pivot_table", "index": ["region"], "agg": "sum"}]})
+        with pytest.raises(ClarificationNeeded, match="values"):
+            _parse_steps(raw)
+
+    def test_pivot_table_missing_agg_asks_clarification(self):
+        raw = json.dumps({"steps": [{"type": "pivot_table", "index": ["region"], "values": "amount"}]})
+        with pytest.raises(ClarificationNeeded, match="agg"):
+            _parse_steps(raw)
+
+    # --- trim_text ---
+
+    def test_parse_valid_trim_text(self):
+        raw = json.dumps({"steps": [{"type": "trim_text", "column": "customer_name"}]})
+        steps = _parse_steps(raw)
+        assert steps[0].type == "trim_text"
+
+    def test_parse_trim_text_with_collapse_whitespace(self):
+        raw = json.dumps({"steps": [{"type": "trim_text", "column": "notes", "collapse_whitespace": True}]})
+        steps = _parse_steps(raw)
+        assert steps[0].type == "trim_text"
+
+    def test_trim_text_missing_column_asks_clarification(self):
+        raw = json.dumps({"steps": [{"type": "trim_text"}]})
+        with pytest.raises(ClarificationNeeded, match="column"):
+            _parse_steps(raw)
+
+    # --- extract_text ---
+
+    def test_parse_valid_extract_text(self):
+        raw = json.dumps({"steps": [
+            {"type": "extract_text", "column": "order_code", "pattern": r"([A-Z]+)-\d+",
+             "new_column": "order_prefix"}
+        ]})
+        steps = _parse_steps(raw)
+        assert steps[0].type == "extract_text"
+
+    def test_extract_text_missing_pattern_asks_clarification(self):
+        raw = json.dumps({"steps": [
+            {"type": "extract_text", "column": "order_code", "new_column": "order_prefix"}
+        ]})
+        with pytest.raises(ClarificationNeeded, match="pattern"):
+            _parse_steps(raw)
+
+    def test_extract_text_missing_new_column_asks_clarification(self):
+        raw = json.dumps({"steps": [
+            {"type": "extract_text", "column": "order_code", "pattern": r"(\d+)"}
+        ]})
+        with pytest.raises(ClarificationNeeded, match="new_column"):
+            _parse_steps(raw)
+
+    def test_extract_text_missing_column_asks_clarification(self):
+        raw = json.dumps({"steps": [
+            {"type": "extract_text", "pattern": r"(\d+)", "new_column": "num"}
+        ]})
+        with pytest.raises(ClarificationNeeded, match="column"):
+            _parse_steps(raw)
+
+    # --- date_diff ---
+
+    def test_parse_valid_date_diff(self):
+        raw = json.dumps({"steps": [
+            {"type": "date_diff", "start_column": "order_date",
+             "end_column": "ship_date", "new_column": "ship_days"}
+        ]})
+        steps = _parse_steps(raw)
+        assert steps[0].type == "date_diff"
+
+    def test_parse_date_diff_with_unit_and_errors(self):
+        raw = json.dumps({"steps": [
+            {"type": "date_diff", "start_column": "order_date", "end_column": "ship_date",
+             "new_column": "ship_days", "unit": "days", "errors": "coerce"}
+        ]})
+        steps = _parse_steps(raw)
+        assert steps[0].type == "date_diff"
+
+    def test_date_diff_missing_start_column_asks_clarification(self):
+        raw = json.dumps({"steps": [
+            {"type": "date_diff", "end_column": "ship_date", "new_column": "ship_days"}
+        ]})
+        with pytest.raises(ClarificationNeeded, match="start_column"):
+            _parse_steps(raw)
+
+    def test_date_diff_missing_end_column_asks_clarification(self):
+        raw = json.dumps({"steps": [
+            {"type": "date_diff", "start_column": "order_date", "new_column": "ship_days"}
+        ]})
+        with pytest.raises(ClarificationNeeded, match="end_column"):
+            _parse_steps(raw)
+
+    def test_date_diff_missing_new_column_asks_clarification(self):
+        raw = json.dumps({"steps": [
+            {"type": "date_diff", "start_column": "order_date", "end_column": "ship_date"}
+        ]})
+        with pytest.raises(ClarificationNeeded, match="new_column"):
+            _parse_steps(raw)
