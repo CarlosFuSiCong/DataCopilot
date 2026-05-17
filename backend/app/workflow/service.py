@@ -17,6 +17,7 @@ from app.workflow.planning import parameter_resolver
 from app.workflow.planning import tool_router
 from app.workflow.planning.query_classifier import classify
 from app.workflow.policy import action_policy
+from app.workflow.policy import tool_policy
 from app.workflow.validation.workflow_validator import simulate_columns
 from app.core.exceptions import ClarificationNeeded, ExecutionError, PlannerError, WorkflowValidationError
 from app.models.chat import ChatRequest, ChatResponse
@@ -330,6 +331,53 @@ async def run_chat(request: ChatRequest) -> ChatResponse:
     # --- Stage 3: Validate + Preview/Confirm + Execute (common to both Level 1 & 2) ---
     steps = list(request.previous_steps) + new_steps
     planned_steps = [step.model_dump() for step in steps]
+
+    # --- Read-only fast path: skip preview/confirm, skip run persistence ---
+    # When every step in the workflow is a read-only analytical tool (e.g. profile_column,
+    # distribution_summary, compare_groups), we execute directly without the confirm gate
+    # and do not save a run artifact to the transformation history.
+    _step_types = [s.type for s in steps]
+    if _level1_done and tool_policy.all_read_only(_step_types):
+        try:
+            steps, _ro_attempts, _ro_val_status = workflow_runtime.validate_with_single_repair(
+                steps,
+                column_names,
+                query=request.query,
+                rag_ctx=rag_ctx,
+                planner_raw_output=planner_raw_output,
+            )
+            planned_steps = [step.model_dump() for step in steps]
+            execution_result = executor_service.execute(steps, content)
+            explanation = result_explainer.explain(
+                query=request.query,
+                planned_steps=planned_steps,
+                execution_result=execution_result,
+                dataset_summary=rag_ctx.dataset_summary.model_dump(),
+            )
+            logger.info(
+                "Read-only fast path: tool=%s steps=%d rows=%d",
+                route_decision.selected_tool if route_decision else "?",
+                len(steps),
+                execution_result.row_count,
+            )
+            return ChatResponse(
+                query=request.query,
+                planned_steps=planned_steps,
+                step_results=[],
+                has_warnings=False,
+                has_errors=False,
+                rag_context=rag_ctx,
+                explanation=explanation,
+                execution_result=execution_result,
+                run_id=None,
+                state="executed",
+                is_read_only=True,
+                ask_mode_type="analytical",
+                evidence_source="analytical_execution",
+                route_decision=route_decision.model_dump() if route_decision else None,
+            )
+        except Exception as exc:
+            logger.warning("Read-only fast path failed (%s) — falling through to normal Stage 3.", exc)
 
     try:
         steps, attempts, validation_status = workflow_runtime.validate_with_single_repair(
