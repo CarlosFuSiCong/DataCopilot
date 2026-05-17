@@ -53,3 +53,12 @@ class ChatResponse(BaseModel):
     context_summary: WorkflowContextSummary | None = None
     # RouteDecision from the query classifier; included for traceability.
     route_decision: dict[str, Any] | None = None
+    # Set to True for read-only analytical results (profile, distribution, etc.)
+    # that do not mutate the dataset state and are not saved to the run history.
+    is_read_only: bool = False
+    # Sub-type of an Ask Mode response: "schema_overview", "column_detail",
+    # "dataset_overview", "analytical", or None for mutating workflow responses.
+    ask_mode_type: str | None = None
+    # Where the answer was grounded: "schema", "analytical_execution",
+    # "workflow_execution", or None.
+    evidence_source: str | None = None
