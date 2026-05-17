@@ -237,7 +237,7 @@ def validate_slots(
     # 2. Required slots for the intent
     required = _REQUIRED_SLOTS.get(intent, [])
     slot_dict = slots.model_dump()
-    missing = [r for r in required if not slot_dict.get(r)]
+    missing = [r for r in required if slot_dict.get(r) is None]
     if missing:
         return _missing_slot(missing, intent)
 

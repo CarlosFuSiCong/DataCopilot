@@ -22,6 +22,35 @@ _STEP_DEFAULTS: dict[str, dict[str, Any]] = {
     "trim_text": {},
 }
 
+# Required fields per step type, checked after _STEP_DEFAULTS are applied.
+# Fields with a runtime default in _STEP_DEFAULTS are excluded here because
+# the resolver fills them before this check runs.
+_REQUIRED_FIELDS: dict[str, list[str]] = {
+    "select_columns": ["columns"],
+    "filter_rows": ["column", "operator", "value"],
+    "group_by": ["column", "target", "agg"],
+    "sort_values": ["column"],
+    "rename_columns": ["mapping"],
+    "derive_column": ["new_column", "column", "operator"],
+    "date_extract": ["column", "part", "new_column"],
+    "drop_columns": ["columns"],
+    "fill_missing_values": ["column"],
+    "replace_values": ["column", "mapping"],
+    "cast_column": ["column", "target_type"],
+    "conditional_column": ["new_column", "condition_column", "operator", "value", "true_value", "false_value"],
+    "bin_column": ["column", "new_column", "bins"],
+    "pivot_table": ["index", "values", "agg"],
+    "trim_text": ["column"],
+    "normalize_text": ["column"],
+    "extract_text": ["column", "pattern", "new_column"],
+    "date_diff": ["start_column", "end_column", "new_column"],
+    "profile_column": ["column"],
+    "inspect_unique_values": ["column"],
+    "summarize_numeric_column": ["column"],
+    "compare_groups": ["group_column", "value_column"],
+    "distribution_summary": ["column"],
+}
+
 
 def resolve_parameters(
     step: dict[str, Any],
@@ -46,6 +75,10 @@ def resolve_parameters(
         if field not in resolved:
             resolved[field] = default
             defaulted_fields.append(field)
+
+    for field in _REQUIRED_FIELDS.get(step_type, []):
+        if field not in resolved:
+            missing_required_fields.append(field)
 
     for field in _COLUMN_FIELDS:
         if field not in resolved:

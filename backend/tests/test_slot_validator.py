@@ -315,3 +315,41 @@ class TestSlotValidationOutcomeModel:
         )
         assert result.blocked is False
         assert result.needs_clarification is True
+
+
+# --------------------------------------------------------------------------- #
+# Bug regression: falsy value slot check
+# Previously `if not slot_dict.get(r)` treated any falsy value (e.g. empty
+# string) as a missing required slot.  The fix uses `is None` so only absent
+# slots trigger clarification.
+# --------------------------------------------------------------------------- #
+
+class TestFalsyValueSlotCheck:
+    def test_empty_string_value_is_not_treated_as_missing(self):
+        # value="" is a valid filter target (match empty strings).
+        # The old falsy check would wrongly flag it as missing and request clarification.
+        result = validate_slots(
+            _extraction(intent="filter", column="status", operator="eq", value=""),
+            ORDERS_PROFILE,
+        )
+        assert result.needs_clarification is False, (
+            "Empty string value should not be reported as a missing slot"
+        )
+
+    def test_none_value_is_correctly_treated_as_missing(self):
+        # Actual None should still be reported as missing.
+        result = validate_slots(
+            _extraction(intent="filter", column="amount", operator="gt", value=None),
+            ORDERS_PROFILE,
+        )
+        assert result.needs_clarification is True
+
+    def test_zero_string_value_is_not_treated_as_missing(self):
+        # "0" is a valid numeric filter value; falsy check would mishandle it.
+        result = validate_slots(
+            _extraction(intent="filter", column="amount", operator="eq", value="0"),
+            ORDERS_PROFILE,
+        )
+        assert result.needs_clarification is False, (
+            'String "0" value should not be reported as a missing slot'
+        )

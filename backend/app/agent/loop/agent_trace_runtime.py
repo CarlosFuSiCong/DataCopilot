@@ -21,6 +21,7 @@ def make_agent_trace(
     action_for_event,
     stop_reason_for_event,
     cancelled_reason: str | None = None,
+    max_iterations: int = DEFAULT_MAX_AGENT_ITERATIONS,
 ) -> AgentTrace:
     """Build an AgentTrace without copying raw dataset preview rows."""
     iterations = [
@@ -35,7 +36,6 @@ def make_agent_trace(
     if state == "cancelled":
         iterations.append(_cancel_iteration(len(iterations), events[-1] if events else None, cancelled_reason))
 
-    max_iterations = max(DEFAULT_MAX_AGENT_ITERATIONS, len(iterations) or 1)
     last_iteration = iterations[-1] if iterations else None
     workflow_summary = None
     if events and events[-1].context_summary:

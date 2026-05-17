@@ -120,3 +120,59 @@ class TestIterationInputOtherFields:
     def test_workflow_context_summary_none_when_absent(self):
         result = _iteration_input(_response(context_summary=None))
         assert result["workflow_context_summary"] is None
+
+
+# --------------------------------------------------------------------------- #
+# make_agent_trace — max_iterations contract
+# Bug regression: max_iterations was previously computed as
+# max(DEFAULT_MAX_AGENT_ITERATIONS, len(iterations) or 1), which grows with
+# the actual iteration count and breaks the max_iterations_reached contract.
+# --------------------------------------------------------------------------- #
+
+
+from app.agent.loop.agent_trace_runtime import make_agent_trace
+from app.agent.loop.agent_models import DEFAULT_MAX_AGENT_ITERATIONS
+
+
+class TestMakeAgentTraceMaxIterations:
+    def _no_events_trace(self, **kwargs):
+        return make_agent_trace(
+            state="completed",
+            events=[],
+            action_for_event=lambda r: "stop_with_result",
+            stop_reason_for_event=lambda r: None,
+            **kwargs,
+        )
+
+    def test_default_max_iterations_is_constant(self):
+        trace = self._no_events_trace()
+        assert trace.max_iterations == DEFAULT_MAX_AGENT_ITERATIONS
+
+    def test_summary_max_iterations_matches_trace(self):
+        trace = self._no_events_trace()
+        assert trace.summary.max_iterations == trace.max_iterations
+
+    def test_explicit_max_iterations_is_respected(self):
+        trace = self._no_events_trace(max_iterations=5)
+        assert trace.max_iterations == 5
+        assert trace.summary.max_iterations == 5
+
+    def test_max_iterations_does_not_shrink_to_default_when_configured_higher(self):
+        # Bug regression: old code used max(DEFAULT_MAX_AGENT_ITERATIONS, len(iterations) or 1).
+        # If configured max is 5 but only 1 event ran, old code would report DEFAULT (3),
+        # not the configured 5 — making the trace lie about the actual configured limit.
+        events = [_response(query="q0")]
+        trace = make_agent_trace(
+            state="completed",
+            events=events,
+            action_for_event=lambda r: "stop_with_result",
+            stop_reason_for_event=lambda r: "done",
+            max_iterations=5,
+        )
+        assert trace.max_iterations == 5
+        assert trace.summary.max_iterations == 5
+
+    def test_trace_and_summary_max_iterations_always_consistent(self):
+        for configured in (1, 3, 5, 10):
+            trace = self._no_events_trace(max_iterations=configured)
+            assert trace.max_iterations == trace.summary.max_iterations == configured

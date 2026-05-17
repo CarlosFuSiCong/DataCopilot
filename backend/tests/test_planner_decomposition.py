@@ -265,8 +265,76 @@ class TestParameterResolver:
 
 
 # ---------------------------------------------------------------------------
-# WorkflowBuilder
+# Bug regression: missing_required_fields was never populated
+# Previously resolve_parameters initialized `missing_required_fields = []`
+# but never added to it, always returning an empty list regardless of input.
 # ---------------------------------------------------------------------------
+
+class TestParameterResolverMissingRequiredFields:
+    def test_complete_filter_step_has_no_missing_fields(self):
+        step = {"type": "filter_rows", "column": "amount", "operator": ">", "value": 100}
+        result = resolve_parameters(step, ["amount"])
+        assert result.missing_required_fields == []
+
+    def test_filter_step_missing_operator_is_reported(self):
+        step = {"type": "filter_rows", "column": "amount", "value": 100}
+        result = resolve_parameters(step, ["amount"])
+        assert "operator" in result.missing_required_fields
+
+    def test_filter_step_missing_value_is_reported(self):
+        step = {"type": "filter_rows", "column": "amount", "operator": ">"}
+        result = resolve_parameters(step, ["amount"])
+        assert "value" in result.missing_required_fields
+
+    def test_filter_step_missing_column_is_reported(self):
+        step = {"type": "filter_rows", "operator": ">", "value": 100}
+        result = resolve_parameters(step, ["amount"])
+        assert "column" in result.missing_required_fields
+
+    def test_group_by_step_missing_target_is_reported(self):
+        step = {"type": "group_by", "column": "region", "agg": "sum"}
+        result = resolve_parameters(step, ["region", "sales"])
+        assert "target" in result.missing_required_fields
+
+    def test_group_by_step_complete_has_no_missing_fields(self):
+        step = {"type": "group_by", "column": "region", "target": "sales", "agg": "sum"}
+        result = resolve_parameters(step, ["region", "sales"])
+        assert result.missing_required_fields == []
+
+    def test_sort_values_missing_column_is_reported(self):
+        step = {"type": "sort_values"}
+        result = resolve_parameters(step, ["amount"])
+        assert "column" in result.missing_required_fields
+
+    def test_sort_values_default_ascending_does_not_appear_as_missing(self):
+        # ascending has a runtime default — must NOT appear in missing_required_fields
+        step = {"type": "sort_values", "column": "amount"}
+        result = resolve_parameters(step, ["amount"])
+        assert "ascending" not in result.missing_required_fields
+        assert result.missing_required_fields == []
+
+    def test_limit_rows_n_default_applied_before_missing_check(self):
+        # n is filled by _STEP_DEFAULTS before the missing check runs
+        step = {"type": "limit_rows"}
+        result = resolve_parameters(step, [])
+        assert result.missing_required_fields == []
+
+    def test_compare_groups_missing_value_column_is_reported(self):
+        step = {"type": "compare_groups", "group_column": "region"}
+        result = resolve_parameters(step, ["region", "sales"])
+        assert "value_column" in result.missing_required_fields
+
+    def test_unknown_step_type_has_no_missing_fields(self):
+        step = {"type": "custom_step", "foo": "bar"}
+        result = resolve_parameters(step, [])
+        assert result.missing_required_fields == []
+
+    def test_missing_fields_and_column_errors_are_independent(self):
+        # A step can have both a missing required field AND a bad column
+        step = {"type": "filter_rows", "column": "nonexistent", "operator": ">"}
+        result = resolve_parameters(step, ["amount"])
+        assert "value" in result.missing_required_fields
+        assert result.column_errors  # nonexistent column is separately reported
 
 class TestWorkflowBuilder:
     def test_build_from_raw_returns_typed_steps(self):
