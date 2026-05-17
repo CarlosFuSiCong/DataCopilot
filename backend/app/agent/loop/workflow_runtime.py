@@ -4,6 +4,7 @@ from typing import Any
 
 from app.core.exceptions import WorkflowValidationError
 from app.agent.observation.models import ObservationSummary
+from app.agent.planning.tool_selector import suggest_tools_from_observation
 from app.models.runtime_trace import (
     AttemptSummary,
     WorkflowAttempt,
@@ -107,6 +108,11 @@ def make_context_summary(
     warning_count, error_count, _ = _preview_counts(preview_result)
     columns = context.current_schema
     row_count = int(context.dataset_profile.get("row_count", 0))
+    tool_suggestions = (
+        [s.model_dump() for s in suggest_tools_from_observation(observation)]
+        if observation and observation.signals
+        else []
+    )
     return WorkflowContextSummary(
         query=context.query,
         dataset_hash=context.dataset_hash,
@@ -123,6 +129,7 @@ def make_context_summary(
         warning_count=warning_count,
         error_count=error_count,
         last_observation=observation,
+        tool_suggestions=tool_suggestions,
     )
 
 
