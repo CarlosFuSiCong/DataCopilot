@@ -23,8 +23,18 @@ class ToolSelectionResult(BaseModel):
     # Tool type names ordered by relevance, highest first.
     candidate_tools: list[str] = Field(default_factory=list)
     selected_tool: str | None = None
-    # Raw score per tool type from retrieved docs + intent bonus.
+    # Raw score per tool type from retrieved docs + intent + observation bonuses.
     scores: dict[str, float] = Field(default_factory=dict)
+    # Tools recommended because of observation signals (may not appear in retrieved docs).
+    observation_suggestions: list["ObservationToolSuggestion"] = Field(default_factory=list)
+
+
+class ObservationToolSuggestion(BaseModel):
+    """One tool recommended by an observation signal."""
+
+    tool_type: str
+    signal: str
+    reason: str
 
 
 class ParameterResolutionResult(BaseModel):
