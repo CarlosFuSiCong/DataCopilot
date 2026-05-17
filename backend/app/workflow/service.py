@@ -13,19 +13,39 @@ from app.workflow.policy import action_policy
 from app.workflow.validation.workflow_validator import simulate_columns
 from app.core.exceptions import ClarificationNeeded, ExecutionError, PlannerError, WorkflowValidationError
 from app.models.chat import ChatRequest, ChatResponse
+from app.models.clarification_context import (
+    ClarificationContext,
+    new_pending_context,
+    planner_query_with_context,
+    resolve_context,
+    validate_scope,
+)
 from app.models.workflow_execution import ExecutionResult
 from app.models.workflow_responses import ConfirmResponse
 from app.models.workflow_transport import ConfirmRequest
 from app.services import dataset_store, run_store
 from app.services.profiler import get_column_names, profile
+from app.workflow.nlu.slot_extractor import extract_slots
+from app.workflow.nlu.slot_validator import validate_slots
 
 logger = logging.getLogger(__name__)
+
+_SLOT_MIN_CONFIDENCE = 0.7
+
+_INTENT_TO_STEP_TYPE: dict[str, str] = {
+    "filter": "filter_rows",
+    "sort": "sort_values",
+    "group_aggregate": "group_by",
+}
 
 _SUPPORTED_STEPS = [
     "filter_rows", "select_columns", "group_by", "sort_values",
     "rename_columns", "remove_missing_values", "fill_missing_values",
     "drop_columns", "derive_column", "date_extract", "limit_rows",
     "generate_summary",
+    "profile_column", "inspect_unique_values", "summarize_numeric_column",
+    "compare_groups", "correlation_summary", "distribution_summary",
+    "suggest_analysis_steps",
 ]
 _EXAMPLE_QUERIES = [
     "Filter rows where amount > 1000",
@@ -34,6 +54,8 @@ _EXAMPLE_QUERIES = [
     "Remove rows with missing values",
     "Extract the month from the order_date column",
     "Add a new column total = amount * quantity",
+    "Profile the amount column",
+    "Compare average amount by region",
 ]
 
 
@@ -42,11 +64,14 @@ async def run_chat(request: ChatRequest) -> ChatResponse:
     content = await dataset_store.load(request.dataset_id)
     dataset_profile = profile(content, filename="<cached>")
     column_names = [col.name for col in dataset_profile.columns]
+    clarification = _resolve_request_clarification(request)
 
-    explicit_missing_col = _explicit_missing_column(request.query, column_names)
-    planner_query = request.query
-    if request.clarification_context:
-        planner_query = f"{request.query}\nUser clarification: {request.clarification_context}"
+    explicit_missing_col = (
+        None
+        if clarification and clarification.user_answer
+        else _explicit_missing_column(request.query, column_names)
+    )
+    planner_query = planner_query_with_context(request.query, clarification)
 
     rag_ctx = await rag_service.build_context(
         query=planner_query,
@@ -75,6 +100,7 @@ async def run_chat(request: ChatRequest) -> ChatResponse:
             f"Column '{explicit_missing_col}' is not in this dataset.",
             workflow_state="needs_clarification",
         )
+        step_type = _detect_step_type_from_query(request.query)
         return _clarification_response(
             request=request,
             content=content,
@@ -87,11 +113,27 @@ async def run_chat(request: ChatRequest) -> ChatResponse:
             ),
             validation_status="failed",
             observation=observation,
+            affected_step={"type": step_type, "column": explicit_missing_col} if step_type else None,
+        )
+
+    slot_context = _run_slot_extraction(request.query, dataset_profile, clarification)
+    if isinstance(slot_context, _SlotClarificationSignal):
+        return _clarification_response(
+            request=request,
+            content=content,
+            dataset_profile=dataset_profile,
+            column_names=column_names,
+            rag_ctx=rag_ctx,
+            question=slot_context.question,
+            validation_status="failed",
+            observation=slot_context.observation,
+            affected_step=slot_context.affected_step,
+            clarification_type="slot_validation",
         )
 
     try:
         workflow_planner.last_raw_output = None
-        new_steps = workflow_planner.plan(query=planner_query, ctx=rag_ctx)
+        new_steps = workflow_planner.plan(query=planner_query, ctx=rag_ctx, slot_context=slot_context)
         planner_raw_output = workflow_planner.last_raw_output
     except ClarificationNeeded as exc:
         logger.info("Clarification needed for query=%r: %s", request.query, exc.question)
@@ -102,10 +144,37 @@ async def run_chat(request: ChatRequest) -> ChatResponse:
             column_names=column_names,
             rag_ctx=rag_ctx,
             question=exc.question,
+            clarification_type="planning",
         )
     except PlannerError as exc:
+        msg = str(exc)
+        if "does not exist in the dataset" in msg or "not found" in msg.lower():
+            missing_col = _extract_column_from_error(msg) or _explicit_missing_column(request.query, column_names)
+            available = ", ".join(column_names)
+            observation = signal_rules.from_validation_failure(
+                msg,
+                workflow_state="needs_clarification",
+            )
+            step_type = _detect_step_type_from_query(request.query)
+            question = (
+                f"Column '{missing_col}' is not in this dataset. "
+                f"Which available column should I use instead? Available columns: {available}."
+                if missing_col
+                else f"{msg} Which available column should I use instead? Available columns: {available}."
+            )
+            return _clarification_response(
+                request=request,
+                content=content,
+                dataset_profile=dataset_profile,
+                column_names=column_names,
+                rag_ctx=rag_ctx,
+                question=question,
+                validation_status="failed",
+                observation=observation,
+                affected_step={"type": step_type, "column": missing_col} if step_type and missing_col else None,
+            )
         relevant = _relevant_steps(rag_ctx)
-        planner_hint = str(exc) if str(exc) != "The request cannot be handled with the supported transformations." else None
+        planner_hint = msg if msg != "The request cannot be handled with the supported transformations." else None
         raise WorkflowValidationError(
             "The planner could not build a workflow for this query. "
             "The request may be outside the supported transformation scope.",
@@ -404,9 +473,17 @@ def _clarification_response(
     attempts: list = None,
     validation_status: str | None = None,
     observation: ObservationSummary | None = None,
+    affected_step: dict | None = None,
+    clarification_type: str = "planning",
 ) -> ChatResponse:
     steps = current_steps or []
     trace_attempts = attempts or []
+    clarification = new_pending_context(
+        dataset_id=request.dataset_id,
+        original_query=request.query,
+        question=question,
+        affected_step=affected_step,
+    )
     context = workflow_runtime.build_context(
         dataset_id=request.dataset_id,
         content=content,
@@ -416,7 +493,7 @@ def _clarification_response(
         previous_steps=request.previous_steps,
         current_steps=steps,
         rag_ctx=rag_ctx,
-        clarification_answer=request.clarification_context,
+        clarification_answer=_clarification_answer(request.clarification_context),
         execution_boundary="preview",
     )
     trace = workflow_runtime.make_trace(
@@ -435,6 +512,8 @@ def _clarification_response(
         rag_context=rag_ctx,
         needs_clarification=True,
         clarification_question=question,
+        clarification_type=clarification_type,
+        clarification_context=clarification,
         state="needs_clarification",
         attempts=trace_attempts,
         context_summary=trace.context_summary,
@@ -443,13 +522,127 @@ def _clarification_response(
 
 def _explicit_missing_column(query: str, column_names: list[str]) -> str | None:
     available = set(column_names)
-    patterns = [r"\bwhere\s+([A-Za-z_][A-Za-z0-9_]*)\b"]
+    available_lower = {c.lower() for c in column_names}
+    identifier = r"([\w]+)"
+    patterns = [
+        r"\bwhere\s+" + identifier + r"\b",
+        r"(?:sort(?:ed)?\s+by|order\s+by)\s+" + identifier + r"\b",
+        identifier + r"\s*(?:大于等于|小于等于|不等于|大于|小于|等于|高于|低于)",
+        r"(?:按|根据)\s*" + identifier + r"\s*(?:排序|降序|升序|排列)",
+    ]
     for pattern in patterns:
         match = re.search(pattern, query, flags=re.IGNORECASE)
         if match:
             col = match.group(1)
-            if col not in available:
+            if col not in available and col.lower() not in available_lower:
                 return col
+    return None
+
+
+def _extract_column_from_error(msg: str) -> str | None:
+    match = re.search(r"[Cc]olumn ['\"]?([\w]+)['\"]?", msg)
+    return match.group(1) if match else None
+
+
+def _clarification_answer(value: str | ClarificationContext | None) -> str | None:
+    if isinstance(value, ClarificationContext):
+        return value.user_answer or value.resolved_parameter
+    return value
+
+
+def _resolve_request_clarification(request: ChatRequest) -> ClarificationContext | None:
+    clarification = resolve_context(
+        request.clarification_context,
+        dataset_id=request.dataset_id,
+        original_query=request.query,
+    )
+    if clarification and not validate_scope(
+        clarification,
+        dataset_id=request.dataset_id,
+        original_query=request.query,
+    ):
+        raise WorkflowValidationError(
+            "Clarification context does not belong to this dataset and query.",
+            error_code="clarification_context_scope_mismatch",
+            context={
+                "dataset_id": request.dataset_id,
+                "original_query": request.query,
+                "clarification_dataset_id": clarification.dataset_id,
+                "clarification_original_query": clarification.original_query,
+            },
+        )
+    return clarification
+
+
+def _run_slot_extraction(
+    query: str,
+    dataset_profile,
+    clarification: ClarificationContext | None,
+):
+    """Run slot extraction and schema validation before workflow planning."""
+    if clarification and clarification.user_answer:
+        return None
+
+    try:
+        slot_output = extract_slots(query)
+    except Exception:
+        logger.debug("Slot extraction raised; falling back to planner-only path.", exc_info=True)
+        return None
+
+    if slot_output.parse_error or slot_output.result.intent == "unknown":
+        return None
+    if slot_output.result.confidence < _SLOT_MIN_CONFIDENCE:
+        return None
+
+    validation = validate_slots(slot_output.result, dataset_profile)
+
+    if validation.blocked:
+        return None
+
+    if validation.needs_clarification:
+        question = validation.clarification_question or "Please clarify your request."
+        slots = slot_output.result.slots
+        step_type = _INTENT_TO_STEP_TYPE.get(slot_output.result.intent)
+        affected_step = {"type": step_type, "column": slots.column} if step_type and slots.column else None
+        observation = signal_rules.from_validation_failure(
+            question,
+            workflow_state="needs_clarification",
+        )
+        return _SlotClarificationSignal(
+            question=question,
+            affected_step=affected_step,
+            observation=observation,
+        )
+
+    if validation.is_valid:
+        return slot_output.result
+
+    return None
+
+
+class _SlotClarificationSignal:
+    """Sentinel returned when slot validation needs user input."""
+
+    __slots__ = ("question", "affected_step", "observation")
+
+    def __init__(self, *, question: str, affected_step: dict | None, observation: ObservationSummary):
+        self.question = question
+        self.affected_step = affected_step
+        self.observation = observation
+
+
+_SORT_PATTERN = re.compile(r"(?:sort(?:ed)?\s+by|order\s+by|按|根据).*", re.IGNORECASE)
+_GROUP_PATTERN = re.compile(r"(?:group\s+by|grouped\s+by|汇总|分组)", re.IGNORECASE)
+_FILTER_PATTERN = re.compile(r"(?:\bwhere\b|filter|过滤|删除|移除|保留)", re.IGNORECASE)
+
+
+def _detect_step_type_from_query(query: str) -> str | None:
+    if _SORT_PATTERN.search(query):
+        return "sort_values"
+    if _GROUP_PATTERN.search(query):
+        return "group_by"
+    if _FILTER_PATTERN.search(query):
+        return "filter_rows"
     return None
 
 
@@ -486,7 +679,7 @@ def _build_trace_after_preview(
         previous_steps=request.previous_steps,
         current_steps=steps,
         rag_ctx=rag_ctx,
-        clarification_answer=request.clarification_context,
+        clarification_answer=_clarification_answer(request.clarification_context),
         execution_boundary=execution_boundary,
     )
     final_attempt = workflow_runtime.make_attempt(

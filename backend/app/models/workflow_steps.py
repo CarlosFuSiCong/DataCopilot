@@ -194,6 +194,54 @@ class DateDiffStep(BaseModel):
     errors: Literal["raise", "coerce"] = "raise"
 
 
+# --------------------------------------------------------------------------- #
+# Analytical / diagnostic steps (Task 7) — read-only, do not modify data
+# --------------------------------------------------------------------------- #
+
+class ProfileColumnStep(BaseModel):
+    """Return a stat/value summary of a single column."""
+    type: Literal["profile_column"]
+    column: str
+
+
+class InspectUniqueValuesStep(BaseModel):
+    """Return value counts for a column (top N by frequency)."""
+    type: Literal["inspect_unique_values"]
+    column: str
+    max_values: int = Field(default=20, ge=1, le=200)
+
+
+class SummarizeNumericColumnStep(BaseModel):
+    """Return descriptive statistics for a numeric column, including outlier hints."""
+    type: Literal["summarize_numeric_column"]
+    column: str
+
+
+class CompareGroupsStep(BaseModel):
+    """Compare a numeric column across groups of a categorical column."""
+    type: Literal["compare_groups"]
+    group_column: str
+    value_column: str
+    agg: Literal["sum", "mean", "count", "min", "max"] = "mean"
+
+
+class CorrelationSummaryStep(BaseModel):
+    """Return pairwise correlations between numeric columns (long format)."""
+    type: Literal["correlation_summary"]
+    columns: list[str] = Field(default_factory=list)
+
+
+class DistributionSummaryStep(BaseModel):
+    """Return distribution stats for a numeric column: quartiles, skewness, outlier hints."""
+    type: Literal["distribution_summary"]
+    column: str
+
+
+class SuggestAnalysisStepsStep(BaseModel):
+    """Inspect the dataset and emit next-step suggestions as a message (no data change)."""
+    type: Literal["suggest_analysis_steps"]
+
+
 WorkflowStep = Annotated[
     Union[
         RemoveMissingValuesStep,
@@ -218,6 +266,13 @@ WorkflowStep = Annotated[
         NormalizeTextStep,
         ExtractTextStep,
         DateDiffStep,
+        ProfileColumnStep,
+        InspectUniqueValuesStep,
+        SummarizeNumericColumnStep,
+        CompareGroupsStep,
+        CorrelationSummaryStep,
+        DistributionSummaryStep,
+        SuggestAnalysisStepsStep,
     ],
     Field(discriminator="type"),
 ]

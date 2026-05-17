@@ -1,0 +1,22 @@
+{
+  "doc_type": "transformation",
+  "step_type": "profile_column",
+  "issue_code": null,
+  "source_path": "transformations/profile_column.json",
+  "type": "profile_column",
+  "title": "profile_column: return a stat/value profile of a single column",
+  "description": "Inspect a single column and return its dtype, missing rate, unique value count, top values, and min/max. Does not modify the dataset. Use before filtering or grouping to understand column content.",
+  "keywords": [
+    "profile", "inspect column", "column info", "dtype", "missing", "unique",
+    "top values", "min", "max", "describe column", "column statistics",
+    "列信息", "列概况", "缺失率", "唯一值", "描述列"
+  ],
+  "parameters": [
+    {"name": "column", "type": "string", "required": true, "description": "Name of the column to profile."}
+  ],
+  "example": {
+    "type": "profile_column",
+    "column": "amount"
+  },
+  "rag_note": "Returns a stat/value DataFrame. Does not change the dataset. Use to diagnose column quality or understand value distribution before applying a filter or group_by."
+}

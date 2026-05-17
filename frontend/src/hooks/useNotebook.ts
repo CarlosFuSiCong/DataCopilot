@@ -73,7 +73,14 @@ export function useNotebook(dataset: UploadResponse | null) {
         previous_steps: previousSteps.length > 0 ? previousSteps : undefined,
       })
       if (result.needs_clarification) {
-        appendCell({ id, query, status: 'clarifying', clarificationQuestion: result.clarification_question ?? '' })
+        appendCell({
+          id,
+          query,
+          status: 'clarifying',
+          clarificationQuestion: result.clarification_question ?? '',
+          clarificationType: result.clarification_type ?? null,
+          clarificationContext: result.clarification_context ?? null,
+        })
       } else if (result.execution_result !== null) {
         appendCell({ id, query, status: 'ok', result })
       } else {
@@ -94,25 +101,35 @@ export function useNotebook(dataset: UploadResponse | null) {
     appendCell({ ...cell, clarificationAnswer: answer })
 
     const id = nextId()
-    appendCell({ id, query: cell.query, status: 'loading' })
+    // Display the user's clarification answer as the follow-up cell query.
+    appendCell({ id, query: answer, status: 'loading' })
 
     try {
       const result = await sendChat({
         dataset_id: dataset.dataset_id,
-        query: cell.query,
-        clarification_context: answer,
+        query: cell.query,   // backend still receives the original query
+        clarification_context: cell.clarificationContext
+          ? { ...cell.clarificationContext, user_answer: answer }
+          : answer,
         previous_steps: previousSteps.length > 0 ? previousSteps : undefined,
       })
       if (result.needs_clarification) {
         // Another round of clarification needed.
-        appendCell({ id, query: cell.query, status: 'clarifying', clarificationQuestion: result.clarification_question ?? '' })
+        appendCell({
+          id,
+          query: answer,
+          status: 'clarifying',
+          clarificationQuestion: result.clarification_question ?? '',
+          clarificationType: result.clarification_type ?? null,
+          clarificationContext: result.clarification_context ?? null,
+        })
       } else if (result.execution_result !== null) {
-        appendCell({ id, query: cell.query, status: 'ok', result })
+        appendCell({ id, query: answer, status: 'ok', result })
       } else {
-        appendCell({ id, query: cell.query, status: 'preview', result })
+        appendCell({ id, query: answer, status: 'preview', result })
       }
     } catch (err) {
-      appendCell(errorCell({ id, query: cell.query }, err))
+      appendCell(errorCell({ id, query: answer }, err))
     }
   }
 

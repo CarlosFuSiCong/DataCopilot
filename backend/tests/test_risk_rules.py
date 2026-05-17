@@ -5,7 +5,9 @@ from app.workflow.observation import risk_rules
 from app.workflow.observation.risk_rules import (
     AFFECTS_MOST_ROWS,
     AFFECTS_THRESHOLD,
+    BULK_REMOVAL_THRESHOLD,
     EMPTY_OUTPUT,
+    LARGE_ROW_REMOVAL,
     NO_ROWS_MATCHED,
 )
 from app.models.workflow import StepIssue
@@ -122,6 +124,32 @@ def test_affects_most_rows_not_raised_when_affected_rate_is_none():
 
 
 # ---------------------------------------------------------------------------
+# large_row_removal
+# ---------------------------------------------------------------------------
+
+def test_large_row_removal_fires_when_filter_removes_more_than_threshold():
+    match_rate = round(1.0 - BULK_REMOVAL_THRESHOLD - 0.01, 4)
+    issues = _check(match_rate=match_rate, output_row_count=10)
+    assert LARGE_ROW_REMOVAL in _codes(issues)
+
+
+def test_large_row_removal_not_fired_at_boundary():
+    match_rate = round(1.0 - BULK_REMOVAL_THRESHOLD, 4)
+    issues = _check(match_rate=match_rate, output_row_count=10)
+    assert LARGE_ROW_REMOVAL not in _codes(issues)
+
+
+def test_large_row_removal_only_fires_for_filter_rows_step():
+    issues = risk_rules.check(
+        step_type="sort_values",
+        output_row_count=2,
+        match_rate=0.1,
+        affected_rate=None,
+    )
+    assert LARGE_ROW_REMOVAL not in [i.code for i in issues]
+
+
+# ---------------------------------------------------------------------------
 # Multiple issues in the same step
 # ---------------------------------------------------------------------------
 
@@ -133,7 +161,7 @@ def test_empty_output_and_no_rows_matched_both_fire():
 
 
 def test_no_issues_for_normal_step():
-    issues = _check(match_rate=0.5, output_row_count=5)
+    issues = _check(match_rate=0.8, output_row_count=5)
     assert issues == []
 
 
