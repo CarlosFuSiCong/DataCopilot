@@ -1,0 +1,19 @@
+{
+  "doc_type": "transformation",
+  "step_type": "suggest_analysis_steps",
+  "issue_code": null,
+  "source_path": "transformations/suggest_analysis_steps.json",
+  "type": "suggest_analysis_steps",
+  "title": "suggest_analysis_steps: inspect the dataset and emit next-step suggestions",
+  "description": "Analyze the dataset schema, column types, and missing values to produce a list of recommended analysis next steps. Does not modify the data. Use when the user asks for help on what to do next.",
+  "keywords": [
+    "suggest", "recommend", "what to do", "next steps", "explore", "start analysis",
+    "how to analyze", "what can I do", "analysis plan",
+    "建议", "下一步", "怎么分析", "推荐", "分析建议", "探索数据", "怎么做"
+  ],
+  "parameters": [],
+  "example": {
+    "type": "suggest_analysis_steps"
+  },
+  "rag_note": "Takes no parameters. Returns the original dataset unchanged. Suggestions are deterministic based on column types and missing value patterns. Should be used before deeper analysis, not after."
+}
