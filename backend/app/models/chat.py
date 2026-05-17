@@ -62,3 +62,6 @@ class ChatResponse(BaseModel):
     # Where the answer was grounded: "schema", "analytical_execution",
     # "workflow_execution", or None.
     evidence_source: str | None = None
+    # Suggested analysis directions for broad / ambiguous clarification requests.
+    # Each dict has: id, label, description, query, tool.
+    clarification_choices: list[dict[str, Any]] | None = None
