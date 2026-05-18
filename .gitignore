@@ -8,6 +8,7 @@ sample_data/
 .cursor/rules/
 
 # Versioned project contracts and lightweight engineering docs
+!/README.md
 !project-docs/
 !project-docs/*.md
 
