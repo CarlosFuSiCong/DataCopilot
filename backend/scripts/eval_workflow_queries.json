@@ -193,5 +193,56 @@
     "expected_output": null,
     "expected_outcome": "success",
     "notes": "MVP4 P2 date_diff case"
+  },
+  {
+    "id": "w20",
+    "demo_case": "MVP7-D04",
+    "query": "Check for missing values",
+    "expected_step_types": ["detect_missing_values"],
+    "expected_output": null,
+    "expected_outcome": "success",
+    "notes": "MVP7 demo path step 4: deterministic detect_missing_values diagnostic tool"
+  },
+  {
+    "id": "w21",
+    "demo_case": "MVP7-D06",
+    "query": "Compare average amount by region",
+    "expected_step_types": ["compare_groups"],
+    "expected_output": null,
+    "expected_outcome": "success",
+    "notes": "MVP7 demo path step 6: deterministic compare_groups tool"
+  },
+  {
+    "id": "w22",
+    "demo_case": "MVP7-D07",
+    "query": "Sort by revenue descending",
+    "expected_step_types": [],
+    "expected_output": null,
+    "expected_outcome": "clarification",
+    "notes": "MVP7 demo path step 7: column 'revenue' missing — must return clarification"
+  },
+  {
+    "id": "w23",
+    "demo_case": "MVP7-D08",
+    "query": "Sort by amount descending",
+    "expected_step_types": ["sort_values"],
+    "expected_output": {
+      "row_count": 30,
+      "column_count": 6
+    },
+    "expected_outcome": "success",
+    "notes": "MVP7 demo path step 8: corrected sort workflow after clarification"
+  },
+  {
+    "id": "w24",
+    "demo_case": "MVP7-D03",
+    "query": "Filter rows where amount > 1000",
+    "expected_step_types": ["filter_rows"],
+    "expected_output": {
+      "row_count": 8,
+      "column_count": 6
+    },
+    "expected_outcome": "success",
+    "notes": "MVP7 demo path: filter that triggers large_row_removal warning"
   }
 ]
