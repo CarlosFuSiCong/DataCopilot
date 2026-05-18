@@ -242,6 +242,11 @@ class SuggestAnalysisStepsStep(BaseModel):
     type: Literal["suggest_analysis_steps"]
 
 
+class DetectMissingValuesStep(BaseModel):
+    """Scan all columns for missing values and return a summary table sorted by missing_pct."""
+    type: Literal["detect_missing_values"]
+
+
 WorkflowStep = Annotated[
     Union[
         RemoveMissingValuesStep,
@@ -273,6 +278,7 @@ WorkflowStep = Annotated[
         CorrelationSummaryStep,
         DistributionSummaryStep,
         SuggestAnalysisStepsStep,
+        DetectMissingValuesStep,
     ],
     Field(discriminator="type"),
 ]
