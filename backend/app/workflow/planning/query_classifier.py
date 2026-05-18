@@ -77,9 +77,26 @@ _TYPE_TO_DEFAULT_TOOL: dict[str, str] = {
 }
 
 _DUPLICATE_TOOL_PATTERN = re.compile(r"duplicate|重复", re.IGNORECASE)
+_DISTRIBUTION_TOOL_PATTERN = re.compile(
+    r"distribution|histogram|spread|range|分布",
+    re.IGNORECASE,
+)
+_UNIQUE_TOOL_PATTERN = re.compile(
+    r"unique\s+values?|value\s+counts?|inspect\s+unique|取值",
+    re.IGNORECASE,
+)
+_CORRELATION_TOOL_PATTERN = re.compile(r"correlat(e|ion)|相关", re.IGNORECASE)
 
 
 def _selected_tool(query_type: str, query_lower: str) -> str | None:
+    if _CORRELATION_TOOL_PATTERN.search(query_lower):
+        return "correlation_summary"
+    if query_type == "profiling":
+        if _UNIQUE_TOOL_PATTERN.search(query_lower):
+            return "inspect_unique_values"
+        if _DISTRIBUTION_TOOL_PATTERN.search(query_lower):
+            return "distribution_summary"
+        return "profile_column"
     if query_type == "diagnosis":
         return "detect_duplicates" if _DUPLICATE_TOOL_PATTERN.search(query_lower) else "detect_missing_values"
     return _TYPE_TO_DEFAULT_TOOL.get(query_type)
@@ -177,6 +194,7 @@ _PROFILING_PATTERNS = [
     r"\bunique\s+values?\b", r"\bvalue\s+counts?\b", r"\bsummariz(e|ation)\b",
     r"\bhistogram\b", r"\bspread\s+of\b", r"\brange\s+of\b", r"\bmin\b.*\bmax\b",
     r"\bstats?\s+(for|of|on)\b", r"\bstatistics\b", r"看看.+的分布", r"分布情况", r"取值情况",
+    r"分析.+分布", r"分布",
 ]
 _DIAGNOSIS_PATTERNS = [
     r"\bdetect\s+(missing|duplicates?|null|nulls|outlier)\b",
@@ -188,6 +206,7 @@ _DIAGNOSIS_PATTERNS = [
 ]
 _COMPARISON_PATTERNS = [
     r"\bcompare\b", r"\bgroup\s+comparison\b", r"\bdifference\s+between\b",
+    r"\bcorrelation\b", r"\bcorrelate\b", r"\bcorrelations?\s+between\b",
     r"\brank\s+(by|groups?)\b", r"按.+比较", r"各.+的.+(均值|总量|数量)", r"不同.+的.+对比",
 ]
 _AGGREGATION_PATTERNS = [
@@ -209,10 +228,15 @@ _SORTING_PATTERNS = [
 ]
 _CLEANING_PATTERNS = [
     r"\bremove\s+(missing|null|duplicate|duplicates?)\b",
+    r"\bremove\s+all\s+rows?\s+with\s+(missing|null)\s+values?\b",
     r"\bdrop\s+(missing|null|duplicate|duplicates?|column)\b",
+    r"\brename\s+column\b",
     r"\bfill\s+(missing|null)\b", r"\bclean\b", r"\bimpute\b", r"\bdeduplicate\b",
     r"\bstrip\s+(whitespace|spaces?)\b", r"\btrim\b", r"\bdelete\s+(rows?|column)\b",
-    r"删除重复", r"删除缺失", r"填充缺失", r"清洗",
+    r"\bextract\b", r"\bcalculate\s+days\s+between\b", r"\bdays\s+between\b",
+    r"\badd\s+a\s+column\b", r"\bcreate\s+\w+\s+bands?\b", r"\bbins?\b",
+    r"\breplace\b", r"\bcast\b", r"\bnormalize\b",
+    r"删除重复", r"删除缺失", r"填充缺失", r"填充.+缺失", r"清洗", r"归一化", r"标准化",
 ]
 _VISUAL_PATTERNS = [
     r"\bplot\b", r"\bchart\b", r"\bgraph\b", r"\bvisuali[sz]e?\b",
@@ -234,13 +258,13 @@ _DETERMINISTIC_CHECKS: list[tuple[list[str], str, float]] = [
     (_UNSUPPORTED_PATTERNS, "unsupported_request", 0.95),
     (_VISUAL_PATTERNS,      "visual_analysis",     0.90),
     (_ASK_PATTERNS,         "ask",                 0.85),
-    (_PROFILING_PATTERNS,   "profiling",           0.75),
     (_CLEANING_PATTERNS,    "cleaning",            0.75),
+    (_PROFILING_PATTERNS,   "profiling",           0.80),
     (_DIAGNOSIS_PATTERNS,   "diagnosis",           0.80),
-    (_COMPARISON_PATTERNS,  "comparison",          0.70),
+    (_COMPARISON_PATTERNS,  "comparison",          0.80),
     (_AGGREGATION_PATTERNS, "aggregation",         0.70),
     (_FILTERING_PATTERNS,   "filtering",           0.70),
-    (_SORTING_PATTERNS,     "sorting",             0.65),
+    (_SORTING_PATTERNS,     "sorting",             0.39),
     (_BROAD_PATTERNS,       "broad_analysis_request", 0.55),
 ]
 

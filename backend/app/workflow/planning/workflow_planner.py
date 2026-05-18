@@ -285,6 +285,8 @@ def _parse_steps(raw_json: str) -> list[WorkflowStep]:
         msg = hint if hint else "The request cannot be handled with the supported transformations."
         raise PlannerError(msg)
 
+    steps_raw = _normalize_step_aliases(steps_raw)
+
     try:
         request = WorkflowRequest(dataset_id="__parse_only__", steps=steps_raw)
     except ValidationError as exc:
@@ -296,6 +298,33 @@ def _parse_steps(raw_json: str) -> list[WorkflowStep]:
         raise PlannerError(f"LLM workflow contains invalid step structure: {exc}") from exc
 
     return request.steps
+
+
+def _normalize_step_aliases(steps_raw: list) -> list:
+    """Normalize a few common LLM field aliases into the workflow contract."""
+    normalized: list = []
+    for step in steps_raw:
+        if not isinstance(step, dict):
+            normalized.append(step)
+            continue
+
+        item = dict(step)
+        params = item.pop("params", None)
+        if isinstance(params, dict):
+            item = {**params, **item}
+        if item.get("type") == "pivot_table":
+            if "index" not in item and "column" in item:
+                column = item["column"]
+                item["index"] = column if isinstance(column, list) else [column]
+            if "index" not in item and "rows" in item:
+                rows = item["rows"]
+                item["index"] = rows if isinstance(rows, list) else [rows]
+            if "values" not in item and "target" in item:
+                item["values"] = item["target"]
+            if "values" not in item and "value_column" in item:
+                item["values"] = item["value_column"]
+        normalized.append(item)
+    return normalized
 
 
 def _missing_required_field_question(

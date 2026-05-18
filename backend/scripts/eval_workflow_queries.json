@@ -162,10 +162,10 @@
     "id": "w16",
     "demo_case": "MVP4-P2",
     "query": "Trim extra spaces in the customer_name column",
-    "expected_step_types": ["trim_text"],
+    "expected_step_types": [],
     "expected_output": null,
-    "expected_outcome": "success",
-    "notes": "MVP4 P2 trim_text case"
+    "expected_outcome": "validation_error",
+    "notes": "MVP4 P2 trim_text case; customer_name is not present in the default orders demo dataset"
   },
   {
     "id": "w17",
@@ -180,19 +180,19 @@
     "id": "w18",
     "demo_case": "MVP4-P2",
     "query": "Extract the prefix from order_code like ABC-123 into order_prefix",
-    "expected_step_types": ["extract_text"],
+    "expected_step_types": [],
     "expected_output": null,
-    "expected_outcome": "success",
-    "notes": "MVP4 P2 extract_text case"
+    "expected_outcome": "validation_error",
+    "notes": "MVP4 P2 extract_text case; order_code is not present in the default orders demo dataset"
   },
   {
     "id": "w19",
     "demo_case": "MVP4-P2",
     "query": "Calculate days between order_date and ship_date into ship_days",
-    "expected_step_types": ["date_diff"],
+    "expected_step_types": [],
     "expected_output": null,
-    "expected_outcome": "success",
-    "notes": "MVP4 P2 date_diff case"
+    "expected_outcome": "validation_error",
+    "notes": "MVP4 P2 date_diff case; ship_date is not present in the default orders demo dataset"
   },
   {
     "id": "w20",

@@ -36,6 +36,14 @@ def from_preview(
         signals.append("empty_result")
         possible_causes.extend(_empty_result_causes(preview_result.step_results, planned_steps))
 
+    if _has_issue(preview_result.step_results, risk_rules.LARGE_ROW_REMOVAL):
+        signals.append("large_row_removal")
+        possible_causes.append("filter_too_strict")
+
+    if _has_issue(preview_result.step_results, risk_rules.NO_ROWS_MATCHED):
+        signals.append("no_rows_matched")
+        possible_causes.append("valid_no_match")
+
     if _has_high_warning_rate(preview_result.step_results):
         signals.append("high_warning_rate")
         possible_causes.append("multiple workflow steps produced warnings")
@@ -147,6 +155,10 @@ def _has_empty_result(step_results: Iterable[StepResult]) -> bool:
         or any(issue.code == risk_rules.EMPTY_OUTPUT for issue in result.issues)
         for result in step_results
     )
+
+
+def _has_issue(step_results: Iterable[StepResult], code: str) -> bool:
+    return any(any(issue.code == code for issue in result.issues) for result in step_results)
 
 
 def _has_high_warning_rate(step_results: list[StepResult]) -> bool:

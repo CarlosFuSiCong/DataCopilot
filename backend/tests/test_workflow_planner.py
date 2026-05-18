@@ -244,6 +244,34 @@ class TestComplexToolParsing:
         steps = _parse_steps(raw)
         assert steps[0].type == "pivot_table"
 
+    def test_parse_pivot_table_normalizes_column_and_target_aliases(self):
+        raw = json.dumps({"steps": [
+            {"type": "pivot_table", "column": "region", "columns": "category", "target": "amount", "agg": "sum"}
+        ]})
+        steps = _parse_steps(raw)
+        assert steps[0].type == "pivot_table"
+        assert steps[0].index == ["region"]
+        assert steps[0].values == "amount"
+
+    def test_parse_pivot_table_normalizes_rows_and_value_column_aliases(self):
+        raw = json.dumps({"steps": [
+            {"type": "pivot_table", "rows": "region", "columns": "category", "value_column": "amount", "agg": "sum"}
+        ]})
+        steps = _parse_steps(raw)
+        assert steps[0].type == "pivot_table"
+        assert steps[0].index == ["region"]
+        assert steps[0].values == "amount"
+
+    def test_parse_pivot_table_normalizes_params_wrapper(self):
+        raw = json.dumps({"steps": [
+            {"type": "pivot_table", "params": {"index": ["region"], "columns": "category", "values": "amount", "agg": "sum"}}
+        ]})
+        steps = _parse_steps(raw)
+        assert steps[0].type == "pivot_table"
+        assert steps[0].index == ["region"]
+        assert steps[0].columns == "category"
+        assert steps[0].values == "amount"
+
     def test_pivot_table_missing_index_asks_clarification(self):
         raw = json.dumps({"steps": [{"type": "pivot_table", "values": "amount", "agg": "sum"}]})
         with pytest.raises(ClarificationNeeded, match="index"):

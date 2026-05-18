@@ -40,9 +40,11 @@ from app.core.exceptions import (  # noqa: E402
 )
 from app.workflow.context import rag_service  # noqa: E402
 from app.workflow.execution import executor as executor_service  # noqa: E402
-from app.workflow.planning import workflow_planner  # noqa: E402
+from app.workflow.planning import parameter_resolver, tool_router, workflow_builder, workflow_planner  # noqa: E402
+from app.workflow.planning.query_classifier import classify_deterministic  # noqa: E402
 from app.workflow.validation import workflow_validator as validator_service  # noqa: E402
 from app.models.workflow_steps import WorkflowStep  # noqa: E402
+from app.models.workflow_transport import WorkflowRequest  # noqa: E402
 from app.services.profiler import profile  # noqa: E402
 
 logging.basicConfig(
@@ -295,37 +297,85 @@ async def _eval_query(
 
     dataset_profile = profile(dataset_bytes, dataset_filename)
     column_names = [c.name for c in dataset_profile.columns]
-
-    try:
-        rag_ctx = await rag_service.build_context(
-            query=query,
-            dataset_profile=dataset_profile,
-            top_k=query_spec.get("rag_top_k", 3),
-            docs=docs,
-        )
-        phases.retrieval_ok = bool(rag_ctx.retrieved_docs)
-    except Exception as exc:
-        phases.failure_phase = "retrieval"
-        phases.failure_message = str(exc)
-        return _build_result(dataset_id, q_id, demo_case, query, expected_step_types,
-                             expected_outcome, expected_row_count, expected_col_count, phases, mode, t0)
+    route_decision = classify_deterministic(query, column_names)
+    phases.route = route_decision.route
 
     planned_steps: list[WorkflowStep] = []
-    try:
-        planned_steps = workflow_planner.plan(query, rag_ctx)
-        phases.planner_ok = True
-        phases.actual_step_types = [s.type for s in planned_steps]
-    except ClarificationNeeded as exc:
+    if route_decision.route == "deterministic_tool":
+        phases.retrieval_ok = True
+        try:
+            router_result = tool_router.route(
+                query=query,
+                column_names=column_names,
+                dataset_profile=dataset_profile,
+                route_decision=route_decision,
+            )
+            if router_result.clarification_question:
+                phases.clarification = True
+                phases.failure_phase = "planning"
+                phases.failure_message = f"clarification: {router_result.clarification_question}"
+                return _build_result(dataset_id, q_id, demo_case, query, expected_step_types,
+                                     expected_outcome, expected_row_count, expected_col_count, phases, mode, t0)
+
+            resolved_raw: list[dict] = []
+            for raw_step in router_result.raw_steps:
+                resolved = parameter_resolver.resolve_parameters(raw_step, column_names)
+                if resolved.column_errors or resolved.missing_required_fields:
+                    error = (resolved.column_errors + resolved.missing_required_fields)[0]
+                    phases.clarification = True
+                    phases.failure_phase = "planning"
+                    phases.failure_message = f"clarification: {error}"
+                    return _build_result(dataset_id, q_id, demo_case, query, expected_step_types,
+                                         expected_outcome, expected_row_count, expected_col_count, phases, mode, t0)
+                resolved_raw.append(resolved.resolved_step)
+
+            request = WorkflowRequest(dataset_id=dataset_id, steps=resolved_raw)
+            workflow = workflow_builder.build_workflow(dataset_id, list(request.steps))
+            planned_steps = list(workflow.steps)
+            phases.planner_ok = True
+            phases.actual_step_types = [s.type for s in planned_steps]
+        except Exception as exc:
+            phases.failure_phase = "planning"
+            phases.failure_message = str(exc)
+            return _build_result(dataset_id, q_id, demo_case, query, expected_step_types,
+                                 expected_outcome, expected_row_count, expected_col_count, phases, mode, t0)
+    elif route_decision.route == "clarification":
         phases.clarification = True
         phases.failure_phase = "planning"
-        phases.failure_message = f"clarification: {exc}"
+        phases.failure_message = route_decision.reason
         return _build_result(dataset_id, q_id, demo_case, query, expected_step_types,
                              expected_outcome, expected_row_count, expected_col_count, phases, mode, t0)
-    except PlannerError as exc:
-        phases.failure_phase = "planning"
-        phases.failure_message = str(exc)
-        return _build_result(dataset_id, q_id, demo_case, query, expected_step_types,
-                             expected_outcome, expected_row_count, expected_col_count, phases, mode, t0)
+    else:
+        try:
+            rag_ctx = await rag_service.build_context(
+                query=query,
+                dataset_profile=dataset_profile,
+                top_k=query_spec.get("rag_top_k", 3),
+                docs=docs,
+            )
+            phases.retrieval_ok = bool(rag_ctx.retrieved_docs)
+        except Exception as exc:
+            phases.failure_phase = "retrieval"
+            phases.failure_message = str(exc)
+            return _build_result(dataset_id, q_id, demo_case, query, expected_step_types,
+                                 expected_outcome, expected_row_count, expected_col_count, phases, mode, t0)
+
+        try:
+            phases.used_llm_planner = True
+            planned_steps = workflow_planner.plan(query, rag_ctx)
+            phases.planner_ok = True
+            phases.actual_step_types = [s.type for s in planned_steps]
+        except ClarificationNeeded as exc:
+            phases.clarification = True
+            phases.failure_phase = "planning"
+            phases.failure_message = f"clarification: {exc}"
+            return _build_result(dataset_id, q_id, demo_case, query, expected_step_types,
+                                 expected_outcome, expected_row_count, expected_col_count, phases, mode, t0)
+        except PlannerError as exc:
+            phases.failure_phase = "planning"
+            phases.failure_message = str(exc)
+            return _build_result(dataset_id, q_id, demo_case, query, expected_step_types,
+                                 expected_outcome, expected_row_count, expected_col_count, phases, mode, t0)
 
     try:
         validator_service.validate(planned_steps, column_names)
