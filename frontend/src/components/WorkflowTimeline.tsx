@@ -81,15 +81,18 @@ export function WorkflowTimeline({ state, hasErrors = false, hasWarnings = false
   const errorState = isErrorState(state) || hasErrors
 
   return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: 0,
-      overflowX: 'auto',
-      padding: '4px 0',
-      fontFamily: 'var(--font-mono)',
-      fontSize: '0.75rem',
-    }}>
+    <div
+      data-testid="workflow-timeline"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 0,
+        overflowX: 'auto',
+        padding: '4px 0',
+        fontFamily: 'var(--font-mono)',
+        fontSize: '0.75rem',
+      }}
+    >
       {STAGES.map((stage, i) => {
         const status = stageStatus(stage.id, activeStage, errorState, hasWarnings)
         const style = STATUS_STYLE[status]

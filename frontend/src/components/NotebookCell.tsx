@@ -9,7 +9,8 @@ import { ExplanationPanel } from './ExplanationPanel'
 import { RAGPanel } from './RAGPanel'
 import { ModeBadge } from './ModeBadge'
 import { RouteDecisionPanel } from './RouteDecisionPanel'
-import { AnalyticsSummaryPanel, ANALYTICAL_STEP_TYPES } from './AnalyticsSummaryPanel'
+import { AnalyticsSummaryPanel } from './AnalyticsSummaryPanel'
+import { ANALYTICAL_STEP_TYPES } from './analyticsStepTypes'
 import { ObservationPanel } from './ObservationPanel'
 import { WorkflowTimeline } from './WorkflowTimeline'
 
@@ -378,6 +379,7 @@ function ClarificationPanel({
   const [draft, setDraft] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const answered = !!cell.clarificationAnswer
+  const choices = cell.clarificationContext?.choices ?? []
   const affectedStep = cell.clarificationContext?.affected_step
   const clarificationLabel = cell.clarificationType === 'slot_validation'
     ? 'slot validation'
@@ -437,6 +439,34 @@ function ClarificationPanel({
           {cell.clarificationQuestion}
         </p>
       </div>
+
+      {!answered && choices.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {choices.map(choice => (
+            <button
+              key={choice.id}
+              type="button"
+              onClick={() => onSubmit(choice.query)}
+              style={{
+                textAlign: 'left',
+                background: 'var(--color-surface-1)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 8,
+                padding: '8px 10px',
+                cursor: 'pointer',
+                fontFamily: 'var(--font-mono)',
+              }}
+            >
+              <div style={{ color: 'var(--color-accent)', fontSize: '0.8rem', fontWeight: 600 }}>
+                {choice.label}
+              </div>
+              <div style={{ color: 'var(--color-text-muted)', fontSize: '0.74rem', lineHeight: 1.5, marginTop: 2 }}>
+                {choice.description}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
 
       {answered ? (
         <div style={{

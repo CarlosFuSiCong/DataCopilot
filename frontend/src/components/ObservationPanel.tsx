@@ -108,14 +108,17 @@ export function ObservationPanel({ observation, onSuggest, onBackToPreview }: Ob
   const headerBg = isError ? '#fee2e2' : '#fef3c7'
 
   return (
-    <div style={{
-      border: `1px solid ${borderColor}`,
-      borderRadius: 8,
-      overflow: 'hidden',
-      marginTop: 8,
-      fontFamily: 'var(--font-mono)',
-      fontSize: '0.82rem',
-    }}>
+    <div
+      data-testid="observation-panel"
+      style={{
+        border: `1px solid ${borderColor}`,
+        borderRadius: 8,
+        overflow: 'hidden',
+        marginTop: 8,
+        fontFamily: 'var(--font-mono)',
+        fontSize: '0.82rem',
+      }}
+    >
       {/* Header */}
       <button
         onClick={() => setExpanded(v => !v)}

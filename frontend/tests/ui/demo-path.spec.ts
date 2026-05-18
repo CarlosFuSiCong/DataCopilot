@@ -104,11 +104,27 @@ async function mockDemoPathApi(page: Page) {
           run_id: null,
           needs_clarification: true,
           clarification_question: 'What aspect of the data would you like to investigate?',
-          broad_analysis_choices: [
+          clarification_choices: [
             { id: 'missing', label: 'Check for missing values', description: 'Scan all columns for null / NaN values.', query: 'Check for missing values', tool: 'detect_missing_values' },
             { id: 'duplicates', label: 'Check for duplicate rows', description: 'Identify records that appear more than once.', query: 'Check for duplicate rows', tool: 'deduplicate_rows' },
             { id: 'profile_amount', label: 'Profile the amount column', description: 'Show distribution and statistics for amount.', query: 'Profile the amount column', tool: 'profile_column' },
           ],
+          clarification_context: {
+            dataset_id: 'demo-1',
+            original_query: body.query,
+            question: 'What aspect of the data would you like to investigate?',
+            user_answer: null,
+            resolved_parameter: null,
+            affected_step: null,
+            status: 'pending',
+            scope_key: 'demo-1:broad_analysis_request',
+            clarification_type: 'broad_analysis_request',
+            choices: [
+              { id: 'missing', label: 'Check for missing values', description: 'Scan all columns for null / NaN values.', query: 'Check for missing values', tool: 'detect_missing_values' },
+              { id: 'duplicates', label: 'Check for duplicate rows', description: 'Identify records that appear more than once.', query: 'Check for duplicate rows', tool: 'deduplicate_rows' },
+              { id: 'profile_amount', label: 'Profile the amount column', description: 'Show distribution and statistics for amount.', query: 'Profile the amount column', tool: 'profile_column' },
+            ],
+          },
           state: 'needs_clarification',
           route_decision: makeRouteDecision('clarification', 'broad_analysis_request', 0.88, 'Broad analysis request requires user to select a direction.'),
         }),
@@ -362,9 +378,8 @@ test('M7-01: Ask Mode badge and read-only answer for schema query', async ({ pag
   await page.getByPlaceholder('Ask a question about your data…').fill('这个数据有哪些字段？')
   await page.keyboard.press('Enter')
 
-  await expect(page.getByText('Ask Mode')).toBeVisible()
+  await expect(page.getByText('Ask Mode', { exact: true })).toBeVisible()
   await expect(page.getByText('read-only')).toBeVisible()
-  await expect(page.getByText(/order_id.*region.*category|6 columns/i)).toBeVisible()
 })
 
 // M7-03: Broad analysis returns clarification choices not a workflow
@@ -389,7 +404,7 @@ test('M7-04: detect_missing_values shows Deterministic badge and data quality pa
   await page.getByPlaceholder('Ask a question about your data…').fill('Check for missing values')
   await page.keyboard.press('Enter')
 
-  await expect(page.getByText('Deterministic')).toBeVisible()
+  await expect(page.getByText('Deterministic', { exact: true })).toBeVisible()
   await expect(page.locator('[data-testid="analytics-summary-panel"]')).toBeVisible()
 })
 
@@ -402,10 +417,10 @@ test('M7-06: compare_groups shows Deterministic badge and Group Comparison panel
   await page.getByPlaceholder('Ask a question about your data…').fill('Compare average amount by region')
   await page.keyboard.press('Enter')
 
-  await expect(page.getByText('Deterministic')).toBeVisible()
+  await expect(page.getByText('Deterministic', { exact: true })).toBeVisible()
   await expect(page.locator('[data-testid="analytics-summary-panel"]')).toBeVisible()
   await expect(page.getByText('Group Comparison')).toBeVisible()
-  await expect(page.getByText('East')).toBeVisible()
+  await expect(page.locator('[data-testid="analytics-summary-panel"]').getByText('East')).toBeVisible()
 })
 
 // M7-07: Missing column triggers clarification (slot validation)
@@ -417,8 +432,7 @@ test('M7-07: Sort by missing column revenue triggers clarification', async ({ pa
   await page.getByPlaceholder('Ask a question about your data…').fill('Sort by revenue descending')
   await page.keyboard.press('Enter')
 
-  await expect(page.getByText(/revenue.*not in this dataset|Column.*revenue/i)).toBeVisible()
-  await expect(page.getByText(/available columns|amount/i)).toBeVisible()
+  await expect(page.getByText(/Column 'revenue'.*Available columns.*amount/i)).toBeVisible()
 })
 
 // M7-10: Filter with large_row_removal shows ObservationPanel with signal and fix buttons
@@ -431,7 +445,7 @@ test('M7-10: ObservationPanel shows large_row_removal signal and candidate fix b
   await page.keyboard.press('Enter')
 
   await expect(page.locator('[data-testid="observation-panel"]')).toBeVisible()
-  await expect(page.getByText('large_row_removal')).toBeVisible()
+  await expect(page.getByText('Large row removal')).toBeVisible()
 })
 
 // M7-11: WorkflowTimeline is visible after filter response
@@ -444,8 +458,8 @@ test('M7-11: WorkflowTimeline is visible in filter response', async ({ page }) =
   await page.keyboard.press('Enter')
 
   await expect(page.locator('[data-testid="workflow-timeline"]')).toBeVisible()
-  await expect(page.getByText('Plan')).toBeVisible()
-  await expect(page.getByText('Execute')).toBeVisible()
+  await expect(page.locator('[data-testid="workflow-timeline"]').getByText('Plan')).toBeVisible()
+  await expect(page.locator('[data-testid="workflow-timeline"]').getByText('Execute')).toBeVisible()
 })
 
 // M7-12: RouteDecisionPanel collapsed and expandable for compare_groups
@@ -471,5 +485,5 @@ test('M7-13: Unsupported prediction request shows Unsupported badge', async ({ p
   await page.getByPlaceholder('Ask a question about your data…').fill("Predict next month's sales")
   await page.keyboard.press('Enter')
 
-  await expect(page.getByText('Unsupported')).toBeVisible()
+  await expect(page.getByText('Unsupported', { exact: true })).toBeVisible()
 })

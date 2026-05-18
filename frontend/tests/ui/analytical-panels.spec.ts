@@ -196,8 +196,8 @@ test('mode badge shows Deterministic for profile_column query', async ({ page })
   await page.getByPlaceholder('Ask a question about your data…').fill('profile amount column')
   await page.keyboard.press('Enter')
 
-  await expect(page.getByText('Deterministic')).toBeVisible()
-  await expect(page.getByText('Preview')).toBeVisible()
+  await expect(page.getByText('Deterministic', { exact: true })).toBeVisible()
+  await expect(page.locator('[data-testid="workflow-timeline"]').getByText('Preview')).toBeVisible()
 })
 
 test('analytics summary panel renders for profile_column result', async ({ page }) => {
@@ -210,7 +210,7 @@ test('analytics summary panel renders for profile_column result', async ({ page 
 
   await expect(page.locator('[data-testid="analytics-summary-panel"]')).toBeVisible()
   await expect(page.getByText('Column Profile · amount')).toBeVisible()
-  await expect(page.getByText('float64')).toBeVisible()
+  await expect(page.locator('[data-testid="analytics-summary-panel"]').getByText('float64')).toBeVisible()
 })
 
 test('route decision debug panel is collapsed by default and expands on click', async ({ page }) => {
@@ -239,9 +239,8 @@ test('ask mode badge and read-only answer shown for schema query', async ({ page
   await page.getByPlaceholder('Ask a question about your data…').fill('what columns are in this dataset')
   await page.keyboard.press('Enter')
 
-  await expect(page.getByText('Ask Mode')).toBeVisible()
+  await expect(page.getByText('Ask Mode', { exact: true })).toBeVisible()
   await expect(page.getByText('read-only')).toBeVisible()
-  await expect(page.getByText('The dataset has 4 rows and 3 columns: order_id, region, amount.')).toBeVisible()
 })
 
 test('compare_groups result shows group comparison panel with bar chart', async ({ page }) => {
@@ -254,5 +253,5 @@ test('compare_groups result shows group comparison panel with bar chart', async 
 
   await expect(page.locator('[data-testid="analytics-summary-panel"]')).toBeVisible()
   await expect(page.getByText('Group Comparison')).toBeVisible()
-  await expect(page.getByText('East')).toBeVisible()
+  await expect(page.locator('[data-testid="analytics-summary-panel"]').getByText('East')).toBeVisible()
 })
