@@ -25,7 +25,9 @@ function errorCell(base: Pick<NotebookCellData, 'id' | 'query'>, err: unknown): 
 
 // Extract previous steps from the last confirmed ok cell for workflow chaining.
 function getPreviousSteps(cells: NotebookCellData[]) {
-  const lastOkCell = [...cells].reverse().find(c => c.status === 'ok')
+  const lastOkCell = [...cells].reverse().find(c =>
+    c.status === 'ok' && (c.confirmResult || !c.result?.is_read_only)
+  )
   return (
     lastOkCell?.confirmResult?.planned_steps ??
     lastOkCell?.result?.planned_steps ??
@@ -83,7 +85,7 @@ export function useNotebook(dataset: UploadResponse | null) {
           clarificationContext: result.clarification_context ?? null,
           clarificationChoices: result.clarification_context?.choices ?? result.clarification_choices ?? [],
         })
-      } else if (result.execution_result !== null) {
+      } else if (result.execution_result !== null || result.is_read_only) {
         appendCell({ id, query, status: 'ok', result })
       } else {
         appendCell({ id, query, status: 'preview', result })
@@ -126,7 +128,7 @@ export function useNotebook(dataset: UploadResponse | null) {
           clarificationContext: result.clarification_context ?? null,
           clarificationChoices: result.clarification_context?.choices ?? result.clarification_choices ?? [],
         })
-      } else if (result.execution_result !== null) {
+      } else if (result.execution_result !== null || result.is_read_only) {
         appendCell({ id, query: answer, status: 'ok', result })
       } else {
         appendCell({ id, query: answer, status: 'preview', result })

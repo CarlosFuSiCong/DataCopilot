@@ -379,6 +379,9 @@ export function NotebookCell({ cell, onConfirm, onClarify, onSuggest, onRerun }:
   const hasResult = (cell.status === 'ok' || cell.status === 'preview' || cell.status === 'confirming') && !!cell.result
   const hasErrors = cell.result?.has_errors ?? false
   const hasWarnings = cell.result?.has_warnings ?? false
+  const isAskModeAnswer =
+    cell.result?.route_decision?.route === 'ask_mode' ||
+    (cell.result?.is_read_only === true && cell.result.planned_steps.length === 0)
 
   // Find the last analytical step in the result for AnalyticsSummaryPanel
   const allStepResults = cell.result?.step_results ?? []
@@ -469,16 +472,20 @@ export function NotebookCell({ cell, onConfirm, onClarify, onSuggest, onRerun }:
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
 
             {/* Workflow pipeline timeline */}
-            <WorkflowTimeline
-              state={cell.result?.state}
-              hasErrors={cell.result?.has_errors}
-              hasWarnings={cell.result?.has_warnings}
-            />
-            <WorkflowImpactSummary
-              stepResults={cell.result?.step_results ?? []}
-              hasErrors={hasErrors}
-              hasWarnings={hasWarnings}
-            />
+            {!isAskModeAnswer && (
+              <WorkflowTimeline
+                state={cell.result?.state}
+                hasErrors={cell.result?.has_errors}
+                hasWarnings={cell.result?.has_warnings}
+              />
+            )}
+            {!isAskModeAnswer && (
+              <WorkflowImpactSummary
+                stepResults={cell.result?.step_results ?? []}
+                hasErrors={hasErrors}
+                hasWarnings={hasWarnings}
+              />
+            )}
             {/* Warning / error summary banner */}
             {(hasErrors || hasWarnings) && (
               <div
@@ -503,11 +510,13 @@ export function NotebookCell({ cell, onConfirm, onClarify, onSuggest, onRerun }:
               </div>
             )}
 
-            <WorkflowViewer
-              steps={cell.result!.planned_steps}
-              stepResults={stepResults}
-              onRerun={steps => onRerun(steps, cell.result!.query, cell.result?.run_id ?? cell.confirmResult?.run_id)}
-            />
+            {!isAskModeAnswer && (
+              <WorkflowViewer
+                steps={cell.result!.planned_steps}
+                stepResults={stepResults}
+                onRerun={steps => onRerun(steps, cell.result!.query, cell.result?.run_id ?? cell.confirmResult?.run_id)}
+              />
+            )}
 
             {/* Route Decision debug panel */}
             {cell.result?.route_decision && (
@@ -562,7 +571,7 @@ export function NotebookCell({ cell, onConfirm, onClarify, onSuggest, onRerun }:
             )}
 
             {/* Read-only answer text (ask mode) */}
-            {cell.result?.is_read_only && !execResult && (
+            {isAskModeAnswer && !execResult && cell.result && (
               <AskModePanel result={cell.result} onSuggest={onSuggest} />
             )}
 

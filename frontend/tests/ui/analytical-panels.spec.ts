@@ -242,6 +242,7 @@ test('ask mode badge and read-only answer shown for schema query', async ({ page
   await expect(page.getByText('Ask Mode', { exact: true })).toBeVisible()
   await expect(page.getByText('read-only')).toBeVisible()
   await expect(page.locator('[data-testid="ask-mode-panel"]')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Confirm' })).toHaveCount(0)
 })
 
 test('compare_groups result shows group comparison panel with bar chart', async ({ page }) => {

@@ -31,8 +31,10 @@ export default function App() {
   // Counts confirmed cells — used as a refresh trigger for run history.
   const confirmedCount = cells.filter(c => c.status === 'ok').length
 
-  // Last confirmed cell — drives the result tab in DataPanel
-  const lastConfirmedCell = [...cells].reverse().find(c => c.status === 'ok')
+  // Last mutating confirmed cell drives the result tab. Read-only answers should not replace the data table.
+  const lastConfirmedCell = [...cells].reverse().find(c =>
+    c.status === 'ok' && (c.confirmResult || !c.result?.is_read_only)
+  )
   const lastConfirmedSteps: WorkflowStep[] | null =
     lastConfirmedCell?.result?.planned_steps ?? null
   // execution_result lives in confirmResult (manual confirm) or result (auto-confirm)

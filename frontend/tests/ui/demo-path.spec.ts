@@ -138,38 +138,20 @@ async function mockDemoPathApi(page: Page) {
         contentType: 'application/json',
         body: JSON.stringify({
           query: body.query,
-          planned_steps: [{ type: 'detect_missing_values' }],
-          step_results: [{
-            step_index: 0,
-            step_type: 'detect_missing_values',
-            status: 'success',
-            issues: [],
-            input_row_count: 30,
-            output_row_count: 6,
-            input_column_count: 6,
-            output_column_count: 3,
-            affected_rows: 3,
-            match_rate: null,
-            affected_rate: null,
-            preview: [
-              { column: 'amount', missing_count: 3, missing_pct: '10.0%' },
-              { column: 'order_id', missing_count: 0, missing_pct: '0.0%' },
-              { column: 'region', missing_count: 0, missing_pct: '0.0%' },
-              { column: 'category', missing_count: 0, missing_pct: '0.0%' },
-              { column: 'quantity', missing_count: 0, missing_pct: '0.0%' },
-              { column: 'status', missing_count: 0, missing_pct: '0.0%' },
-            ],
-            message: '1 column has missing values. amount: 3 missing (10.0%).',
-          }],
+          planned_steps: [],
+          step_results: [],
           has_warnings: false,
           has_errors: false,
           rag_context: { ...ragContext, query: body.query },
-          explanation: null,
+          explanation: 'Missing value check:\n  - 1 of 6 columns have missing values.\n  - amount: 3 missing (10.0%)\n  - This is read-only and did not modify the dataset.',
           execution_result: null,
           run_id: null,
           needs_clarification: false,
-          state: 'preview_ready',
-          route_decision: makeRouteDecision('deterministic_tool', 'diagnosis', 0.93, 'Missing value detection matched deterministic tool.', 'detect_missing_values'),
+          state: 'executed',
+          is_read_only: true,
+          ask_mode_type: 'missing_values',
+          evidence_source: 'schema',
+          route_decision: makeRouteDecision('ask_mode', 'diagnosis', 0.93, 'Missing value detection is read-only ask mode.', 'detect_missing_values'),
         }),
       })
       return
@@ -383,10 +365,12 @@ test('M7-01: Ask Mode badge and read-only answer for schema query', async ({ pag
 
   expect(request.postDataJSON().mode_hint).toBe('ask')
   await expect(page.getByText('Ask Mode', { exact: true })).toBeVisible()
-  await expect(page.getByText('read-only')).toBeVisible()
+  await expect(page.getByText('read-only', { exact: true })).toBeVisible()
   await expect(page.locator('[data-testid="ask-mode-panel"]')).toBeVisible()
   await expect(page.locator('[data-testid="ask-mode-panel"]').getByText('Rows', { exact: true })).toBeVisible()
   await expect(page.locator('[data-testid="ask-mode-panel"]').getByText('amount · float64')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Confirm' })).toHaveCount(0)
+  await expect(page.locator('[data-testid="workflow-timeline"]')).toHaveCount(0)
 })
 
 // M7-03: Broad analysis returns clarification choices not a workflow
@@ -403,8 +387,8 @@ test('M7-03: Broad analysis query returns clarification choices', async ({ page 
   await expect(page.getByText('Check for duplicate rows')).toBeVisible()
 })
 
-// M7-04: Diagnostic detect_missing_values — Deterministic badge + data quality result
-test('M7-04: detect_missing_values shows Deterministic badge and data quality panel', async ({ page }) => {
+// M7-04: Diagnostic detect_missing_values — Ask Mode read-only answer
+test('M7-04: detect_missing_values uses Ask Mode and does not show workflow chrome', async ({ page }) => {
   await mockDemoPathApi(page)
   await page.goto('/')
   await uploadOrdersCsv(page)
@@ -412,8 +396,12 @@ test('M7-04: detect_missing_values shows Deterministic badge and data quality pa
   await page.getByPlaceholder('Ask a question about your data…').fill('Check for missing values')
   await page.keyboard.press('Enter')
 
-  await expect(page.getByText('Deterministic', { exact: true })).toBeVisible()
-  await expect(page.locator('[data-testid="analytics-summary-panel"]')).toBeVisible()
+  await expect(page.getByText('Ask Mode', { exact: true })).toBeVisible()
+  await expect(page.getByText('read-only', { exact: true })).toBeVisible()
+  await expect(page.locator('[data-testid="ask-mode-panel"]')).toBeVisible()
+  await expect(page.getByText('amount: 3 missing (10.0%)')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Confirm' })).toHaveCount(0)
+  await expect(page.locator('[data-testid="workflow-timeline"]')).toHaveCount(0)
 })
 
 // M7-06: compare_groups routes deterministically and shows Group Comparison panel
