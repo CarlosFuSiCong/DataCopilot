@@ -375,11 +375,18 @@ test('M7-01: Ask Mode badge and read-only answer for schema query', async ({ pag
   await page.goto('/')
   await uploadOrdersCsv(page)
 
+  await page.getByRole('button', { name: 'Ask' }).click()
+  const chatRequest = page.waitForRequest('**/api/chat')
   await page.getByPlaceholder('Ask a question about your data…').fill('这个数据有哪些字段？')
   await page.keyboard.press('Enter')
+  const request = await chatRequest
 
+  expect(request.postDataJSON().mode_hint).toBe('ask')
   await expect(page.getByText('Ask Mode', { exact: true })).toBeVisible()
   await expect(page.getByText('read-only')).toBeVisible()
+  await expect(page.locator('[data-testid="ask-mode-panel"]')).toBeVisible()
+  await expect(page.locator('[data-testid="ask-mode-panel"]').getByText('Rows', { exact: true })).toBeVisible()
+  await expect(page.locator('[data-testid="ask-mode-panel"]').getByText('amount · float64')).toBeVisible()
 })
 
 // M7-03: Broad analysis returns clarification choices not a workflow
@@ -391,6 +398,7 @@ test('M7-03: Broad analysis query returns clarification choices', async ({ page 
   await page.getByPlaceholder('Ask a question about your data…').fill('帮我看看这个数据有什么问题')
   await page.keyboard.press('Enter')
 
+  await expect(page.locator('[data-testid="clarification-panel"]')).toBeVisible()
   await expect(page.getByText('Check for missing values')).toBeVisible()
   await expect(page.getByText('Check for duplicate rows')).toBeVisible()
 })
@@ -433,6 +441,7 @@ test('M7-07: Sort by missing column revenue triggers clarification', async ({ pa
   await page.keyboard.press('Enter')
 
   await expect(page.getByText(/Column 'revenue'.*Available columns.*amount/i)).toBeVisible()
+  await expect(page.locator('[data-testid="clarification-panel"]').getByRole('button', { name: 'amount' })).toBeVisible()
 })
 
 // M7-10: Filter with large_row_removal shows ObservationPanel with signal and fix buttons
@@ -445,7 +454,9 @@ test('M7-10: ObservationPanel shows large_row_removal signal and candidate fix b
   await page.keyboard.press('Enter')
 
   await expect(page.locator('[data-testid="observation-panel"]')).toBeVisible()
-  await expect(page.getByText('Large row removal')).toBeVisible()
+  await expect(page.locator('[data-testid="observation-panel"]').getByText('Large row removal').first()).toBeVisible()
+  await expect(page.locator('[data-testid="workflow-impact-summary"]')).toBeVisible()
+  await expect(page.getByText('Suggested next actions')).toBeVisible()
 })
 
 // M7-11: WorkflowTimeline is visible after filter response
@@ -486,4 +497,16 @@ test('M7-13: Unsupported prediction request shows Unsupported badge', async ({ p
   await page.keyboard.press('Enter')
 
   await expect(page.getByText('Unsupported', { exact: true })).toBeVisible()
+})
+
+test('Demo guide click fills a prompt without sending', async ({ page }) => {
+  await mockDemoPathApi(page)
+  await page.goto('/')
+  await uploadOrdersCsv(page)
+
+  await expect(page.locator('[data-testid="demo-guide-panel"]')).toBeVisible()
+  await page.getByRole('button', { name: 'Compare amount by region' }).click()
+
+  await expect(page.getByPlaceholder('Ask a question about your data…')).toHaveValue('Compare average amount by region')
+  await expect(page.locator('[data-testid="cell-status-header"]')).toHaveCount(0)
 })
