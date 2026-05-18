@@ -24,3 +24,8 @@ build/
 
 # Object storage - raw user data and run artifacts must not be committed
 backend/storage/
+
+# Eval reports - generated artifacts, not committed by default
+reports/*.json
+reports/*.md
+!reports/.gitkeep

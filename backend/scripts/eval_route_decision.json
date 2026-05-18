@@ -1,0 +1,182 @@
+[
+  {
+    "id": "r01",
+    "query": "What columns are in this dataset?",
+    "expected_route": "ask_mode",
+    "expected_query_type": "ask",
+    "expected_tool": null,
+    "expected_requires_confirm": false,
+    "notes": "Pure read-only schema question — must not go to planner."
+  },
+  {
+    "id": "r02",
+    "query": "How many rows are in this dataset?",
+    "expected_route": "ask_mode",
+    "expected_query_type": "ask",
+    "expected_tool": null,
+    "expected_requires_confirm": false,
+    "notes": "Row count question — ask_mode read-only."
+  },
+  {
+    "id": "r03",
+    "query": "Profile the amount column",
+    "expected_route": "deterministic_tool",
+    "expected_query_type": "profiling",
+    "expected_tool": "profile_column",
+    "expected_requires_confirm": false,
+    "notes": "Deterministic analytical tool — no LLM planner needed."
+  },
+  {
+    "id": "r04",
+    "query": "Check for missing values",
+    "expected_route": "deterministic_tool",
+    "expected_query_type": "diagnosis",
+    "expected_tool": "detect_missing_values",
+    "expected_requires_confirm": false,
+    "notes": "Deterministic diagnosis tool."
+  },
+  {
+    "id": "r05",
+    "query": "Compare average amount by region",
+    "expected_route": "deterministic_tool",
+    "expected_query_type": "comparison",
+    "expected_tool": "compare_groups",
+    "expected_requires_confirm": false,
+    "notes": "Deterministic comparison tool."
+  },
+  {
+    "id": "r06",
+    "query": "Show the distribution of the status column",
+    "expected_route": "deterministic_tool",
+    "expected_query_type": "profiling",
+    "expected_tool": "distribution_summary",
+    "expected_requires_confirm": false,
+    "notes": "Distribution summary — deterministic tool."
+  },
+  {
+    "id": "r07",
+    "query": "Filter rows where amount > 1000",
+    "expected_route": "llm_planner",
+    "expected_query_type": "filtering",
+    "expected_tool": null,
+    "expected_requires_confirm": true,
+    "notes": "Mutating workflow — must go through LLM planner and require confirm."
+  },
+  {
+    "id": "r08",
+    "query": "Group by region and sum the amount",
+    "expected_route": "llm_planner",
+    "expected_query_type": "aggregation",
+    "expected_tool": null,
+    "expected_requires_confirm": true,
+    "notes": "Mutating aggregation workflow — LLM planner."
+  },
+  {
+    "id": "r09",
+    "query": "Sort by revenue descending",
+    "expected_route": "clarification",
+    "expected_query_type": "sorting",
+    "expected_tool": null,
+    "expected_requires_confirm": false,
+    "notes": "Missing column 'revenue' — must clarify before planning."
+  },
+  {
+    "id": "r10",
+    "query": "Analyse this data and find insights",
+    "expected_route": "clarification",
+    "expected_query_type": "broad_analysis_request",
+    "expected_tool": null,
+    "expected_requires_confirm": false,
+    "notes": "Broad analysis — must return clarification choices, not a workflow."
+  },
+  {
+    "id": "r11",
+    "query": "Predict next month's sales",
+    "expected_route": "unsupported",
+    "expected_query_type": "unsupported_request",
+    "expected_tool": null,
+    "expected_requires_confirm": false,
+    "notes": "Forecasting/ML is outside supported scope."
+  },
+  {
+    "id": "r12",
+    "query": "Create a clustering model",
+    "expected_route": "unsupported",
+    "expected_query_type": "unsupported_request",
+    "expected_tool": null,
+    "expected_requires_confirm": false,
+    "notes": "ML clustering is outside supported scope."
+  },
+  {
+    "id": "r13",
+    "query": "Fill missing values in amount with the mean",
+    "expected_route": "llm_planner",
+    "expected_query_type": "cleaning",
+    "expected_tool": null,
+    "expected_requires_confirm": true,
+    "notes": "Mutating cleaning workflow — LLM planner + confirm."
+  },
+  {
+    "id": "r14",
+    "query": "这个数据集有哪些列？",
+    "expected_route": "ask_mode",
+    "expected_query_type": "ask",
+    "expected_tool": null,
+    "expected_requires_confirm": false,
+    "notes": "Chinese ask query — same as r01, language-agnostic classifier."
+  },
+  {
+    "id": "r15",
+    "query": "分析amount列的分布",
+    "expected_route": "deterministic_tool",
+    "expected_query_type": "profiling",
+    "expected_tool": "distribution_summary",
+    "expected_requires_confirm": false,
+    "notes": "Chinese distribution query — deterministic tool."
+  },
+  {
+    "id": "r16",
+    "query": "Show correlation between amount and quantity",
+    "expected_route": "deterministic_tool",
+    "expected_query_type": "comparison",
+    "expected_tool": "correlation_summary",
+    "expected_requires_confirm": false,
+    "notes": "Correlation — deterministic analytical tool."
+  },
+  {
+    "id": "r17",
+    "query": "Remove all rows with missing values",
+    "expected_route": "llm_planner",
+    "expected_query_type": "cleaning",
+    "expected_tool": null,
+    "expected_requires_confirm": true,
+    "notes": "Mutating remove_missing_values — LLM planner + confirm."
+  },
+  {
+    "id": "r18",
+    "query": "Rename column amount to sales",
+    "expected_route": "llm_planner",
+    "expected_query_type": "cleaning",
+    "expected_tool": null,
+    "expected_requires_confirm": true,
+    "notes": "Mutating rename_columns — LLM planner."
+  },
+  {
+    "id": "r19",
+    "query": "Show me unique values in the status column",
+    "expected_route": "deterministic_tool",
+    "expected_query_type": "profiling",
+    "expected_tool": "inspect_unique_values",
+    "expected_requires_confirm": false,
+    "notes": "Inspect unique values — deterministic tool."
+  },
+  {
+    "id": "r20",
+    "query": "Draw a bar chart of sales by region",
+    "expected_route": "unsupported",
+    "expected_query_type": "visual_analysis",
+    "expected_tool": null,
+    "expected_requires_confirm": false,
+    "notes": "Visualization requests are outside supported scope."
+  }
+]
