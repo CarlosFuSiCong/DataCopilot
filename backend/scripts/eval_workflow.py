@@ -82,6 +82,9 @@ class PhaseResult:
     failure_phase: str | None = None
     failure_message: str = ""
     elapsed_ms: float = 0.0
+    # Route / LLM tracking
+    route: str | None = None
+    used_llm_planner: bool = False
 
 
 @dataclass
@@ -117,7 +120,21 @@ class DatasetReport:
             "step_types_ok": sum(1 for r in self.results if r.phases.step_types_ok),
             "shape_ok": sum(1 for r in self.results if r.phases.shape_ok),
             "overall_ok": sum(1 for r in self.results if r.overall_ok),
+            "clarification": sum(1 for r in self.results if r.phases.clarification),
+            "used_llm_planner": sum(1 for r in self.results if r.phases.used_llm_planner),
         }
+
+    @property
+    def latency_stats(self) -> dict[str, float]:
+        """Average elapsed_ms for all queries, split by failure phase."""
+        if not self.results:
+            return {}
+        stats: dict[str, list[float]] = {"overall": []}
+        for r in self.results:
+            stats["overall"].append(r.phases.elapsed_ms)
+            phase = r.phases.failure_phase or "success"
+            stats.setdefault(phase, []).append(r.phases.elapsed_ms)
+        return {k: sum(v) / len(v) for k, v in stats.items()}
 
     @property
     def failures(self) -> list[QueryResult]:
@@ -147,6 +164,8 @@ class EvalReport:
             "step_types_ok",
             "shape_ok",
             "overall_ok",
+            "clarification",
+            "used_llm_planner",
         ]
         return {
             key: sum(dataset.counts[key] for dataset in self.datasets)
@@ -156,6 +175,15 @@ class EvalReport:
     @property
     def failures(self) -> list[QueryResult]:
         return [result for dataset in self.datasets for result in dataset.failures]
+
+    @property
+    def latency_stats(self) -> dict[str, float]:
+        """Merged latency stats across all datasets."""
+        combined: dict[str, list[float]] = {}
+        for dataset in self.datasets:
+            for phase, avg in dataset.latency_stats.items():
+                combined.setdefault(phase, []).append(avg)
+        return {k: sum(v) / len(v) for k, v in combined.items()}
 
 
 def _load_json(path: Path) -> object:
@@ -454,12 +482,24 @@ def _print_report(report: EvalReport) -> None:
 
     def _row(label: str, val: int) -> None:
         rate = val / n if n else 0
-        print(f"  {label:<30} {val:>6} / {n:>5}   {rate:>7.2%}")
+        print(f"  {label:<32} {val:>6} / {n:>5}   {rate:>7.2%}")
 
     for key in ("retrieval_ok", "planner_ok", "validation_ok", "execution_ok", "step_types_ok", "shape_ok"):
         _row(key, c[key])
     print(f"  {sep}")
     _row("overall_ok", c["overall_ok"])
+
+    # Pipeline routing metrics
+    print(f"\n  Pipeline routing metrics:")
+    _row("clarification_rate", c["clarification"])
+    _row("llm_planner_rate", c["used_llm_planner"])
+
+    # Latency stats
+    lat = report.latency_stats
+    if lat:
+        print(f"\n  Average latency by phase (ms):")
+        for phase, avg_ms in sorted(lat.items()):
+            print(f"    {phase:<28} {avg_ms:>8.1f} ms")
 
     if report.failures:
         print(f"\nFailure cases / regression candidates ({len(report.failures)}):")
@@ -478,9 +518,18 @@ def _print_report(report: EvalReport) -> None:
 def _build_json_output(report: EvalReport) -> dict:
     output = asdict(report)
     output["total_queries"] = report.total_queries
+    n = report.total_queries
+    c = report.counts
     output["summary"] = {
-        key: f"{value}/{report.total_queries}"
-        for key, value in report.counts.items()
+        key: f"{value}/{n}"
+        for key, value in c.items()
+    }
+    output["metrics"] = {
+        "clarification_rate": round(c["clarification"] / n, 4) if n else 0,
+        "llm_planner_rate": round(c["used_llm_planner"] / n, 4) if n else 0,
+        "average_latency_by_phase_ms": {
+            k: round(v, 2) for k, v in report.latency_stats.items()
+        },
     }
     output["failures"] = [
         {
