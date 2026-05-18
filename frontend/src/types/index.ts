@@ -234,6 +234,8 @@ export interface ChatResponse {
   is_read_only?: boolean
   ask_mode_type?: string | null
   evidence_source?: string | null
+  // Route decision debug info from the query classifier (task 5).
+  route_decision?: Record<string, unknown> | null
 }
 
 // ─── Run history ──────────────────────────────────────────────────────────────
