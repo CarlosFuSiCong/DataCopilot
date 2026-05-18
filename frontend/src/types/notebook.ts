@@ -1,4 +1,4 @@
-import type { ApiErrorContext, ChatResponse, ClarificationContext, ConfirmResponse } from './index'
+import type { ApiErrorContext, ChatResponse, ClarificationChoice, ClarificationContext, ConfirmResponse } from './index'
 
 export interface NotebookCellData {
   id: string
@@ -15,6 +15,7 @@ export interface NotebookCellData {
   clarificationAnswer?: string
   clarificationType?: string | null
   clarificationContext?: ClarificationContext | null
+  clarificationChoices?: ClarificationChoice[]
   // Set when this cell was created by a rerun so the confirm call can
   // write parent_run_id into the new run record.
   parentRunId?: string | null

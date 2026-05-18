@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ChatResponse, UploadResponse, WorkflowStep } from '../types'
+import type { ChatResponse, QueryModeHint, UploadResponse, WorkflowStep } from '../types'
 import type { NotebookCellData } from '../types/notebook'
 import { ApiCallError, sendChat, confirmWorkflow, rerunWorkflow, previewWorkflow } from '../api/client'
 
@@ -56,7 +56,7 @@ export function useNotebook(dataset: UploadResponse | null) {
     })
   }
 
-  async function handleSubmit(query: string) {
+  async function handleSubmit(query: string, modeHint: QueryModeHint = 'auto') {
     if (!dataset || !query.trim()) return
 
     // Read latest cells via ref before any appendCell calls so we never see
@@ -70,6 +70,7 @@ export function useNotebook(dataset: UploadResponse | null) {
       const result = await sendChat({
         dataset_id: dataset.dataset_id,
         query,
+        mode_hint: modeHint,
         previous_steps: previousSteps.length > 0 ? previousSteps : undefined,
       })
       if (result.needs_clarification) {
@@ -80,6 +81,7 @@ export function useNotebook(dataset: UploadResponse | null) {
           clarificationQuestion: result.clarification_question ?? '',
           clarificationType: result.clarification_type ?? null,
           clarificationContext: result.clarification_context ?? null,
+          clarificationChoices: result.clarification_context?.choices ?? result.clarification_choices ?? [],
         })
       } else if (result.execution_result !== null) {
         appendCell({ id, query, status: 'ok', result })
@@ -122,6 +124,7 @@ export function useNotebook(dataset: UploadResponse | null) {
           clarificationQuestion: result.clarification_question ?? '',
           clarificationType: result.clarification_type ?? null,
           clarificationContext: result.clarification_context ?? null,
+          clarificationChoices: result.clarification_context?.choices ?? result.clarification_choices ?? [],
         })
       } else if (result.execution_result !== null) {
         appendCell({ id, query: answer, status: 'ok', result })

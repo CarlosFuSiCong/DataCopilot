@@ -193,6 +193,7 @@ export interface ObservationSummary {
 export interface ChatRequest {
   dataset_id: string
   query: string
+  mode_hint?: QueryModeHint
   auto_confirm?: boolean
   // Steps from the last confirmed workflow. When present the new query chains
   // onto the prior result instead of starting from the raw dataset.
@@ -200,6 +201,8 @@ export interface ChatRequest {
   // User's answer to a clarification question, merged into the planner query.
   clarification_context?: string | ClarificationContext
 }
+
+export type QueryModeHint = 'auto' | 'ask' | 'analysis' | 'workflow'
 
 export interface ClarificationContext {
   dataset_id: string

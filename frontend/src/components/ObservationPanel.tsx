@@ -98,7 +98,7 @@ function FixButton({
 // ─── Main panel ───────────────────────────────────────────────────────────────
 
 export function ObservationPanel({ observation, onSuggest, onBackToPreview }: ObservationPanelProps) {
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(observation.status === 'warning' || observation.status === 'error')
 
   if (observation.status === 'not_observed' || observation.status === 'ok') return null
 

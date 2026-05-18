@@ -1,4 +1,3 @@
-import { useRef, useState } from 'react'
 import type { ApiErrorContext } from '../types'
 import type { NotebookCellData } from '../types/notebook'
 import { OutputBlock } from './ui/OutputBlock'
@@ -7,12 +6,15 @@ import { WorkflowViewer } from './WorkflowViewer'
 import { ResultTable } from './ResultTable'
 import { ExplanationPanel } from './ExplanationPanel'
 import { RAGPanel } from './RAGPanel'
-import { ModeBadge } from './ModeBadge'
 import { RouteDecisionPanel } from './RouteDecisionPanel'
 import { AnalyticsSummaryPanel } from './AnalyticsSummaryPanel'
 import { ANALYTICAL_STEP_TYPES } from './analyticsStepTypes'
 import { ObservationPanel } from './ObservationPanel'
 import { WorkflowTimeline } from './WorkflowTimeline'
+import { AskModePanel } from './AskModePanel'
+import { CellStatusHeader } from './CellStatusHeader'
+import { ClarificationPanel } from './ClarificationPanel'
+import { WorkflowImpactSummary } from './WorkflowImpactSummary'
 
 import type { WorkflowStep } from '../types'
 
@@ -365,167 +367,6 @@ function ErrorContent({ cell, onSuggest }: { cell: NotebookCellData; onSuggest: 
   }
 }
 
-// ---------------------------------------------------------------------------
-// Clarification panel
-// ---------------------------------------------------------------------------
-
-function ClarificationPanel({
-  cell,
-  onSubmit,
-}: {
-  cell: NotebookCellData
-  onSubmit: (answer: string) => void
-}) {
-  const [draft, setDraft] = useState('')
-  const inputRef = useRef<HTMLInputElement>(null)
-  const answered = !!cell.clarificationAnswer
-  const choices = cell.clarificationContext?.choices ?? []
-  const affectedStep = cell.clarificationContext?.affected_step
-  const clarificationLabel = cell.clarificationType === 'slot_validation'
-    ? 'slot validation'
-    : 'clarification needed'
-  const clarificationAccent = cell.clarificationType === 'slot_validation'
-    ? 'var(--color-yellow)'
-    : 'var(--color-blue)'
-
-  function handleSubmit() {
-    const trimmed = draft.trim()
-    if (!trimmed) return
-    onSubmit(trimmed)
-    setDraft('')
-  }
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-        <span style={{
-          width: 'fit-content',
-          border: `1px solid ${clarificationAccent}`,
-          borderRadius: 999,
-          padding: '2px 8px',
-          fontFamily: 'var(--font-mono)',
-          fontSize: '0.7rem',
-          color: clarificationAccent,
-          background: 'var(--color-surface-1)',
-        }}>
-          {clarificationLabel}
-        </span>
-        {affectedStep?.type && (
-          <span style={{
-            width: 'fit-content',
-            border: '1px solid var(--color-border)',
-            borderRadius: 999,
-            padding: '2px 8px',
-            fontFamily: 'var(--font-mono)',
-            fontSize: '0.7rem',
-            color: 'var(--color-text-muted)',
-            background: 'var(--color-surface-1)',
-          }}>
-            {String(affectedStep.type)}
-            {typeof affectedStep.column === 'string' ? ` · ${affectedStep.column}` : ''}
-          </span>
-        )}
-      </div>
-
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-        <span style={{ color: clarificationAccent, fontSize: '1rem', lineHeight: 1, flexShrink: 0 }}>?</span>
-        <p style={{
-          margin: 0,
-          fontFamily: 'var(--font-mono)',
-          fontSize: '0.85rem',
-          color: 'var(--color-text)',
-          lineHeight: 1.6,
-        }}>
-          {cell.clarificationQuestion}
-        </p>
-      </div>
-
-      {!answered && choices.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {choices.map(choice => (
-            <button
-              key={choice.id}
-              type="button"
-              onClick={() => onSubmit(choice.query)}
-              style={{
-                textAlign: 'left',
-                background: 'var(--color-surface-1)',
-                border: '1px solid var(--color-border)',
-                borderRadius: 8,
-                padding: '8px 10px',
-                cursor: 'pointer',
-                fontFamily: 'var(--font-mono)',
-              }}
-            >
-              <div style={{ color: 'var(--color-accent)', fontSize: '0.8rem', fontWeight: 600 }}>
-                {choice.label}
-              </div>
-              <div style={{ color: 'var(--color-text-muted)', fontSize: '0.74rem', lineHeight: 1.5, marginTop: 2 }}>
-                {choice.description}
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {answered ? (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          padding: '5px 10px',
-          background: 'var(--color-surface-1)',
-          border: '1px solid var(--color-border)',
-          borderRadius: 6,
-        }}>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Answer:</span>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: 'var(--color-accent)' }}>
-            {cell.clarificationAnswer}
-          </span>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', gap: 6 }}>
-          <input
-            ref={inputRef}
-            autoFocus
-            value={draft}
-            onChange={e => setDraft(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') handleSubmit() }}
-            placeholder="Type your answer…"
-            style={{
-              flex: 1,
-              background: 'var(--color-surface-1)',
-              border: '1px solid var(--color-border)',
-              borderRadius: 6,
-              padding: '5px 10px',
-              fontFamily: 'var(--font-mono)',
-              fontSize: '0.82rem',
-              color: 'var(--color-text)',
-              outline: 'none',
-            }}
-          />
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={!draft.trim()}
-            style={{
-              padding: '5px 14px',
-              background: draft.trim() ? 'var(--color-blue)' : 'var(--color-surface-2)',
-              border: '1px solid var(--color-border)',
-              borderRadius: 6,
-              fontFamily: 'var(--font-mono)',
-              fontSize: '0.78rem',
-              color: draft.trim() ? '#fff' : 'var(--color-text-muted)',
-              cursor: draft.trim() ? 'pointer' : 'not-allowed',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Send
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
-
 export function NotebookCell({ cell, onConfirm, onClarify, onSuggest, onRerun }: NotebookCellProps) {
   const execResult = cell.confirmResult?.execution_result ?? cell.result?.execution_result ?? null
   const explanation = cell.confirmResult?.explanation ?? cell.result?.explanation ?? null
@@ -576,22 +417,7 @@ export function NotebookCell({ cell, onConfirm, onClarify, onSuggest, onRerun }:
 
       {/* Bot response area */}
       <div style={{ padding: '0 16px 8px' }}>
-        {/* Bot label + mode badge */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-          <span style={{ color: 'var(--color-accent)', fontSize: '0.8rem', lineHeight: 1 }}>◉</span>
-          <span
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: '0.7rem',
-              color: 'var(--color-text-muted)',
-              letterSpacing: '0.06em',
-              textTransform: 'uppercase',
-            }}
-          >
-            DataCopilot
-          </span>
-          <ModeBadge result={cell.result} cellStatus={cell.status} />
-        </div>
+        <CellStatusHeader result={cell.result} cellStatus={cell.status} />
 
         {/* Loading / thinking indicator */}
         {cell.status === 'loading' && (
@@ -620,7 +446,11 @@ export function NotebookCell({ cell, onConfirm, onClarify, onSuggest, onRerun }:
             label={cell.clarificationType === 'slot_validation' ? 'slot validation' : 'clarification'}
             accent={cell.clarificationType === 'slot_validation' ? 'var(--color-yellow)' : 'var(--color-blue)'}
           >
-            <ClarificationPanel cell={cell} onSubmit={answer => onClarify(cell, answer)} />
+            <ClarificationPanel
+              cell={cell}
+              onSubmit={answer => onClarify(cell, answer)}
+              onSuggest={onSuggest}
+            />
           </OutputBlock>
         )}
 
@@ -643,6 +473,11 @@ export function NotebookCell({ cell, onConfirm, onClarify, onSuggest, onRerun }:
               state={cell.result?.state}
               hasErrors={cell.result?.has_errors}
               hasWarnings={cell.result?.has_warnings}
+            />
+            <WorkflowImpactSummary
+              stepResults={cell.result?.step_results ?? []}
+              hasErrors={hasErrors}
+              hasWarnings={hasWarnings}
             />
             {/* Warning / error summary banner */}
             {(hasErrors || hasWarnings) && (
@@ -727,19 +562,8 @@ export function NotebookCell({ cell, onConfirm, onClarify, onSuggest, onRerun }:
             )}
 
             {/* Read-only answer text (ask mode) */}
-            {cell.status === 'ok' && cell.result?.is_read_only && !execResult && cell.result?.explanation && (
-              <div style={{
-                padding: '10px 14px',
-                background: 'var(--color-surface-1)',
-                border: '1px solid rgba(152,195,121,0.3)',
-                borderRadius: 8,
-                fontFamily: 'var(--font-mono)',
-                fontSize: '0.84rem',
-                color: 'var(--color-text)',
-                lineHeight: 1.65,
-              }}>
-                {cell.result.explanation}
-              </div>
+            {cell.result?.is_read_only && !execResult && (
+              <AskModePanel result={cell.result} onSuggest={onSuggest} />
             )}
 
             {cell.status === 'ok' && explanation && !cell.result?.is_read_only && (
@@ -770,8 +594,8 @@ export function NotebookCell({ cell, onConfirm, onClarify, onSuggest, onRerun }:
                   )}
                   <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: 'var(--color-text-soft)', flex: 1 }}>
                     {hasWarnings
-                      ? 'Workflow has warnings. Review the steps above, then confirm to execute.'
-                      : 'Review the planned workflow above, then confirm to execute.'}
+                      ? 'Workflow has warnings. Review impact and suggested actions; confirm only if this change is intentional.'
+                      : 'Review the planned workflow above, then confirm to execute. Confirm will create a run artifact.'}
                   </p>
                   <button
                     onClick={() => onConfirm(cell)}

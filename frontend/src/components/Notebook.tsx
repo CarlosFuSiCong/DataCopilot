@@ -1,15 +1,16 @@
 import { useEffect, useRef } from 'react'
-import type { UploadResponse, WorkflowStep } from '../types'
+import type { QueryModeHint, UploadResponse, WorkflowStep } from '../types'
 import type { NotebookCellData } from '../types/notebook'
 import { NotebookIcon } from './ui/Icons'
 import { NotebookCell } from './NotebookCell'
 import { InputCell } from './InputCell'
+import { DemoGuidePanel } from './DemoGuidePanel'
 
 interface NotebookProps {
   cells: NotebookCellData[]
   isLoading: boolean
   dataset: UploadResponse | null
-  onSubmit: (query: string) => void
+  onSubmit: (query: string, modeHint?: QueryModeHint) => void
   onConfirm: (cell: NotebookCellData) => void
   onClarify: (cell: NotebookCellData, answer: string) => void
   onSuggest: (query: string) => void
@@ -85,6 +86,8 @@ export function Notebook({ cells, dataset, onSubmit, onConfirm, onClarify, onSug
 
         <div ref={bottomRef} style={{ height: 4 }} />
       </div>
+
+      {dataset && <DemoGuidePanel onSuggest={onSuggest} />}
 
       {/* Chat input bar — always at the bottom */}
       <InputCell

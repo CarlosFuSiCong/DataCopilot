@@ -1,4 +1,4 @@
-import type { UploadResponse, WorkflowStep } from '../types'
+import type { QueryModeHint, UploadResponse, WorkflowStep } from '../types'
 import type { NotebookCellData } from '../types/notebook'
 import { Notebook } from './Notebook'
 
@@ -6,7 +6,7 @@ interface ChatPanelProps {
   dataset: UploadResponse | null
   cells: NotebookCellData[]
   isLoading: boolean
-  onSubmit: (query: string) => void
+  onSubmit: (query: string, modeHint?: QueryModeHint) => void
   onConfirm: (cell: NotebookCellData) => void
   onClarify: (cell: NotebookCellData, answer: string) => void
   onSuggest: (query: string) => void
