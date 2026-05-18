@@ -7,6 +7,9 @@ import { WorkflowViewer } from './WorkflowViewer'
 import { ResultTable } from './ResultTable'
 import { ExplanationPanel } from './ExplanationPanel'
 import { RAGPanel } from './RAGPanel'
+import { ModeBadge } from './ModeBadge'
+import { RouteDecisionPanel } from './RouteDecisionPanel'
+import { AnalyticsSummaryPanel, ANALYTICAL_STEP_TYPES } from './AnalyticsSummaryPanel'
 
 import type { WorkflowStep } from '../types'
 
@@ -504,6 +507,18 @@ export function NotebookCell({ cell, onConfirm, onClarify, onSuggest, onRerun }:
   const hasErrors = cell.result?.has_errors ?? false
   const hasWarnings = cell.result?.has_warnings ?? false
 
+  // Find the last analytical step in the result for AnalyticsSummaryPanel
+  const allStepResults = cell.result?.step_results ?? []
+  const analyticalIdx = allStepResults.findLastIndex(r => ANALYTICAL_STEP_TYPES.has(r.step_type))
+  const analyticalStepResult = analyticalIdx >= 0 ? allStepResults[analyticalIdx] : null
+  const analyticalPlannedStep = analyticalIdx >= 0 ? cell.result?.planned_steps[analyticalIdx] : undefined
+
+  // Same for executed result
+  const execStepResults = execResult?.step_results ?? []
+  const execAnalyticalIdx = execStepResults.findLastIndex(r => ANALYTICAL_STEP_TYPES.has(r.step_type))
+  const execAnalyticalStepResult = execAnalyticalIdx >= 0 ? execStepResults[execAnalyticalIdx] : null
+  const execAnalyticalPlannedStep = execAnalyticalIdx >= 0 ? cell.result?.planned_steps[execAnalyticalIdx] : undefined
+
   return (
     <div style={{ marginBottom: 4 }}>
       {/* User message — right-aligned bubble */}
@@ -529,8 +544,8 @@ export function NotebookCell({ cell, onConfirm, onClarify, onSuggest, onRerun }:
 
       {/* Bot response area */}
       <div style={{ padding: '0 16px 8px' }}>
-        {/* Bot label */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+        {/* Bot label + mode badge */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
           <span style={{ color: 'var(--color-accent)', fontSize: '0.8rem', lineHeight: 1 }}>◉</span>
           <span
             style={{
@@ -543,6 +558,7 @@ export function NotebookCell({ cell, onConfirm, onClarify, onSuggest, onRerun }:
           >
             DataCopilot
           </span>
+          <ModeBadge result={cell.result} cellStatus={cell.status} />
         </div>
 
         {/* Loading / thinking indicator */}
@@ -619,10 +635,23 @@ export function NotebookCell({ cell, onConfirm, onClarify, onSuggest, onRerun }:
               onRerun={steps => onRerun(steps, cell.result!.query, cell.result?.run_id ?? cell.confirmResult?.run_id)}
             />
 
+            {/* Route Decision debug panel */}
+            {cell.result?.route_decision && (
+              <RouteDecisionPanel routeDecision={cell.result.route_decision} />
+            )}
+
             {ragContext && <RAGPanel ragContext={ragContext} />}
 
-            {/* Preview result (before confirm) */}
-            {(cell.status === 'preview' || cell.status === 'confirming') && lastPreviewStep && (
+            {/* Analytics panel for preview state */}
+            {(cell.status === 'preview' || cell.status === 'confirming') && analyticalStepResult && (
+              <AnalyticsSummaryPanel
+                stepResult={analyticalStepResult}
+                plannedStep={analyticalPlannedStep as WorkflowStep | undefined}
+              />
+            )}
+
+            {/* Preview result (before confirm) — skip for pure analytical tools */}
+            {(cell.status === 'preview' || cell.status === 'confirming') && lastPreviewStep && !ANALYTICAL_STEP_TYPES.has(lastPreviewStep.step_type) && (
               <ResultTable
                 columns={previewCols}
                 rows={lastPreviewStep.preview}
@@ -631,8 +660,16 @@ export function NotebookCell({ cell, onConfirm, onClarify, onSuggest, onRerun }:
               />
             )}
 
-            {/* Final execution result */}
-            {cell.status === 'ok' && execResult && (
+            {/* Analytics panel for executed state */}
+            {cell.status === 'ok' && execAnalyticalStepResult && (
+              <AnalyticsSummaryPanel
+                stepResult={execAnalyticalStepResult}
+                plannedStep={execAnalyticalPlannedStep as WorkflowStep | undefined}
+              />
+            )}
+
+            {/* Final execution result — skip for pure analytical tools */}
+            {cell.status === 'ok' && execResult && !ANALYTICAL_STEP_TYPES.has(execResult.step_results?.at(-1)?.step_type ?? '') && (
               <ResultTable
                 columns={execResult.columns}
                 rows={execResult.preview}
@@ -642,7 +679,23 @@ export function NotebookCell({ cell, onConfirm, onClarify, onSuggest, onRerun }:
               />
             )}
 
-            {cell.status === 'ok' && explanation && (
+            {/* Read-only answer text (ask mode) */}
+            {cell.status === 'ok' && cell.result?.is_read_only && !execResult && cell.result?.explanation && (
+              <div style={{
+                padding: '10px 14px',
+                background: 'var(--color-surface-1)',
+                border: '1px solid rgba(152,195,121,0.3)',
+                borderRadius: 8,
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.84rem',
+                color: 'var(--color-text)',
+                lineHeight: 1.65,
+              }}>
+                {cell.result.explanation}
+              </div>
+            )}
+
+            {cell.status === 'ok' && explanation && !cell.result?.is_read_only && (
               <ExplanationPanel
                 text={explanation}
                 executionResult={execResult ?? undefined}
