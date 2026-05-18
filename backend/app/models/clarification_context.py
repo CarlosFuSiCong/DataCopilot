@@ -192,7 +192,7 @@ def broad_analysis_choices(column_names: list[str], dataset_profile) -> list[dic
         "label": "Check for duplicate rows",
         "description": "Identify records that appear more than once.",
         "query": "Check for duplicate rows",
-        "tool": "detect_duplicates",
+        "tool": "deduplicate_rows",
     })
 
     # 3. Profile first numeric column
