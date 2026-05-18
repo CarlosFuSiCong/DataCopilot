@@ -45,6 +45,7 @@ from app.models.workflow_steps import (
     SummarizeNumericColumnStep,
     TrimTextStep,
     WorkflowStep,
+    DetectMissingValuesStep,
 )
 
 
@@ -1115,6 +1116,23 @@ def _execute_suggest_analysis_steps(step: WorkflowStep, df: pd.DataFrame) -> tup
     return df, msg, StepMetrics(affected_rate=0.0)
 
 
+def _execute_detect_missing_values(step: WorkflowStep, df: pd.DataFrame) -> tuple[pd.DataFrame, str, StepMetrics]:
+    assert isinstance(step, DetectMissingValuesStep)
+    rows: list[tuple] = []
+    for col in df.columns:
+        missing = int(df[col].isna().sum())
+        pct = round(100.0 * missing / len(df), 1) if len(df) > 0 else 0.0
+        rows.append((col, missing, pct, str(df[col].dtype)))
+    result = pd.DataFrame(rows, columns=["column", "missing_count", "missing_pct", "dtype"])
+    result = result[result["missing_count"] > 0].sort_values("missing_pct", ascending=False).reset_index(drop=True)
+    if result.empty:
+        result = pd.DataFrame([("(no missing values)", 0, 0.0, "")], columns=["column", "missing_count", "missing_pct", "dtype"])
+        msg = "No missing values found in any column."
+    else:
+        msg = f"Missing values detected in {len(result)} column(s)."
+    return result, msg, StepMetrics(affected_rate=0.0)
+
+
 _REGISTRY: dict[str, ToolSpec] = {
     "remove_missing_values": ToolSpec(
         type="remove_missing_values",
@@ -1403,6 +1421,15 @@ _REGISTRY: dict[str, ToolSpec] = {
         validate=_validate_noop,
         execute=_execute_suggest_analysis_steps,
         examples=[{"type": "suggest_analysis_steps"}],
+        risk_profile={},
+    ),
+    "detect_missing_values": ToolSpec(
+        type="detect_missing_values",
+        description="Scan all columns for missing values and return a table sorted by missing percentage.",
+        input_schema=_schema(DetectMissingValuesStep),
+        validate=_validate_noop,
+        execute=_execute_detect_missing_values,
+        examples=[{"type": "detect_missing_values"}],
         risk_profile={},
     ),
 }

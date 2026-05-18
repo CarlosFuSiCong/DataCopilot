@@ -1,0 +1,19 @@
+{
+  "doc_type": "transformation",
+  "step_type": "detect_missing_values",
+  "issue_code": null,
+  "source_path": "transformations/detect_missing_values.json",
+  "type": "detect_missing_values",
+  "title": "detect_missing_values: scan all columns for missing values and return a summary table",
+  "description": "Inspect every column in the dataset for null or missing values. Returns a table with columns [column, missing_count, missing_pct, dtype], sorted by missing_pct descending, showing only columns that have at least one missing value. If no missing values exist, returns a single informational row. Does not modify the dataset.",
+  "keywords": [
+    "missing values", "null", "detect missing", "check missing", "missing data",
+    "null check", "data quality", "incomplete data", "missing columns", "missing rate",
+    "缺失值", "空值", "检测缺失", "数据质量", "缺失率", "哪些列有缺失", "空值检测"
+  ],
+  "parameters": [],
+  "example": {
+    "type": "detect_missing_values"
+  },
+  "rag_note": "Takes no parameters. Scans all columns and returns only those with missing_count > 0, sorted by missing_pct descending. Returns a single row '(no missing values)' when the dataset is complete. Use before fill_missing_values or remove_missing_values to understand which columns are affected."
+}
