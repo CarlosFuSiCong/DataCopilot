@@ -8,6 +8,7 @@ from app.models.runtime_trace import WorkflowAttempt, WorkflowContextSummary, Wo
 from app.models.rag import RAGContext
 from app.models.workflow_execution import ExecutionResult, StepResult
 from app.models.workflow_steps import WorkflowStep
+from app.workflow.observation.models import ObservationSummary
 
 
 class ChatRequest(BaseModel):
@@ -65,3 +66,6 @@ class ChatResponse(BaseModel):
     # Suggested analysis directions for broad / ambiguous clarification requests.
     # Each dict has: id, label, description, query, tool.
     clarification_choices: list[dict[str, Any]] | None = None
+    # Structured observation from the preview pass: signals, diagnostic_explanation,
+    # candidate_fixes. Included whenever the pipeline runs a preview.
+    observation: ObservationSummary | None = None

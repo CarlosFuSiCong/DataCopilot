@@ -4,7 +4,7 @@ from app.workflow import runtime as workflow_runtime
 from app.models.runtime_trace import WorkflowContextSummary
 from app.workflow.observation import signal_rules
 from app.workflow.observation.models import ObservationSummary
-from app.workflow.observation.risk_rules import AFFECTS_MOST_ROWS, EMPTY_OUTPUT, NO_ROWS_MATCHED
+from app.workflow.observation.risk_rules import AFFECTS_MOST_ROWS, EMPTY_OUTPUT, LARGE_ROW_REMOVAL, NO_ROWS_MATCHED
 from app.models.workflow import PreviewResponse, StepIssue, StepResult
 
 
@@ -164,3 +164,71 @@ def test_observation_enters_agent_next_decision_input():
 
     assert decision_input["observation"]["status"] == "ok"
     assert decision_input["workflow_context_summary"]["planned_step_types"] == ["filter_rows"]
+
+
+def test_diagnostic_explanation_populated_for_empty_result():
+    result = _step_result(
+        status="warning",
+        issues=[StepIssue(severity="warning", code=EMPTY_OUTPUT, message="empty")],
+        output_rows=0,
+    )
+    observation = signal_rules.from_preview(_preview([result]))
+
+    assert observation.diagnostic_explanation is not None
+    assert "zero rows" in observation.diagnostic_explanation.lower() or "empty" in observation.diagnostic_explanation.lower()
+
+
+def test_candidate_fixes_for_empty_result_include_inspect_and_relax():
+    result = _step_result(
+        status="warning",
+        issues=[StepIssue(severity="warning", code=EMPTY_OUTPUT, message="empty")],
+        output_rows=0,
+        match_rate=0.0,
+    )
+    observation = signal_rules.from_preview(
+        _preview([result]),
+        planned_steps=[{"type": "filter_rows", "column": "status", "operator": "=", "value": "open"}],
+    )
+
+    fix_ids = [f.id for f in observation.candidate_fixes]
+    assert "inspect_unique" in fix_ids
+    assert "relax_filter" in fix_ids
+    inspect_fix = next(f for f in observation.candidate_fixes if f.id == "inspect_unique")
+    assert inspect_fix.action_type == "inspect_column"
+    assert "status" in (inspect_fix.query or "")
+
+
+def test_candidate_fixes_for_large_row_removal():
+    result = _step_result(
+        status="warning",
+        issues=[StepIssue(severity="warning", code=LARGE_ROW_REMOVAL, message="large removal")],
+        input_rows=100,
+        output_rows=10,
+        match_rate=0.1,
+    )
+    observation = signal_rules.from_preview(
+        _preview([result]),
+        planned_steps=[{"type": "filter_rows", "column": "amount", "operator": ">", "value": 9000}],
+    )
+
+    assert observation.diagnostic_explanation is not None
+    fix_ids = [f.id for f in observation.candidate_fixes]
+    assert "relax_filter" in fix_ids
+
+
+def test_validation_failure_includes_diagnostic_and_fixes():
+    observation = signal_rules.from_validation_failure("Column 'revenue' does not exist.")
+
+    assert observation.diagnostic_explanation is not None
+    assert "column" in observation.diagnostic_explanation.lower()
+    fix_ids = [f.id for f in observation.candidate_fixes]
+    assert "choose_column" in fix_ids
+
+
+def test_execution_error_includes_diagnostic_and_back_to_preview():
+    observation = signal_rules.from_execution_error("Division by zero in derive_column.")
+
+    assert observation.diagnostic_explanation is not None
+    fix_ids = [f.id for f in observation.candidate_fixes]
+    assert "back_to_preview" in fix_ids
+    assert "inspect_unique" in fix_ids

@@ -584,6 +584,7 @@ async def run_chat(request: ChatRequest) -> ChatResponse:
         attempts=attempts,
         context_summary=trace.context_summary,
         route_decision=route_decision.model_dump() if route_decision else None,
+        observation=observation,
     )
 
 
