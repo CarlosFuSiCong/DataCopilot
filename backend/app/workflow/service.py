@@ -80,16 +80,21 @@ async def run_chat(request: ChatRequest) -> ChatResponse:
     dataset_profile = profile(content, filename="<cached>")
     column_names = [col.name for col in dataset_profile.columns]
     clarification = _resolve_request_clarification(request)
+    is_broad_analysis_followup = (
+        bool(clarification and clarification.user_answer)
+        and clarification.clarification_type == "broad_analysis_request"
+    )
+    routing_query = clarification.user_answer if is_broad_analysis_followup and clarification else request.query
 
     # --- Stage 1: Query Classification ---
     # Skip classifier when the user is answering a clarification question so
     # the resolved query passes through to the planner without re-routing.
     route_decision = None
-    if not (clarification and clarification.user_answer):
-        route_decision = classify(request.query, column_names)
+    if not (clarification and clarification.user_answer) or is_broad_analysis_followup:
+        route_decision = classify(routing_query, column_names)
         logger.info(
             "RouteDecision: query=%r type=%s route=%s confidence=%.2f reason=%r evidence=%s",
-            request.query,
+            routing_query,
             route_decision.query_type,
             route_decision.route,
             route_decision.confidence,
@@ -99,7 +104,7 @@ async def run_chat(request: ChatRequest) -> ChatResponse:
 
         if route_decision.route == "ask_mode":
             return _ask_mode_response(
-                request=request,
+                request=request.model_copy(update={"query": routing_query}),
                 dataset_profile=dataset_profile,
                 column_names=column_names,
                 route_decision=route_decision,
@@ -164,13 +169,13 @@ async def run_chat(request: ChatRequest) -> ChatResponse:
     if (
         route_decision
         and route_decision.route == "deterministic_tool"
-        and not (clarification and clarification.user_answer)
+        and (not (clarification and clarification.user_answer) or is_broad_analysis_followup)
     ):
-        _min_rag = _build_minimal_rag_ctx(request.query, dataset_profile, column_names)
+        _min_rag = _build_minimal_rag_ctx(routing_query, dataset_profile, column_names)
 
         # Stage 2a: Tool Selection — select concrete tool and draft raw step
         _tr = tool_router.route(
-            query=request.query,
+            query=routing_query,
             column_names=column_names,
             dataset_profile=dataset_profile,
             route_decision=route_decision,

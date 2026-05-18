@@ -159,8 +159,11 @@ def _build_route_decision(
     if col_evidence:
         evidence = list(dict.fromkeys(evidence + col_evidence))
 
+    selected_tool = _selected_tool(query_type, query_lower)
     route = _derive_route(query_type, confidence)
-    tool = _selected_tool(query_type, query_lower) if route in ("deterministic_tool", "ask_mode") else None
+    if query_type == "diagnosis" and selected_tool == "detect_missing_values" and confidence >= 0.8:
+        route = "ask_mode"
+    tool = selected_tool if route in ("deterministic_tool", "ask_mode") else None
 
     return RouteDecision(
         route=route,
@@ -304,8 +307,11 @@ def classify_deterministic(
         if col_ev:
             conf = min(conf + 0.1, 1.0)
         conf = round(conf, 2)
+        selected_tool = _selected_tool(qtype, q)
         route = _derive_route(qtype, conf)
-        tool = _selected_tool(qtype, q) if route in ("deterministic_tool", "ask_mode") else None
+        if qtype == "diagnosis" and selected_tool == "detect_missing_values" and conf >= 0.8:
+            route = "ask_mode"
+        tool = selected_tool if route in ("deterministic_tool", "ask_mode") else None
         return RouteDecision(
             route=route,
             query_type=qtype,  # type: ignore[arg-type]

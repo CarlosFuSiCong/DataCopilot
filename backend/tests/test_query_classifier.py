@@ -67,9 +67,9 @@ class TestLLMPath:
         rd = classify("Profile xyz", SAMPLE_COLUMNS, _client=_mock_client("profiling", 0.6))
         assert rd.route == "llm_planner"
 
-    def test_high_confidence_diagnosis_gets_deterministic_tool(self):
+    def test_high_confidence_missing_diagnosis_gets_ask_mode(self):
         rd = classify("Detect missing values", SAMPLE_COLUMNS, _client=_mock_client("diagnosis", 0.9))
-        assert rd.route == "deterministic_tool"
+        assert rd.route == "ask_mode"
         assert rd.selected_tool == "detect_missing_values"
 
     def test_diagnosis_duplicate_selects_detect_duplicates(self):
@@ -182,6 +182,7 @@ class TestDeterministicFallback:
     def test_detect_missing(self):
         rd = classify_deterministic("Detect missing values", SAMPLE_COLUMNS)
         assert rd.query_type == "diagnosis"
+        assert rd.route == "ask_mode"
         assert rd.selected_tool == "detect_missing_values"
 
     def test_detect_duplicates(self):
@@ -229,6 +230,7 @@ class TestDeterministicFallback:
     def test_chinese_missing_values(self):
         rd = classify_deterministic("这个数据有哪些缺失值？", SAMPLE_COLUMNS)
         assert rd.query_type == "diagnosis"
+        assert rd.route == "ask_mode"
 
     def test_chinese_predict(self):
         rd = classify_deterministic("预测下个月的销售额", SAMPLE_COLUMNS)

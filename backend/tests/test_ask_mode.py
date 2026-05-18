@@ -180,6 +180,9 @@ class TestAskModeSubType:
     def test_dataset_overview_describe(self):
         assert _ask_mode_sub_type("Describe this dataset", self.COLUMN_NAMES) == "dataset_overview"
 
+    def test_missing_value_check(self):
+        assert _ask_mode_sub_type("Check for missing values", self.COLUMN_NAMES) == "missing_values"
+
 
 # ---------------------------------------------------------------------------
 # Ask Mode Response Content
@@ -229,6 +232,15 @@ class TestAskModeResponse:
         assert resp.ask_mode_type == "dataset_overview"
         assert "200" in resp.explanation
         assert "3" in resp.explanation  # column count
+
+    def test_missing_value_answer_is_read_only(self):
+        resp = self._call("Check for missing values")
+        assert resp.ask_mode_type == "missing_values"
+        assert resp.is_read_only is True
+        assert resp.execution_result is None
+        assert resp.planned_steps == []
+        assert "region: 5 missing (2.5%)" in resp.explanation
+        assert "did not modify the dataset" in resp.explanation
 
     def test_response_has_rag_context(self):
         resp = self._call("What columns are in this dataset?")

@@ -80,6 +80,8 @@ def _detect_mentioned_column(query: str, column_names: list[str]) -> str | None:
 def _ask_mode_sub_type(query: str, column_names: list[str]) -> str:
     """Classify the Ask Mode sub-type from query text."""
     q = query.lower()
+    if any(kw in q for kw in ("missing", "null", "nan", "缺失值", "空值")):
+        return "missing_values"
     if any(kw in q for kw in ("how many rows", "row count", "how many records", "行数", "多少行")):
         return "dataset_overview"
     if any(kw in q for kw in ("overview", "describe", "summary", "about this", "dataset", "数据集", "概览")):
@@ -101,7 +103,30 @@ def _ask_mode_response(
     sub_type = _ask_mode_sub_type(request.query, column_names)
     mentioned_col = _detect_mentioned_column(request.query, column_names)
 
-    if sub_type == "column_detail" and mentioned_col:
+    if sub_type == "missing_values":
+        missing_cols = sorted(
+            [c for c in dataset_profile.columns if c.missing_count > 0],
+            key=lambda c: c.missing_pct,
+            reverse=True,
+        )
+        if missing_cols:
+            lines = [
+                f"  - {c.name}: {c.missing_count} missing ({c.missing_pct:.1f}%)"
+                for c in missing_cols
+            ]
+            answer = (
+                "Missing value check:\n"
+                f"  - {len(missing_cols)} of {len(column_names)} columns have missing values.\n"
+                + "\n".join(lines)
+                + "\n  - This is read-only and did not modify the dataset."
+            )
+        else:
+            answer = (
+                "Missing value check:\n"
+                "  - No missing values were found in the dataset.\n"
+                "  - This is read-only and did not modify the dataset."
+            )
+    elif sub_type == "column_detail" and mentioned_col:
         col_info = next((c for c in dataset_profile.columns if c.name == mentioned_col), None)
         if col_info:
             missing_pct = f"{col_info.missing_pct:.1f}" if col_info.missing_pct else "0.0"

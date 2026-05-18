@@ -316,6 +316,51 @@ def test_chat_explicit_missing_column_asks_clarification_before_planning():
     mock_plan.assert_not_called()
 
 
+def test_broad_analysis_missing_choice_returns_read_only_ask_mode():
+    did = _upload()
+    broad_route = RouteDecision(
+        route="clarification",
+        query_type="broad_analysis_request",
+        confidence=0.9,
+        reason="mocked broad analysis",
+    )
+    missing_route = RouteDecision(
+        route="ask_mode",
+        query_type="diagnosis",
+        confidence=0.95,
+        reason="mocked missing value check",
+        selected_tool="detect_missing_values",
+    )
+    with patch("app.workflow.service.classify", side_effect=[broad_route, missing_route]):
+        first = client.post(
+            "/api/chat",
+            json={"dataset_id": did, "query": "Analyze this dataset for issues"},
+        )
+        assert first.status_code == 200
+        context = first.json()["clarification_context"]
+        context["user_answer"] = "Check for missing values in the dataset"
+
+        with patch("app.api.chat.workflow_planner.plan") as mock_plan:
+            second = client.post(
+                "/api/chat",
+                json={
+                    "dataset_id": did,
+                    "query": "Analyze this dataset for issues",
+                    "clarification_context": context,
+                },
+            )
+
+    assert second.status_code == 200
+    data = second.json()
+    assert data["is_read_only"] is True
+    assert data["ask_mode_type"] == "missing_values"
+    assert data["planned_steps"] == []
+    assert data["execution_result"] is None
+    assert data["route_decision"]["route"] == "ask_mode"
+    assert "sales: 1 missing (20.0%)" in data["explanation"]
+    mock_plan.assert_not_called()
+
+
 def test_chat_validation_failure_allows_one_case_repair():
     bad_case_steps = [FilterRowsStep(type="filter_rows", column="Sales", operator=">", value=1000)]
     did = _upload()
