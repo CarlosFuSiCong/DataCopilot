@@ -165,6 +165,29 @@ export interface RAGContext {
   debug: RetrievalDebug
 }
 
+// ─── Observation ─────────────────────────────────────────────────────────────
+
+export type CandidateFixAction = 'suggest_query' | 'inspect_column' | 'back_to_preview' | 'relax_filter'
+
+export interface CandidateFix {
+  id: string
+  label: string
+  description: string
+  action_type: CandidateFixAction
+  query?: string | null
+}
+
+export interface ObservationSummary {
+  status: 'not_observed' | 'ok' | 'warning' | 'error'
+  signals: string[]
+  message?: string | null
+  diagnostic_explanation?: string | null
+  possible_causes: string[]
+  candidate_fixes: CandidateFix[]
+  recommended_next_action?: string | null
+  workflow_state?: string | null
+}
+
 // ─── Chat ─────────────────────────────────────────────────────────────────────
 
 export interface ChatRequest {
@@ -236,6 +259,8 @@ export interface ChatResponse {
   evidence_source?: string | null
   // Route decision debug info from the query classifier (task 5).
   route_decision?: Record<string, unknown> | null
+  // Structured observation from the preview pass (task 6).
+  observation?: ObservationSummary | null
 }
 
 // ─── Run history ──────────────────────────────────────────────────────────────

@@ -10,6 +10,8 @@ import { RAGPanel } from './RAGPanel'
 import { ModeBadge } from './ModeBadge'
 import { RouteDecisionPanel } from './RouteDecisionPanel'
 import { AnalyticsSummaryPanel, ANALYTICAL_STEP_TYPES } from './AnalyticsSummaryPanel'
+import { ObservationPanel } from './ObservationPanel'
+import { WorkflowTimeline } from './WorkflowTimeline'
 
 import type { WorkflowStep } from '../types'
 
@@ -605,6 +607,13 @@ export function NotebookCell({ cell, onConfirm, onClarify, onSuggest, onRerun }:
         {/* Main result content */}
         {hasResult && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+
+            {/* Workflow pipeline timeline */}
+            <WorkflowTimeline
+              state={cell.result?.state}
+              hasErrors={cell.result?.has_errors}
+              hasWarnings={cell.result?.has_warnings}
+            />
             {/* Warning / error summary banner */}
             {(hasErrors || hasWarnings) && (
               <div
@@ -638,6 +647,14 @@ export function NotebookCell({ cell, onConfirm, onClarify, onSuggest, onRerun }:
             {/* Route Decision debug panel */}
             {cell.result?.route_decision && (
               <RouteDecisionPanel routeDecision={cell.result.route_decision} />
+            )}
+
+            {/* Observation diagnostics panel */}
+            {cell.result?.observation && (cell.result.has_warnings || cell.result.has_errors) && (
+              <ObservationPanel
+                observation={cell.result.observation}
+                onSuggest={onSuggest}
+              />
             )}
 
             {ragContext && <RAGPanel ragContext={ragContext} />}
