@@ -121,6 +121,14 @@ class TestValidOutcomes:
         )
         assert result.is_valid is True
 
+    def test_valid_missing_value_filter_does_not_require_value(self):
+        result = validate_slots(
+            _extraction(intent="filter", column="amount", operator="is_null", value=None),
+            ORDERS_PROFILE,
+        )
+        assert result.is_valid is True
+        assert result.needs_clarification is False
+
     def test_valid_column_case_insensitive(self):
         result = validate_slots(
             _extraction(intent="filter", column="AMOUNT", operator="gt", value="500"),
