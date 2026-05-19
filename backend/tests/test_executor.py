@@ -1,7 +1,8 @@
 """Unit tests for app.workflow.execution.executor."""
 import pytest
+import pandas as pd
 
-from app.workflow.execution.executor import execute
+from app.workflow.execution.executor import _filter_rows, execute
 from app.workflow.observation.risk_rules import AFFECTS_MOST_ROWS, EMPTY_OUTPUT, NO_ROWS_MATCHED
 from app.core.exceptions import ExecutionError
 from app.models.workflow import (
@@ -97,6 +98,35 @@ def test_filter_less_than_or_equal():
         BASE_CSV,
     )
     assert result.row_count == 2
+
+
+def test_filter_is_null_keeps_missing_rows():
+    result = execute(
+        [FilterRowsStep(type="filter_rows", column="sales", operator="is_null")],
+        BASE_CSV,
+    )
+    assert result.row_count == 1
+    assert result.preview[0]["region"] == "West"
+
+
+def test_filter_null_equality_normalizes_to_is_null():
+    step = FilterRowsStep(type="filter_rows", column="sales", operator="=", value=None)
+
+    result = execute([step], BASE_CSV)
+
+    assert step.operator == "is_null"
+    assert result.row_count == 1
+
+
+def test_legacy_filter_handler_supports_null_operator():
+    step = FilterRowsStep(type="filter_rows", column="sales", operator="is_null")
+    df = pd.DataFrame({"region": ["North", "West"], "sales": [1200, None]})
+
+    result, message, _ = _filter_rows(step, df)
+
+    assert len(result) == 1
+    assert result.iloc[0]["region"] == "West"
+    assert message == "Filtered 'sales' is_null: 1 rows kept."
 
 
 # ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 """Workflow step contracts."""
 from typing import Annotated, Literal, Union
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class RemoveMissingValuesStep(BaseModel):
@@ -33,19 +33,40 @@ _OPERATOR_ALIASES: dict[str, str] = {
     "less_than_or_equal": "<=",
     "lte": "<=",
     "le": "<=",
+    "is_missing": "is_null",
+    "missing": "is_null",
+    "is_null": "is_null",
+    "null": "is_null",
+    "is_not_missing": "is_not_null",
+    "not_missing": "is_not_null",
+    "is_not_null": "is_not_null",
+    "not_null": "is_not_null",
 }
 
 
 class FilterRowsStep(BaseModel):
     type: Literal["filter_rows"]
     column: str
-    operator: Literal["=", "!=", ">", ">=", "<", "<="]
-    value: Union[int, float, str]
+    operator: Literal["=", "!=", ">", ">=", "<", "<=", "is_null", "is_not_null"]
+    value: Union[int, float, str, None] = None
 
     @field_validator("operator", mode="before")
     @classmethod
     def normalize_operator(cls, v: str) -> str:
         return _OPERATOR_ALIASES.get(v, v)
+
+    @model_validator(mode="after")
+    def normalize_null_filter(self) -> "FilterRowsStep":
+        if self.value is None:
+            if self.operator == "=":
+                self.operator = "is_null"
+            elif self.operator == "!=":
+                self.operator = "is_not_null"
+            elif self.operator not in {"is_null", "is_not_null"}:
+                raise ValueError(
+                    f"filter_rows operator '{self.operator}' requires a comparison value."
+                )
+        return self
 
 
 class GroupByStep(BaseModel):

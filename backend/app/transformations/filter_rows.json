@@ -5,9 +5,9 @@
   "source_path": "transformations/filter_rows.json",
   "type": "filter_rows",
   "title": "filter_rows: keep rows that satisfy a condition",
-  "description": "Keep only rows that satisfy a comparison condition on a single column. Removes all rows that do not match. Supports numeric comparisons (>, >=, <, <=, =, !=) and string equality. Use this when the user wants to focus on a subset of data, such as rows above a threshold or matching a specific category.",
+  "description": "Keep only rows that satisfy a condition on a single column. Removes all rows that do not match. Supports numeric comparisons (>, >=, <, <=, =, !=), string equality, and missing-value checks with is_null or is_not_null. Use this when the user wants to focus on a subset of data, such as rows above a threshold, matching a category, or rows where a column is missing.",
   "keywords": [
-    "filter", "where", "condition", "greater", "less", "equal", "rows", "subset",
+    "filter", "where", "condition", "greater", "less", "equal", "rows", "subset", "missing", "null",
     "过滤", "筛选", "条件", "大于", "小于", "等于", "行", "满足", "only", "above", "below",
     "超过", "低于", "高于", "不等于"
   ],
@@ -22,13 +22,13 @@
       "name": "operator",
       "type": "str",
       "required": true,
-      "description": "Comparison operator. Allowed values (use the symbol exactly, never English words): = (equal), != (not equal), > (greater than), >= (greater than or equal), < (less than), <= (less than or equal). Do NOT use 'equals', 'eq', 'gt', 'gte', 'lt', 'lte', or any other form."
+      "description": "Comparison operator. Allowed values (use exactly): = (equal), != (not equal), > (greater than), >= (greater than or equal), < (less than), <= (less than or equal), is_null (missing values), is_not_null (non-missing values). Do NOT use 'equals', 'eq', 'gt', 'gte', 'lt', 'lte', 'missing', or any other form."
     },
     {
       "name": "value",
-      "type": "int | float | str",
-      "required": true,
-      "description": "The value to compare against. Use a number for numeric comparisons, or a string (in quotes) for text comparisons."
+      "type": "int | float | str | null",
+      "required": false,
+      "description": "The value to compare against. Required for =, !=, >, >=, <, and <=. Omit this field for is_null and is_not_null."
     }
   ],
   "example": {
