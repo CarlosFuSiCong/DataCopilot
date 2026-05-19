@@ -22,7 +22,7 @@ from pydantic import ValidationError
 from app.core.config import settings
 from app.core.exceptions import ClarificationNeeded, PlannerError
 from app.models.rag import RAGContext
-from app.models.workflow_steps import WorkflowStep
+from app.models.workflow_steps import GroupByStep, SortValuesStep, WorkflowStep
 from app.models.workflow_transport import WorkflowRequest
 from app.workflow.nlu.slot_models import SlotExtractionResult
 from app.workflow.registry import registry
@@ -59,9 +59,12 @@ STRICT FIELD CONSTRAINTS (must be followed exactly, no synonyms or alternatives)
 - filter_rows "operator": MUST be one of exactly: "=", "!=", ">", ">=", "<", "<=", "is_null", "is_not_null"
   Do NOT use: "equals", "eq", "greater_than", "gt", "lt", "gte", "lte", "missing", "not_missing", or any word form.
 - For filter_rows missing-value requests such as "amount is missing", use
-  {"type": "filter_rows", "column": "amount", "operator": "is_null"} and omit "value".
+  {{"type": "filter_rows", "column": "amount", "operator": "is_null"}} and omit "value".
 - group_by "agg": MUST be one of: "sum", "mean", "count", "min", "max"
 - sort_values "ascending": MUST be a boolean — true (ascending) or false (descending). Do NOT use "order", "asc", "desc", or any string.
+- For aggregate ranking requests such as "total sales by region", "sum amount by category",
+  or "average amount by status", add a sort_values step after group_by:
+  {{"type": "sort_values", "column": "<group_by target>", "ascending": false}}.
 
 CLARIFICATION — apply a structural test, not a list of examples:
 
@@ -123,6 +126,10 @@ _SLOT_TO_PLANNER_OP: dict[str, str] = {
 }
 
 _SLOT_HINT_MIN_CONFIDENCE = 0.7
+_AGGREGATE_BY_PATTERN = re.compile(
+    r"\b(?:total|sum|average|avg|mean|count|min|max)\b.*\bby\b",
+    re.IGNORECASE,
+)
 
 
 def _format_slot_hints(slot_context: SlotExtractionResult) -> str:
@@ -297,6 +304,9 @@ def _parse_steps(raw_json: str) -> list[WorkflowStep]:
         question = _missing_required_field_question(exc, steps_raw)
         if question:
             raise ClarificationNeeded(question) from exc
+        question = _filter_missing_value_question(exc, steps_raw)
+        if question:
+            raise ClarificationNeeded(question) from exc
         raise PlannerError(f"LLM workflow contains invalid step structure: {exc}") from exc
     except Exception as exc:
         raise PlannerError(f"LLM workflow contains invalid step structure: {exc}") from exc
@@ -355,6 +365,24 @@ def _missing_required_field_question(
     )
 
 
+def _filter_missing_value_question(
+    exc: ValidationError,
+    steps_raw: list,
+) -> str | None:
+    for err in exc.errors():
+        msg = str(err.get("msg", ""))
+        if "requires a comparison value" not in msg:
+            continue
+        step_index = _extract_step_index(err.get("loc", ()))
+        step_type = _extract_step_type(steps_raw, step_index)
+        if step_type == "filter_rows":
+            return (
+                "The planned 'filter_rows' step is missing required field 'value'. "
+                "What value should I use for 'value'?"
+            )
+    return None
+
+
 def _extract_step_index(loc: tuple) -> int | None:
     for part in loc:
         if isinstance(part, int):
@@ -370,6 +398,23 @@ def _extract_step_type(steps_raw: list, step_index: int | None) -> str | None:
         step_type = step_raw.get("type")
         return str(step_type) if step_type else None
     return None
+
+
+def _apply_default_aggregate_sort(query: str, steps: list[WorkflowStep]) -> list[WorkflowStep]:
+    """Rank aggregate-by results by the aggregate value unless already sorted."""
+    if not _AGGREGATE_BY_PATTERN.search(query):
+        return steps
+
+    sorted_steps: list[WorkflowStep] = []
+    for idx, step in enumerate(steps):
+        sorted_steps.append(step)
+        if not isinstance(step, GroupByStep):
+            continue
+        next_step = steps[idx + 1] if idx + 1 < len(steps) else None
+        if isinstance(next_step, SortValuesStep):
+            continue
+        sorted_steps.append(SortValuesStep(type="sort_values", column=step.target, ascending=False))
+    return sorted_steps
 
 
 def plan_with_trace(
@@ -432,7 +477,7 @@ def plan_with_trace(
     global last_raw_output
     last_raw_output = raw
 
-    steps = _parse_steps(raw)
+    steps = _apply_default_aggregate_sort(query, _parse_steps(raw))
     logger.info("Planner produced %d steps", len(steps))
     return PlannerResult(steps=steps, raw_output=raw)
 

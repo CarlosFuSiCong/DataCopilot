@@ -170,6 +170,41 @@ def test_plan_returns_steps_from_llm():
     assert steps[0].type == "group_by"
 
 
+def test_plan_adds_descending_sort_for_total_by_group():
+    llm_response = json.dumps({
+        "steps": [{"type": "group_by", "column": "region", "target": "sales", "agg": "sum"}]
+    })
+    mock_client = _make_mock_client(llm_response)
+
+    with patch("app.workflow.planning.workflow_planner.settings") as mock_settings:
+        mock_settings.llm_api_key = "test-key"
+        mock_settings.llm_model = "gpt-4o-mini"
+        mock_settings.llm_max_tokens = 512
+        steps = plan("Calculate total sales by region", SAMPLE_CTX, client=mock_client)
+
+    assert [step.type for step in steps] == ["group_by", "sort_values"]
+    assert steps[1].column == "sales"
+    assert steps[1].ascending is False
+
+
+def test_plan_does_not_duplicate_existing_aggregate_sort():
+    llm_response = json.dumps({
+        "steps": [
+            {"type": "group_by", "column": "region", "target": "sales", "agg": "sum"},
+            {"type": "sort_values", "column": "sales", "ascending": False},
+        ]
+    })
+    mock_client = _make_mock_client(llm_response)
+
+    with patch("app.workflow.planning.workflow_planner.settings") as mock_settings:
+        mock_settings.llm_api_key = "test-key"
+        mock_settings.llm_model = "gpt-4o-mini"
+        mock_settings.llm_max_tokens = 512
+        steps = plan("Calculate total sales by region", SAMPLE_CTX, client=mock_client)
+
+    assert [step.type for step in steps] == ["group_by", "sort_values"]
+
+
 def test_plan_raises_planner_error_when_llm_returns_empty_steps():
     mock_client = _make_mock_client(json.dumps({"steps": []}))
 
