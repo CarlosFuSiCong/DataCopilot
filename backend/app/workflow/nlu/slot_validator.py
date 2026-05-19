@@ -8,7 +8,7 @@ from app.models.dataset import DatasetProfile
 from app.workflow.nlu.slot_models import SlotExtractionResult
 
 _REQUIRED_SLOTS: dict[str, list[str]] = {
-    "filter": ["column", "operator", "value"],
+    "filter": ["column", "operator"],
     "sort": ["column", "sort_direction"],
     "group_aggregate": ["column", "aggregation"],
     "limit": ["limit"],
@@ -19,6 +19,7 @@ _REQUIRED_SLOTS: dict[str, list[str]] = {
 _UNSUPPORTED_INTENTS: frozenset[str] = frozenset({"unknown"})
 _NUMERIC_DTYPES = {"int64", "float64", "int32", "float32", "uint64", "uint32", "Int64", "Float64"}
 _MAX_CANDIDATES = 3
+_NULL_OPERATORS = {"is_null", "is_not_null"}
 
 SlotValidationStatus = Literal[
     "valid",
@@ -168,6 +169,8 @@ def validate_slots(
     required = _REQUIRED_SLOTS.get(intent, [])
     slot_dict = slots.model_dump()
     missing = [r for r in required if slot_dict.get(r) is None]
+    if intent == "filter" and slots.operator not in _NULL_OPERATORS and slots.value is None:
+        missing.append("value")
     if missing:
         return _missing_slot(missing, intent)
 

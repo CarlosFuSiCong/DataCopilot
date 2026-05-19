@@ -23,7 +23,7 @@ _STEP_DEFAULTS: dict[str, dict[str, Any]] = {
 
 _REQUIRED_FIELDS: dict[str, list[str]] = {
     "select_columns": ["columns"],
-    "filter_rows": ["column", "operator", "value"],
+    "filter_rows": ["column", "operator"],
     "group_by": ["column", "target", "agg"],
     "sort_values": ["column"],
     "rename_columns": ["mapping"],
@@ -57,6 +57,12 @@ def resolve_parameters(
     for field in _REQUIRED_FIELDS.get(step_type, []):
         if field not in resolved:
             missing_required_fields.append(field)
+    if (
+        step_type == "filter_rows"
+        and resolved.get("operator") not in {"is_null", "is_not_null"}
+        and "value" not in resolved
+    ):
+        missing_required_fields.append("value")
 
     for field in _COLUMN_FIELDS:
         if field not in resolved:

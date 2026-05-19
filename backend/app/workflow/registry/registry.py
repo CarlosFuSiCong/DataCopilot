@@ -395,6 +395,8 @@ _FILTER_OPS = {
     ">=": lambda s, v: s >= v,
     "<": lambda s, v: s < v,
     "<=": lambda s, v: s <= v,
+    "is_null": lambda s, v: s.isna(),
+    "is_not_null": lambda s, v: s.notna(),
 }
 
 
@@ -407,9 +409,14 @@ def _execute_filter_rows(step: WorkflowStep, df: pd.DataFrame) -> tuple[pd.DataF
         )
     mask = _FILTER_OPS[step.operator](df[step.column], step.value)
     result = df[mask].reset_index(drop=True)
+    condition = (
+        f"'{step.column}' {step.operator}"
+        if step.operator in {"is_null", "is_not_null"}
+        else f"'{step.column}' {step.operator} {step.value!r}"
+    )
     return (
         result,
-        f"Filtered '{step.column}' {step.operator} {step.value!r}: {len(result)} rows kept.",
+        f"Filtered {condition}: {len(result)} rows kept.",
         StepMetrics(match_rate=_safe_rate(len(result), len(df))),
     )
 

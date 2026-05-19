@@ -56,8 +56,10 @@ Rules:
   Always include the full list of available columns so the user knows what to choose from.
 
 STRICT FIELD CONSTRAINTS (must be followed exactly, no synonyms or alternatives):
-- filter_rows "operator": MUST be one of exactly: "=", "!=", ">", ">=", "<", "<="
-  Do NOT use: "equals", "eq", "greater_than", "gt", "lt", "gte", "lte", or any word form.
+- filter_rows "operator": MUST be one of exactly: "=", "!=", ">", ">=", "<", "<=", "is_null", "is_not_null"
+  Do NOT use: "equals", "eq", "greater_than", "gt", "lt", "gte", "lte", "missing", "not_missing", or any word form.
+- For filter_rows missing-value requests such as "amount is missing", use
+  {"type": "filter_rows", "column": "amount", "operator": "is_null"} and omit "value".
 - group_by "agg": MUST be one of: "sum", "mean", "count", "min", "max"
 - sort_values "ascending": MUST be a boolean — true (ascending) or false (descending). Do NOT use "order", "asc", "desc", or any string.
 
@@ -116,6 +118,8 @@ _SLOT_TO_PLANNER_OP: dict[str, str] = {
     "gte": ">=",
     "lt": "<",
     "lte": "<=",
+    "is_null": "is_null",
+    "is_not_null": "is_not_null",
 }
 
 _SLOT_HINT_MIN_CONFIDENCE = 0.7

@@ -55,7 +55,8 @@ Chinese operator mapping:
 
 Rules:
 - Preserve column names exactly as written in the query; do not translate or infer.
-- For filter intent: column, operator, value are required.
+- For filter intent: column and operator are required. value is required for
+  comparison operators, but must be null for is_null / is_not_null.
 - For sort intent: column and sort_direction are required.
 - For group_aggregate intent: column is the group-by column, target_column is the numeric column, aggregation is required.
 - For limit intent: limit is required.
@@ -66,6 +67,9 @@ Examples:
 
 Query: "filter rows where amount > 1000"
 {"intent":"filter","slots":{"column":"amount","operator":"gt","value":"1000","target_column":null,"aggregation":null,"sort_direction":null,"limit":null},"confidence":0.95,"missing_slots":[],"ambiguities":[],"query_locale":"en"}
+
+Query: "find rows where amount is missing"
+{"intent":"filter","slots":{"column":"amount","operator":"is_null","value":null,"target_column":null,"aggregation":null,"sort_direction":null,"limit":null},"confidence":0.95,"missing_slots":[],"ambiguities":[],"query_locale":"en"}
 
 Query: "筛选 amount 大于 1000 的行"
 {"intent":"filter","slots":{"column":"amount","operator":"gt","value":"1000","target_column":null,"aggregation":null,"sort_direction":null,"limit":null},"confidence":0.93,"missing_slots":[],"ambiguities":[],"query_locale":"zh"}

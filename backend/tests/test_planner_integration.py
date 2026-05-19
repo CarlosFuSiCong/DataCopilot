@@ -79,6 +79,11 @@ class TestFormatSlotHints:
         hint = _format_slot_hints(_result(operator="ne"))
         assert "operator: !=" in hint
 
+    def test_filter_hint_maps_missing_operator_without_value(self):
+        hint = _format_slot_hints(_result(operator="is_null", value=None))
+        assert "operator: is_null" in hint
+        assert "value:" not in hint
+
     def test_unmapped_operator_omitted(self):
         # "contains" has no planner mapping — operator line should be absent.
         hint = _format_slot_hints(_result(operator="contains"))

@@ -61,6 +61,19 @@ class TestParseLLMOutput:
         assert result.slots.value == "1000"
         assert result.confidence == pytest.approx(0.95)
 
+    def test_valid_missing_value_filter_output(self):
+        raw = _slot_json(
+            slots={
+                "column": "amount", "operator": "is_null", "value": None,
+                "target_column": None, "aggregation": None,
+                "sort_direction": None, "limit": None,
+            }
+        )
+        result, err = _parse_llm_output(raw, "find rows where amount is missing")
+        assert err is None
+        assert result.slots.operator == "is_null"
+        assert result.slots.value is None
+
     def test_empty_string_returns_unknown(self):
         result, err = _parse_llm_output("", "some query")
         assert err is not None
