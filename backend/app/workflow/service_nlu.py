@@ -137,7 +137,10 @@ def _extract_column_from_error(msg: str) -> str | None:
 # ---------------------------------------------------------------------------
 
 _SORT_PATTERN = re.compile(r"(?:sort(?:ed)?\s+by|order\s+by|按|根据).*", re.IGNORECASE)
-_GROUP_PATTERN = re.compile(r"(?:group\s+by|grouped\s+by|汇总|分组)", re.IGNORECASE)
+_GROUP_PATTERN = re.compile(
+    r"(?:group\s+by|grouped\s+by|\b(?:total|sum|average|avg|mean|count|min|max)\b.*\bby\b|汇总|分组)",
+    re.IGNORECASE,
+)
 _FILTER_PATTERN = re.compile(r"(?:\bwhere\b|filter|过滤|删除|移除|保留)", re.IGNORECASE)
 
 

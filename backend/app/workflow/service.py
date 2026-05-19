@@ -80,6 +80,8 @@ async def run_chat(request: ChatRequest) -> ChatResponse:
     dataset_profile = profile(content, filename="<cached>")
     column_names = [col.name for col in dataset_profile.columns]
     clarification = _resolve_request_clarification(request)
+    if clarification and clarification.user_answer and request.query != clarification.original_query:
+        request = request.model_copy(update={"query": clarification.original_query})
     is_broad_analysis_followup = (
         bool(clarification and clarification.user_answer)
         and clarification.clarification_type == "broad_analysis_request"
@@ -439,6 +441,8 @@ async def run_chat(request: ChatRequest) -> ChatResponse:
         if "does not exist in the dataset" in msg or "not found" in msg.lower():
             intermediate_cols = simulate_columns(request.previous_steps, column_names)
             observation = signal_rules.from_validation_failure(msg, workflow_state="needs_clarification")
+            missing_col = _extract_column_from_error(msg)
+            affected_step = _affected_step_for_missing_column(steps, missing_col)
             failed_attempt = workflow_runtime.make_attempt(
                 attempt_index=0,
                 query=request.query,
@@ -460,6 +464,7 @@ async def run_chat(request: ChatRequest) -> ChatResponse:
                 attempts=[failed_attempt],
                 validation_status="failed",
                 observation=observation,
+                affected_step=affected_step,
             )
         raise
 
@@ -696,10 +701,17 @@ def _resolve_request_clarification(request: ChatRequest) -> ClarificationContext
         dataset_id=request.dataset_id,
         original_query=request.query,
     )
-    if clarification and not validate_scope(
-        clarification,
-        dataset_id=request.dataset_id,
-        original_query=request.query,
+    if clarification and not (
+        validate_scope(
+            clarification,
+            dataset_id=request.dataset_id,
+            original_query=request.query,
+        )
+        or validate_scope(
+            clarification,
+            dataset_id=request.dataset_id,
+            original_query=clarification.original_query,
+        )
     ):
         raise WorkflowValidationError(
             "Clarification context does not belong to this dataset and query.",
@@ -712,3 +724,26 @@ def _resolve_request_clarification(request: ChatRequest) -> ClarificationContext
             },
         )
     return clarification
+
+
+def _affected_step_for_missing_column(steps: list, missing_col: str | None) -> dict | None:
+    if not missing_col:
+        return None
+    for step in steps:
+        payload = step.model_dump() if hasattr(step, "model_dump") else dict(step)
+        if _step_payload_mentions_column(payload, missing_col):
+            return {"type": payload.get("type"), "column": missing_col}
+    return None
+
+
+def _step_payload_mentions_column(payload: dict, missing_col: str) -> bool:
+    for key, value in payload.items():
+        if key == "type":
+            continue
+        if value == missing_col:
+            return True
+        if isinstance(value, list) and missing_col in value:
+            return True
+        if isinstance(value, dict) and missing_col in value:
+            return True
+    return False

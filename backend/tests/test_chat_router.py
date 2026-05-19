@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core.exceptions import PlannerError
 from app.main import app
 from app.models.workflow import FilterRowsStep, GroupByStep, RemoveMissingValuesStep, SortValuesStep
 from app.workflow.planning.route_decision import RouteDecision
@@ -272,7 +273,6 @@ def test_chat_unknown_dataset_returns_400():
 
 
 def test_chat_planner_error_returns_400():
-    from app.core.exceptions import PlannerError
     did = _upload()
     with patch("app.api.chat.workflow_planner.plan", side_effect=PlannerError("unsupported request")):
         resp = client.post("/api/chat", json={"dataset_id": did, "query": "画一张图"})
@@ -314,6 +314,84 @@ def test_chat_explicit_missing_column_asks_clarification_before_planning():
     assert "revenue" in data["clarification_question"]
     assert "sales" in data["clarification_question"]
     mock_plan.assert_not_called()
+
+
+def test_chat_clarification_context_uses_original_query_scope_when_followup_query_is_answer():
+    did = _upload()
+    first = client.post(
+        "/api/chat",
+        json={"dataset_id": did, "query": "filter rows where revenue > 100"},
+    )
+    assert first.status_code == 200
+    context = first.json()["clarification_context"]
+    context["user_answer"] = "sales"
+
+    with patch(
+        "app.api.chat.workflow_planner.plan",
+        return_value=[FilterRowsStep(type="filter_rows", column="sales", operator=">", value=100)],
+    ):
+        with patch("app.api.chat.result_explainer.explain", return_value=_MOCK_EXPLANATION):
+            second = client.post(
+                "/api/chat",
+                json={
+                    "dataset_id": did,
+                    "query": "sales",
+                    "clarification_context": context,
+                },
+            )
+
+    assert second.status_code == 200
+    assert second.json().get("error_code") != "clarification_context_scope_mismatch"
+
+
+def test_chat_planner_missing_group_column_clarification_tracks_affected_step():
+    did = _upload()
+    original_query = "Calculate total sales by customer_type"
+
+    with patch(
+        "app.api.chat.workflow_planner.plan",
+        side_effect=PlannerError("Column 'customer_type' does not exist in the dataset."),
+    ):
+        first = client.post("/api/chat", json={"dataset_id": did, "query": original_query})
+
+    assert first.status_code == 200
+    context = first.json()["clarification_context"]
+    assert context["affected_step"] == {"type": "group_by", "column": "customer_type"}
+
+
+def test_chat_validation_missing_column_clarification_rewrites_failed_step_column():
+    did = _upload()
+    original_query = "Calculate total sales by customer_type"
+    bad_steps = [GroupByStep(type="group_by", column="customer_type", target="sales", agg="sum")]
+
+    with patch("app.api.chat.workflow_planner.plan", return_value=bad_steps):
+        first = client.post("/api/chat", json={"dataset_id": did, "query": original_query})
+
+    assert first.status_code == 200
+    context = first.json()["clarification_context"]
+    assert context["affected_step"] == {"type": "group_by", "column": "customer_type"}
+    context["user_answer"] = "region"
+
+    captured = {}
+
+    def fake_plan(query, ctx, client=None, slot_context=None):
+        captured["query"] = query
+        return [GroupByStep(type="group_by", column="region", target="sales", agg="sum")]
+
+    with patch("app.api.chat.workflow_planner.plan", side_effect=fake_plan):
+        with patch("app.api.chat.result_explainer.explain", return_value=_MOCK_EXPLANATION):
+            second = client.post(
+                "/api/chat",
+                json={
+                    "dataset_id": did,
+                    "query": "region",
+                    "clarification_context": context,
+                },
+            )
+
+    assert second.status_code == 200
+    assert captured["query"] == "Calculate total sales by region"
+    assert second.json()["planned_steps"][0]["column"] == "region"
 
 
 def test_broad_analysis_missing_choice_returns_read_only_ask_mode():
