@@ -7,15 +7,23 @@ interface ClarificationPanelProps {
   onSuggest: (query: string) => void
 }
 
-const AVAILABLE_COLUMNS_PATTERN = /Available columns:\s*([^.;]+)/i
+const AVAILABLE_COLUMNS_PATTERN = /Available columns:\s*([^.?;]+)/gi
+
+function cleanColumnToken(value: string): string {
+  return value
+    .trim()
+    .replace(/^[\s'"[]+/, '')
+    .replace(/[\s'"\]]+$/, '')
+}
 
 function availableColumnsFromQuestion(question: string | undefined): string[] {
   if (!question) return []
-  const match = question.match(AVAILABLE_COLUMNS_PATTERN)
-  if (!match?.[1]) return []
-  return match[1]
+  const matches = Array.from(question.matchAll(AVAILABLE_COLUMNS_PATTERN))
+  const lastMatch = matches[matches.length - 1]
+  if (!lastMatch?.[1]) return []
+  return lastMatch[1]
     .split(',')
-    .map(value => value.trim())
+    .map(cleanColumnToken)
     .filter(Boolean)
 }
 
