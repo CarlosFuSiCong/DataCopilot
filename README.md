@@ -1,32 +1,64 @@
 ﻿# DataCopilot
 
-DataCopilot is a learning-first AI workflow prototype that demonstrates how natural-language data requests can be converted into inspectable, validated, and executable workflows.
+DataCopilot is a learning-first workflow product. It turns a natural-language data request into workflow JSON that can be checked, executed, and explained.
 
-The project is built around one core idea: the LLM should not directly invent final data answers. Instead, it should help plan a structured workflow, while deterministic code validates the plan, executes it on real data, and explains the result from actual execution evidence.
+The design principle:
 
-## What This Project Demonstrates
+> The LLM plans. The system validates. Deterministic tools execute. The user sees the plan and confirms actions that change data.
 
-DataCopilot is designed as a demonstration project for reliable AI workflow architecture, not a production analytics platform. It demonstrates how an AI data assistant can be made more trustworthy by separating:
+Model capability makes the system smart. Workflow and harness make it reliable. Tools make it able to act. Product design makes it useful.
 
-- Intent understanding from execution.
-- Workflow planning from validation.
-- Read-only questions from dataset-changing transformations.
-- Preview from confirmed execution.
-- Explanations from actual run results.
+## The idea
 
-The current demo supports one uploaded CSV at a time and focuses on transparent workflow execution rather than broad autonomous analysis.
+A stronger model is not a complete data product. Around the model, the system needs context, a contract, validation, execution, a trace, and a place for the user to step in.
 
-## Two Branch Ideas
+DataCopilot is that system, applied to one uploaded CSV:
 
-This repository has explored two product directions. The default branch, `master`, is the workflow-first product. The agent-loop exploration remains on `experiment/agent-loop`.
+```text
+User request
+-> context: schema, dataset profile, transformation docs
+-> workflow JSON
+-> validator and policy checks
+-> preview, then confirmation when data will change
+-> pandas execution
+-> explanation grounded in the run result
+```
 
-### 1. Workflow-First Product
+Workflow JSON is the contract between planning and execution. The validator rejects unknown step types, missing columns, and invalid parameters. The executor runs pandas. The explainer summarizes the real output.
 
-Default branch: `master`
+Responsibility is split on purpose:
 
-This is the current recommended demo path.
+```text
+Intent understanding     model-led
+Plan generation          model-assisted
+Validation               rule-led
+Execution                code-led
+Result calculation       code-led
+Result explanation       model-assisted
+```
 
-The workflow-first branch treats workflow JSON as the contract between AI planning and deterministic execution:
+The closer a step is to the final number, the less the model is allowed to own it.
+
+## Why workflow comes first
+
+Many products jump to an agent: give the model a goal and let it keep acting. That story is attractive. It is also hard to verify, repeat, audit, or hand back to a person.
+
+Workflow is the more useful first product when the job has a stable shape. A workflow can be inspected, tested, reproduced, and plugged into an existing process.
+
+The direction I want is agent over workflow, not an agent that skips the workflow:
+
+```text
+Chat interface
+-> RAG for tool and schema context
+-> workflow as the contract
+-> validator as the boundary
+-> executor as the action
+-> a controlled agent only after that contract is stable
+```
+
+`master` is the workflow-first product. `experiment/agent-loop` keeps the earlier exploration: observe, choose an action, evaluate, then continue, ask, or stop. That work shaped observation, policy, and trace. It is not the demo path. An open loop is harder to explain, and self-repair can hide risk when the contract is still soft.
+
+## How a request is handled
 
 ```text
 user query
@@ -36,188 +68,96 @@ user query
 -> validator and policy checks
 -> preview
 -> user confirmation when needed
--> deterministic pandas execution
--> grounded explanation and UI result panels
+-> pandas execution
+-> grounded explanation and result panels
 ```
 
-Why this direction:
+- Ask Mode answers schema and dataset overview questions and does not change the data.
+- Deterministic tools cover high-confidence read-only work: missing values, profiling, group comparison, correlation.
+- The LLM planner is still used for transformations. Every planned step must pass validation.
+- Broad or ambiguous requests return clarification choices.
+- Workflows that change data are previewed before confirmation.
+- Unsupported requests are rejected in the open: prediction, forecasting, machine learning, arbitrary Python, and autonomous multi-agent analysis.
 
-- Easier to explain to viewers.
-- More stable for demos.
-- Clearer trust boundary.
-- Better suited to MVP evaluation.
-- Avoids hidden autonomous loops.
+## What you see
 
-Important behaviors:
+The workspace has three panels:
 
-- Ask Mode answers schema or dataset overview questions without mutating data.
-- Deterministic analytical tools handle high-confidence read-only tasks such as missing-value checks, profiling, group comparison, and correlation summaries.
-- LLM planning is still available for transformations, but every planned step must pass validation.
-- Broad or ambiguous requests produce clarification choices instead of guessing.
-- Mutating workflows are previewed before confirmation.
+- Dataset sidebar: upload a CSV, inspect the schema, view run history.
+- Data panel: preview the upload and confirmed results.
+- Chat panel: ask, see the route, preview the workflow, and confirm execution.
 
-### 2. Agent-Loop Exploration Branch
+Each answer shows which path was taken: Ask Mode, Deterministic, LLM Planner, Clarification, or Unsupported. Warnings, route decisions, and validation failures stay visible.
 
-Branch: `experiment/agent-loop`
+## Demo
 
-The Agent-loop direction explored a more autonomous assistant architecture:
-
-```text
-user task
--> agent state
--> retrieve context
--> select action
--> plan workflow
--> execute or observe
--> evaluate result
--> decide whether to continue, retry, replan, ask user, or stop
-```
-
-Why this direction was useful:
-
-- It explored how an AI data assistant might manage multi-step tasks.
-- It introduced concepts such as observation, policy decisions, evaluation, and agent trace.
-- It helped identify what should be deterministic before adding more autonomy.
-
-Why it is not the current main demo path:
-
-- Autonomous loops are harder to make reliable in a small MVP.
-- The user-facing behavior is harder to explain.
-- Replanning and self-repair can hide risk if not tightly controlled.
-- The product is more convincing when the workflow contract is explicit first.
-
-In short: the Agent work informed the architecture, but the current product branch intentionally narrows the system into a workflow-first AI product.
-
-## Current Product Flow
-
-The current frontend presents a three-panel workspace:
-
-- Dataset sidebar: upload CSV, inspect schema, view run history.
-- Data panel: preview uploaded data and confirmed results.
-- Chat panel: ask questions, choose query mode, inspect route decisions, preview workflows, and confirm execution.
-
-The chat UI exposes several productized states:
-
-- `Ask Mode`: read-only dataset questions.
-- `Deterministic`: high-confidence analytical tools.
-- `LLM Planner`: transformation workflows planned from natural language.
-- `Clarification`: schema-aware or ambiguity-aware follow-up choices.
-- `Unsupported`: explicit rejection of out-of-scope requests.
-
-## Demo Path
-
-A typical demo uses an orders-style CSV with fields such as:
+Use an orders-style CSV:
 
 ```text
 order_id, region, category, amount, quantity, status
 ```
 
-Suggested demo prompts by route:
-
 Ask Mode:
 
 - `What columns are in this dataset?`
 
-Deterministic Analysis:
+Deterministic analysis:
 
 - `Check for missing values`
 - `Compare average amount by region`
 
-LLM Workflow Preview:
+LLM workflow preview:
 
 - `Sort by amount descending`
 - `Filter rows where amount > 1000`
 
-Clarification / Boundary:
+Clarification and schema boundary:
 
 - `Analyze this dataset for issues`
 - `Sort by revenue descending`
 
-These prompts are intended to make route decisions visible: Ask Mode, deterministic analysis, LLM workflow preview, warning review, clarification, and schema boundary handling.
+These prompts are there to show the route, not to prove the system can answer every data question.
 
-## Architecture Overview
+## Architecture
 
 ```text
-frontend/
-  React + TypeScript UI
-  Notebook-style chat
-  Dataset preview and result panels
-  Workflow timeline, route decision, observation, and analytics panels
-
-backend/
-  FastAPI API
-  Workflow planning and routing
-  RAG context retrieval
-  Validation and policy checks
-  Pandas execution engine
-  Run history and local artifact storage
-
-docker/
-  PostgreSQL + pgvector service
-  Backend API service
-  Backend test service
+frontend/   React + TypeScript notebook, preview, timeline, route and result panels
+backend/    FastAPI planning, RAG, validation, pandas execution, run history
+docker/     PostgreSQL + pgvector, API, tests
 ```
 
-Core backend areas:
+The backend follows the same split as the product idea:
 
-- `workflow/planning`: query classification, route decision, tool routing, parameter resolution, workflow building, LLM planning.
-- `workflow/validation`: schema and workflow contract validation.
-- `workflow/execution`: deterministic pandas execution.
-- `workflow/observation`: warning and diagnostic signal generation.
-- `workflow/response`: grounded result explanation.
+- `workflow/planning`: classification, routing, parameter resolution, workflow building, LLM planning.
+- `workflow/validation`: schema and contract checks.
+- `workflow/execution`: pandas.
+- `workflow/observation`: warnings and diagnostic signals. Signals suggest a next action. They do not start another loop.
+- `workflow/response`: explanation from the execution result.
 - `services`: dataset storage, run storage, profiling.
 
-## Trust And Safety Boundaries
+RAG supplies transformation docs and examples. It does not replace validation.
 
-DataCopilot intentionally keeps several boundaries visible:
+## Boundaries
 
-- It does not execute arbitrary model-generated code.
-- It rejects unknown workflow step types.
-- It validates column references against the active dataset.
-- It does not silently mutate the dataset for read-only questions.
-- It does not hide warnings, route decisions, or validation failures.
-- It treats prediction, forecasting, machine learning, and autonomous multi-agent analysis as unsupported for the MVP.
+The project is judged by whether the loop closes, not by coverage of every question.
 
-## Evaluation Mindset
+A good run selects the right route, shows an inspectable workflow, catches invalid columns, surfaces warnings, executes deterministically, and explains only what the run produced.
 
-The project is evaluated by whether it closes the workflow loop, not by whether it can answer every data question.
-
-Good outcomes:
-
-- The system selects the right route.
-- The workflow is inspectable.
-- Invalid columns are caught.
-- Warnings are visible.
-- Execution is deterministic.
-- Explanations are grounded in real outputs.
-
-Known MVP limits:
+Current limits:
 
 - One uploaded CSV at a time.
 - No multi-file joins.
 - No authentication or multi-user workspace.
 - No arbitrary Python execution.
 - No production-scale database integration.
-- No autonomous multi-agent loop in the main product branch.
+- No autonomous multi-agent loop on `master`.
 
-## Tech Stack
+## Tech stack
 
-Backend:
+- Backend: Python, FastAPI, Pydantic, pandas, PostgreSQL / pgvector for optional RAG storage.
+- Frontend: React, TypeScript, Vite, Playwright.
 
-- Python
-- FastAPI
-- Pydantic
-- pandas
-- PostgreSQL / pgvector for optional RAG storage
-
-Frontend:
-
-- React
-- TypeScript
-- Vite
-- Playwright UI tests
-
-## Running Locally
+## Running locally
 
 ### Backend
 
@@ -239,7 +179,7 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-Optional environment variables can be placed in `backend/.env`:
+Optional settings in `backend/.env`:
 
 ```text
 LLM_API_KEY=
@@ -257,7 +197,7 @@ pnpm install
 pnpm dev
 ```
 
-### Docker Backend Stack
+### Docker
 
 From the repository root:
 
@@ -267,14 +207,10 @@ docker compose -f docker/docker-compose.yml up --build
 
 ## Testing
 
-Backend:
-
 ```bash
 cd backend
 python -m pytest
 ```
-
-Frontend:
 
 ```bash
 cd frontend
@@ -283,6 +219,6 @@ pnpm build
 pnpm test:ui
 ```
 
-## Repository Status
+## Repository
 
-The current product direction is workflow-first, and that code is what `master` contains. The Agent-loop direction remains on `experiment/agent-loop` as architectural research.
+`master` is the workflow-first product and the recommended demo. `experiment/agent-loop` is the architectural research branch.
