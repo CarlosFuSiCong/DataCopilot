@@ -1,7 +1,7 @@
 """Workflow step contracts."""
 from typing import Annotated, Literal, Union
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class RemoveMissingValuesStep(BaseModel):
@@ -33,19 +33,40 @@ _OPERATOR_ALIASES: dict[str, str] = {
     "less_than_or_equal": "<=",
     "lte": "<=",
     "le": "<=",
+    "is_missing": "is_null",
+    "missing": "is_null",
+    "is_null": "is_null",
+    "null": "is_null",
+    "is_not_missing": "is_not_null",
+    "not_missing": "is_not_null",
+    "is_not_null": "is_not_null",
+    "not_null": "is_not_null",
 }
 
 
 class FilterRowsStep(BaseModel):
     type: Literal["filter_rows"]
     column: str
-    operator: Literal["=", "!=", ">", ">=", "<", "<="]
-    value: Union[int, float, str]
+    operator: Literal["=", "!=", ">", ">=", "<", "<=", "is_null", "is_not_null"]
+    value: Union[int, float, str, None] = None
 
     @field_validator("operator", mode="before")
     @classmethod
     def normalize_operator(cls, v: str) -> str:
         return _OPERATOR_ALIASES.get(v, v)
+
+    @model_validator(mode="after")
+    def normalize_null_filter(self) -> "FilterRowsStep":
+        if self.value is None:
+            if self.operator == "=":
+                self.operator = "is_null"
+            elif self.operator == "!=":
+                self.operator = "is_not_null"
+            elif self.operator not in {"is_null", "is_not_null"}:
+                raise ValueError(
+                    f"filter_rows operator '{self.operator}' requires a comparison value."
+                )
+        return self
 
 
 class GroupByStep(BaseModel):
@@ -194,6 +215,59 @@ class DateDiffStep(BaseModel):
     errors: Literal["raise", "coerce"] = "raise"
 
 
+# --------------------------------------------------------------------------- #
+# Analytical / diagnostic steps (Task 7) — read-only, do not modify data
+# --------------------------------------------------------------------------- #
+
+class ProfileColumnStep(BaseModel):
+    """Return a stat/value summary of a single column."""
+    type: Literal["profile_column"]
+    column: str
+
+
+class InspectUniqueValuesStep(BaseModel):
+    """Return value counts for a column (top N by frequency)."""
+    type: Literal["inspect_unique_values"]
+    column: str
+    max_values: int = Field(default=20, ge=1, le=200)
+
+
+class SummarizeNumericColumnStep(BaseModel):
+    """Return descriptive statistics for a numeric column, including outlier hints."""
+    type: Literal["summarize_numeric_column"]
+    column: str
+
+
+class CompareGroupsStep(BaseModel):
+    """Compare a numeric column across groups of a categorical column."""
+    type: Literal["compare_groups"]
+    group_column: str
+    value_column: str
+    agg: Literal["sum", "mean", "count", "min", "max"] = "mean"
+
+
+class CorrelationSummaryStep(BaseModel):
+    """Return pairwise correlations between numeric columns (long format)."""
+    type: Literal["correlation_summary"]
+    columns: list[str] = Field(default_factory=list)
+
+
+class DistributionSummaryStep(BaseModel):
+    """Return distribution stats for a numeric column: quartiles, skewness, outlier hints."""
+    type: Literal["distribution_summary"]
+    column: str
+
+
+class SuggestAnalysisStepsStep(BaseModel):
+    """Inspect the dataset and emit next-step suggestions as a message (no data change)."""
+    type: Literal["suggest_analysis_steps"]
+
+
+class DetectMissingValuesStep(BaseModel):
+    """Scan all columns for missing values and return a summary table sorted by missing_pct."""
+    type: Literal["detect_missing_values"]
+
+
 WorkflowStep = Annotated[
     Union[
         RemoveMissingValuesStep,
@@ -218,6 +292,14 @@ WorkflowStep = Annotated[
         NormalizeTextStep,
         ExtractTextStep,
         DateDiffStep,
+        ProfileColumnStep,
+        InspectUniqueValuesStep,
+        SummarizeNumericColumnStep,
+        CompareGroupsStep,
+        CorrelationSummaryStep,
+        DistributionSummaryStep,
+        SuggestAnalysisStepsStep,
+        DetectMissingValuesStep,
     ],
     Field(discriminator="type"),
 ]

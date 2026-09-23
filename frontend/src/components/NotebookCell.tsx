@@ -1,4 +1,3 @@
-import { useRef, useState } from 'react'
 import type { ApiErrorContext } from '../types'
 import type { NotebookCellData } from '../types/notebook'
 import { OutputBlock } from './ui/OutputBlock'
@@ -7,6 +6,15 @@ import { WorkflowViewer } from './WorkflowViewer'
 import { ResultTable } from './ResultTable'
 import { ExplanationPanel } from './ExplanationPanel'
 import { RAGPanel } from './RAGPanel'
+import { RouteDecisionPanel } from './RouteDecisionPanel'
+import { AnalyticsSummaryPanel } from './AnalyticsSummaryPanel'
+import { ANALYTICAL_STEP_TYPES } from './analyticsStepTypes'
+import { ObservationPanel } from './ObservationPanel'
+import { WorkflowTimeline } from './WorkflowTimeline'
+import { AskModePanel } from './AskModePanel'
+import { CellStatusHeader } from './CellStatusHeader'
+import { ClarificationPanel } from './ClarificationPanel'
+import { WorkflowImpactSummary } from './WorkflowImpactSummary'
 
 import type { WorkflowStep } from '../types'
 
@@ -359,101 +367,6 @@ function ErrorContent({ cell, onSuggest }: { cell: NotebookCellData; onSuggest: 
   }
 }
 
-// ---------------------------------------------------------------------------
-// Clarification panel
-// ---------------------------------------------------------------------------
-
-function ClarificationPanel({
-  cell,
-  onSubmit,
-}: {
-  cell: NotebookCellData
-  onSubmit: (answer: string) => void
-}) {
-  const [draft, setDraft] = useState('')
-  const inputRef = useRef<HTMLInputElement>(null)
-  const answered = !!cell.clarificationAnswer
-
-  function handleSubmit() {
-    const trimmed = draft.trim()
-    if (!trimmed) return
-    onSubmit(trimmed)
-    setDraft('')
-  }
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-        <span style={{ color: 'var(--color-blue)', fontSize: '1rem', lineHeight: 1, flexShrink: 0 }}>?</span>
-        <p style={{
-          margin: 0,
-          fontFamily: 'var(--font-mono)',
-          fontSize: '0.85rem',
-          color: 'var(--color-text)',
-          lineHeight: 1.6,
-        }}>
-          {cell.clarificationQuestion}
-        </p>
-      </div>
-
-      {answered ? (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          padding: '5px 10px',
-          background: 'var(--color-surface-1)',
-          border: '1px solid var(--color-border)',
-          borderRadius: 6,
-        }}>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Answer:</span>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: 'var(--color-accent)' }}>
-            {cell.clarificationAnswer}
-          </span>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', gap: 6 }}>
-          <input
-            ref={inputRef}
-            autoFocus
-            value={draft}
-            onChange={e => setDraft(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') handleSubmit() }}
-            placeholder="Type your answer…"
-            style={{
-              flex: 1,
-              background: 'var(--color-surface-1)',
-              border: '1px solid var(--color-border)',
-              borderRadius: 6,
-              padding: '5px 10px',
-              fontFamily: 'var(--font-mono)',
-              fontSize: '0.82rem',
-              color: 'var(--color-text)',
-              outline: 'none',
-            }}
-          />
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={!draft.trim()}
-            style={{
-              padding: '5px 14px',
-              background: draft.trim() ? 'var(--color-blue)' : 'var(--color-surface-2)',
-              border: '1px solid var(--color-border)',
-              borderRadius: 6,
-              fontFamily: 'var(--font-mono)',
-              fontSize: '0.78rem',
-              color: draft.trim() ? '#fff' : 'var(--color-text-muted)',
-              cursor: draft.trim() ? 'pointer' : 'not-allowed',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Send
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
-
 export function NotebookCell({ cell, onConfirm, onClarify, onSuggest, onRerun }: NotebookCellProps) {
   const execResult = cell.confirmResult?.execution_result ?? cell.result?.execution_result ?? null
   const explanation = cell.confirmResult?.explanation ?? cell.result?.explanation ?? null
@@ -466,6 +379,21 @@ export function NotebookCell({ cell, onConfirm, onClarify, onSuggest, onRerun }:
   const hasResult = (cell.status === 'ok' || cell.status === 'preview' || cell.status === 'confirming') && !!cell.result
   const hasErrors = cell.result?.has_errors ?? false
   const hasWarnings = cell.result?.has_warnings ?? false
+  const isAskModeAnswer =
+    cell.result?.route_decision?.route === 'ask_mode' ||
+    (cell.result?.is_read_only === true && cell.result.planned_steps.length === 0)
+
+  // Find the last analytical step in the result for AnalyticsSummaryPanel
+  const allStepResults = cell.result?.step_results ?? []
+  const analyticalIdx = allStepResults.findLastIndex(r => ANALYTICAL_STEP_TYPES.has(r.step_type))
+  const analyticalStepResult = analyticalIdx >= 0 ? allStepResults[analyticalIdx] : null
+  const analyticalPlannedStep = analyticalIdx >= 0 ? cell.result?.planned_steps[analyticalIdx] : undefined
+
+  // Same for executed result
+  const execStepResults = execResult?.step_results ?? []
+  const execAnalyticalIdx = execStepResults.findLastIndex(r => ANALYTICAL_STEP_TYPES.has(r.step_type))
+  const execAnalyticalStepResult = execAnalyticalIdx >= 0 ? execStepResults[execAnalyticalIdx] : null
+  const execAnalyticalPlannedStep = execAnalyticalIdx >= 0 ? cell.result?.planned_steps[execAnalyticalIdx] : undefined
 
   return (
     <div style={{ marginBottom: 4 }}>
@@ -492,21 +420,7 @@ export function NotebookCell({ cell, onConfirm, onClarify, onSuggest, onRerun }:
 
       {/* Bot response area */}
       <div style={{ padding: '0 16px 8px' }}>
-        {/* Bot label */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-          <span style={{ color: 'var(--color-accent)', fontSize: '0.8rem', lineHeight: 1 }}>◉</span>
-          <span
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: '0.7rem',
-              color: 'var(--color-text-muted)',
-              letterSpacing: '0.06em',
-              textTransform: 'uppercase',
-            }}
-          >
-            DataCopilot
-          </span>
-        </div>
+        <CellStatusHeader result={cell.result} cellStatus={cell.status} />
 
         {/* Loading / thinking indicator */}
         {cell.status === 'loading' && (
@@ -531,8 +445,15 @@ export function NotebookCell({ cell, onConfirm, onClarify, onSuggest, onRerun }:
 
         {/* Clarification state */}
         {cell.status === 'clarifying' && (
-          <OutputBlock label="clarification" accent="var(--color-blue)">
-            <ClarificationPanel cell={cell} onSubmit={answer => onClarify(cell, answer)} />
+          <OutputBlock
+            label={cell.clarificationType === 'slot_validation' ? 'slot validation' : 'clarification'}
+            accent={cell.clarificationType === 'slot_validation' ? 'var(--color-yellow)' : 'var(--color-blue)'}
+          >
+            <ClarificationPanel
+              cell={cell}
+              onSubmit={answer => onClarify(cell, answer)}
+              onSuggest={onSuggest}
+            />
           </OutputBlock>
         )}
 
@@ -549,6 +470,22 @@ export function NotebookCell({ cell, onConfirm, onClarify, onSuggest, onRerun }:
         {/* Main result content */}
         {hasResult && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+
+            {/* Workflow pipeline timeline */}
+            {!isAskModeAnswer && (
+              <WorkflowTimeline
+                state={cell.result?.state}
+                hasErrors={cell.result?.has_errors}
+                hasWarnings={cell.result?.has_warnings}
+              />
+            )}
+            {!isAskModeAnswer && (
+              <WorkflowImpactSummary
+                stepResults={cell.result?.step_results ?? []}
+                hasErrors={hasErrors}
+                hasWarnings={hasWarnings}
+              />
+            )}
             {/* Warning / error summary banner */}
             {(hasErrors || hasWarnings) && (
               <div
@@ -573,16 +510,39 @@ export function NotebookCell({ cell, onConfirm, onClarify, onSuggest, onRerun }:
               </div>
             )}
 
-            <WorkflowViewer
-              steps={cell.result!.planned_steps}
-              stepResults={stepResults}
-              onRerun={steps => onRerun(steps, cell.result!.query, cell.result?.run_id ?? cell.confirmResult?.run_id)}
-            />
+            {!isAskModeAnswer && (
+              <WorkflowViewer
+                steps={cell.result!.planned_steps}
+                stepResults={stepResults}
+                onRerun={steps => onRerun(steps, cell.result!.query, cell.result?.run_id ?? cell.confirmResult?.run_id)}
+              />
+            )}
+
+            {/* Route Decision debug panel */}
+            {cell.result?.route_decision && (
+              <RouteDecisionPanel routeDecision={cell.result.route_decision} />
+            )}
+
+            {/* Observation diagnostics panel */}
+            {cell.result?.observation && (cell.result.has_warnings || cell.result.has_errors) && (
+              <ObservationPanel
+                observation={cell.result.observation}
+                onSuggest={onSuggest}
+              />
+            )}
 
             {ragContext && <RAGPanel ragContext={ragContext} />}
 
-            {/* Preview result (before confirm) */}
-            {(cell.status === 'preview' || cell.status === 'confirming') && lastPreviewStep && (
+            {/* Analytics panel for preview state */}
+            {(cell.status === 'preview' || cell.status === 'confirming') && analyticalStepResult && (
+              <AnalyticsSummaryPanel
+                stepResult={analyticalStepResult}
+                plannedStep={analyticalPlannedStep as WorkflowStep | undefined}
+              />
+            )}
+
+            {/* Preview result (before confirm) — skip for pure analytical tools */}
+            {(cell.status === 'preview' || cell.status === 'confirming') && lastPreviewStep && !ANALYTICAL_STEP_TYPES.has(lastPreviewStep.step_type) && (
               <ResultTable
                 columns={previewCols}
                 rows={lastPreviewStep.preview}
@@ -591,8 +551,16 @@ export function NotebookCell({ cell, onConfirm, onClarify, onSuggest, onRerun }:
               />
             )}
 
-            {/* Final execution result */}
-            {cell.status === 'ok' && execResult && (
+            {/* Analytics panel for executed state */}
+            {cell.status === 'ok' && execAnalyticalStepResult && (
+              <AnalyticsSummaryPanel
+                stepResult={execAnalyticalStepResult}
+                plannedStep={execAnalyticalPlannedStep as WorkflowStep | undefined}
+              />
+            )}
+
+            {/* Final execution result — skip for pure analytical tools */}
+            {cell.status === 'ok' && execResult && !ANALYTICAL_STEP_TYPES.has(execResult.step_results?.at(-1)?.step_type ?? '') && (
               <ResultTable
                 columns={execResult.columns}
                 rows={execResult.preview}
@@ -602,7 +570,12 @@ export function NotebookCell({ cell, onConfirm, onClarify, onSuggest, onRerun }:
               />
             )}
 
-            {cell.status === 'ok' && explanation && (
+            {/* Read-only answer text (ask mode) */}
+            {isAskModeAnswer && !execResult && cell.result && (
+              <AskModePanel result={cell.result} onSuggest={onSuggest} />
+            )}
+
+            {cell.status === 'ok' && explanation && !cell.result?.is_read_only && (
               <ExplanationPanel
                 text={explanation}
                 executionResult={execResult ?? undefined}
@@ -630,8 +603,8 @@ export function NotebookCell({ cell, onConfirm, onClarify, onSuggest, onRerun }:
                   )}
                   <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: 'var(--color-text-soft)', flex: 1 }}>
                     {hasWarnings
-                      ? 'Workflow has warnings. Review the steps above, then confirm to execute.'
-                      : 'Review the planned workflow above, then confirm to execute.'}
+                      ? 'Workflow has warnings. Review impact and suggested actions; confirm only if this change is intentional.'
+                      : 'Review the planned workflow above, then confirm to execute. Confirm will create a run artifact.'}
                   </p>
                   <button
                     onClick={() => onConfirm(cell)}

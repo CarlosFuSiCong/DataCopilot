@@ -3,7 +3,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from app.agent.observation.models import ObservationSummary
+from app.workflow.observation.models import ObservationSummary
 
 
 WorkflowRunState = Literal[

@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
+import type { QueryModeHint } from '../types'
+import { QueryModeSwitch } from './QueryModeSwitch'
 
 interface InputCellProps {
   disabled: boolean
-  onSubmit: (query: string) => void
+  onSubmit: (query: string, modeHint?: QueryModeHint) => void
   // When set by a parent (e.g. "Use this" button), pre-fills and focuses the input.
   suggestedQuery?: string
   onSuggestedQueryConsumed?: () => void
@@ -10,6 +12,7 @@ interface InputCellProps {
 
 export function InputCell({ disabled, onSubmit, suggestedQuery, onSuggestedQueryConsumed }: InputCellProps) {
   const [query, setQuery] = useState('')
+  const [modeHint, setModeHint] = useState<QueryModeHint>('auto')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   // When a "Use this" suggestion arrives, fill the textarea and focus it.
@@ -47,7 +50,7 @@ export function InputCell({ disabled, onSubmit, suggestedQuery, onSuggestedQuery
   function submit() {
     const trimmed = query.trim()
     if (!trimmed || disabled) return
-    onSubmit(trimmed)
+    onSubmit(trimmed, modeHint)
     setQuery('')
     // Reset height after clearing
     setTimeout(() => {
@@ -68,6 +71,7 @@ export function InputCell({ disabled, onSubmit, suggestedQuery, onSuggestedQuery
         flexShrink: 0,
       }}
     >
+      <QueryModeSwitch value={modeHint} onChange={setModeHint} disabled={disabled} />
       <div
         style={{
           display: 'flex',

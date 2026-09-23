@@ -14,9 +14,9 @@ import logging
 from fastapi import APIRouter, Query
 from fastapi.responses import Response
 
-from app.agent.execution import executor as executor_service
-from app.agent.policy import action_policy
-from app.agent.validation import workflow_validator as validator_service
+from app.workflow.execution import executor as executor_service
+from app.workflow.policy import action_policy
+from app.workflow.validation import workflow_validator as validator_service
 from app.core.exceptions import DatasetNotFoundError, WorkflowValidationError
 from app.models.runs import RerunRequest, RunListResponse, RunRecord
 from app.models.workflow_transport import PreviewResponse

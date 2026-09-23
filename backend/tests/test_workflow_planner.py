@@ -1,4 +1,4 @@
-"""Unit tests for app.agent.planning.workflow_planner.
+"""Unit tests for app.workflow.planning.workflow_planner.
 
 All tests mock the OpenAI client to avoid real API calls.
 """
@@ -10,7 +10,7 @@ import pytest
 from app.core.exceptions import ClarificationNeeded, PlannerError
 from app.models.dataset import ColumnProfile, DatasetProfile
 from app.models.rag import DatasetSummary, RAGContext, RetrievalDebug, RetrievedDoc
-from app.agent.planning.workflow_planner import _build_messages, _parse_steps, plan
+from app.workflow.planning.workflow_planner import _build_messages, _parse_steps, plan
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -160,7 +160,7 @@ def test_plan_returns_steps_from_llm():
     })
     mock_client = _make_mock_client(llm_response)
 
-    with patch("app.agent.planning.workflow_planner.settings") as mock_settings:
+    with patch("app.workflow.planning.workflow_planner.settings") as mock_settings:
         mock_settings.llm_api_key = "test-key"
         mock_settings.llm_model = "gpt-4o-mini"
         mock_settings.llm_max_tokens = 512
@@ -170,10 +170,45 @@ def test_plan_returns_steps_from_llm():
     assert steps[0].type == "group_by"
 
 
+def test_plan_adds_descending_sort_for_total_by_group():
+    llm_response = json.dumps({
+        "steps": [{"type": "group_by", "column": "region", "target": "sales", "agg": "sum"}]
+    })
+    mock_client = _make_mock_client(llm_response)
+
+    with patch("app.workflow.planning.workflow_planner.settings") as mock_settings:
+        mock_settings.llm_api_key = "test-key"
+        mock_settings.llm_model = "gpt-4o-mini"
+        mock_settings.llm_max_tokens = 512
+        steps = plan("Calculate total sales by region", SAMPLE_CTX, client=mock_client)
+
+    assert [step.type for step in steps] == ["group_by", "sort_values"]
+    assert steps[1].column == "sales"
+    assert steps[1].ascending is False
+
+
+def test_plan_does_not_duplicate_existing_aggregate_sort():
+    llm_response = json.dumps({
+        "steps": [
+            {"type": "group_by", "column": "region", "target": "sales", "agg": "sum"},
+            {"type": "sort_values", "column": "sales", "ascending": False},
+        ]
+    })
+    mock_client = _make_mock_client(llm_response)
+
+    with patch("app.workflow.planning.workflow_planner.settings") as mock_settings:
+        mock_settings.llm_api_key = "test-key"
+        mock_settings.llm_model = "gpt-4o-mini"
+        mock_settings.llm_max_tokens = 512
+        steps = plan("Calculate total sales by region", SAMPLE_CTX, client=mock_client)
+
+    assert [step.type for step in steps] == ["group_by", "sort_values"]
+
+
 def test_plan_raises_planner_error_when_llm_returns_empty_steps():
     mock_client = _make_mock_client(json.dumps({"steps": []}))
 
-    with patch("app.agent.planning.workflow_planner.settings") as mock_settings:
+    with patch("app.workflow.planning.workflow_planner.settings") as mock_settings:
         mock_settings.llm_api_key = "test-key"
         mock_settings.llm_model = "gpt-4o-mini"
         mock_settings.llm_max_tokens = 512
@@ -182,7 +217,7 @@ def test_plan_raises_planner_error_when_llm_returns_empty_steps():
 
 
 def test_plan_raises_planner_error_when_no_api_key():
-    with patch("app.agent.planning.workflow_planner.settings") as mock_settings:
+    with patch("app.workflow.planning.workflow_planner.settings") as mock_settings:
         mock_settings.llm_api_key = ""
         with pytest.raises(PlannerError, match="API key"):
             plan("test", SAMPLE_CTX)
@@ -192,7 +227,7 @@ def test_plan_raises_planner_error_when_llm_call_fails():
     mock_client = MagicMock()
     mock_client.chat.completions.create.side_effect = Exception("connection timeout")
 
-    with patch("app.agent.planning.workflow_planner.settings") as mock_settings:
+    with patch("app.workflow.planning.workflow_planner.settings") as mock_settings:
         mock_settings.llm_api_key = "test-key"
         mock_settings.llm_model = "gpt-4o-mini"
         mock_settings.llm_max_tokens = 512
@@ -207,9 +242,169 @@ def test_plan_raises_planner_error_on_empty_choices():
     mock_client = MagicMock()
     mock_client.chat.completions.create.return_value = mock_response
 
-    with patch("app.agent.planning.workflow_planner.settings") as mock_settings:
+    with patch("app.workflow.planning.workflow_planner.settings") as mock_settings:
         mock_settings.llm_api_key = "test-key"
         mock_settings.llm_model = "gpt-4o-mini"
         mock_settings.llm_max_tokens = 512
         with pytest.raises(PlannerError, match="unexpected response structure"):
             plan("test", SAMPLE_CTX, client=mock_client)
+
+
+# ---------------------------------------------------------------------------
+# Focused planner tests: pivot_table, trim_text, extract_text, date_diff
+# ---------------------------------------------------------------------------
+
+
+class TestComplexToolParsing:
+    """Verify _parse_steps handles complex transformation types correctly.
+
+    These tests cover the contract between the LLM output and the step models:
+    valid responses parse cleanly; missing required fields raise ClarificationNeeded
+    rather than an opaque PlannerError.
+    """
+
+    # --- pivot_table ---
+
+    def test_parse_valid_pivot_table(self):
+        raw = json.dumps({"steps": [
+            {"type": "pivot_table", "index": ["region"], "values": "amount", "agg": "sum"}
+        ]})
+        steps = _parse_steps(raw)
+        assert steps[0].type == "pivot_table"
+
+    def test_parse_pivot_table_with_columns_field(self):
+        raw = json.dumps({"steps": [
+            {"type": "pivot_table", "index": ["region"], "columns": "category", "values": "amount", "agg": "mean"}
+        ]})
+        steps = _parse_steps(raw)
+        assert steps[0].type == "pivot_table"
+
+    def test_parse_pivot_table_normalizes_column_and_target_aliases(self):
+        raw = json.dumps({"steps": [
+            {"type": "pivot_table", "column": "region", "columns": "category", "target": "amount", "agg": "sum"}
+        ]})
+        steps = _parse_steps(raw)
+        assert steps[0].type == "pivot_table"
+        assert steps[0].index == ["region"]
+        assert steps[0].values == "amount"
+
+    def test_parse_pivot_table_normalizes_rows_and_value_column_aliases(self):
+        raw = json.dumps({"steps": [
+            {"type": "pivot_table", "rows": "region", "columns": "category", "value_column": "amount", "agg": "sum"}
+        ]})
+        steps = _parse_steps(raw)
+        assert steps[0].type == "pivot_table"
+        assert steps[0].index == ["region"]
+        assert steps[0].values == "amount"
+
+    def test_parse_pivot_table_normalizes_params_wrapper(self):
+        raw = json.dumps({"steps": [
+            {"type": "pivot_table", "params": {"index": ["region"], "columns": "category", "values": "amount", "agg": "sum"}}
+        ]})
+        steps = _parse_steps(raw)
+        assert steps[0].type == "pivot_table"
+        assert steps[0].index == ["region"]
+        assert steps[0].columns == "category"
+        assert steps[0].values == "amount"
+
+    def test_pivot_table_missing_index_asks_clarification(self):
+        raw = json.dumps({"steps": [{"type": "pivot_table", "values": "amount", "agg": "sum"}]})
+        with pytest.raises(ClarificationNeeded, match="index"):
+            _parse_steps(raw)
+
+    def test_pivot_table_missing_values_asks_clarification(self):
+        raw = json.dumps({"steps": [{"type": "pivot_table", "index": ["region"], "agg": "sum"}]})
+        with pytest.raises(ClarificationNeeded, match="values"):
+            _parse_steps(raw)
+
+    def test_pivot_table_missing_agg_asks_clarification(self):
+        raw = json.dumps({"steps": [{"type": "pivot_table", "index": ["region"], "values": "amount"}]})
+        with pytest.raises(ClarificationNeeded, match="agg"):
+            _parse_steps(raw)
+
+    # --- trim_text ---
+
+    def test_parse_valid_trim_text(self):
+        raw = json.dumps({"steps": [{"type": "trim_text", "column": "customer_name"}]})
+        steps = _parse_steps(raw)
+        assert steps[0].type == "trim_text"
+
+    def test_parse_trim_text_with_collapse_whitespace(self):
+        raw = json.dumps({"steps": [{"type": "trim_text", "column": "notes", "collapse_whitespace": True}]})
+        steps = _parse_steps(raw)
+        assert steps[0].type == "trim_text"
+
+    def test_trim_text_missing_column_asks_clarification(self):
+        raw = json.dumps({"steps": [{"type": "trim_text"}]})
+        with pytest.raises(ClarificationNeeded, match="column"):
+            _parse_steps(raw)
+
+    # --- extract_text ---
+
+    def test_parse_valid_extract_text(self):
+        raw = json.dumps({"steps": [
+            {"type": "extract_text", "column": "order_code", "pattern": r"([A-Z]+)-\d+",
+             "new_column": "order_prefix"}
+        ]})
+        steps = _parse_steps(raw)
+        assert steps[0].type == "extract_text"
+
+    def test_extract_text_missing_pattern_asks_clarification(self):
+        raw = json.dumps({"steps": [
+            {"type": "extract_text", "column": "order_code", "new_column": "order_prefix"}
+        ]})
+        with pytest.raises(ClarificationNeeded, match="pattern"):
+            _parse_steps(raw)
+
+    def test_extract_text_missing_new_column_asks_clarification(self):
+        raw = json.dumps({"steps": [
+            {"type": "extract_text", "column": "order_code", "pattern": r"(\d+)"}
+        ]})
+        with pytest.raises(ClarificationNeeded, match="new_column"):
+            _parse_steps(raw)
+
+    def test_extract_text_missing_column_asks_clarification(self):
+        raw = json.dumps({"steps": [
+            {"type": "extract_text", "pattern": r"(\d+)", "new_column": "num"}
+        ]})
+        with pytest.raises(ClarificationNeeded, match="column"):
+            _parse_steps(raw)
+
+    # --- date_diff ---
+
+    def test_parse_valid_date_diff(self):
+        raw = json.dumps({"steps": [
+            {"type": "date_diff", "start_column": "order_date",
+             "end_column": "ship_date", "new_column": "ship_days"}
+        ]})
+        steps = _parse_steps(raw)
+        assert steps[0].type == "date_diff"
+
+    def test_parse_date_diff_with_unit_and_errors(self):
+        raw = json.dumps({"steps": [
+            {"type": "date_diff", "start_column": "order_date", "end_column": "ship_date",
+             "new_column": "ship_days", "unit": "days", "errors": "coerce"}
+        ]})
+        steps = _parse_steps(raw)
+        assert steps[0].type == "date_diff"
+
+    def test_date_diff_missing_start_column_asks_clarification(self):
+        raw = json.dumps({"steps": [
+            {"type": "date_diff", "end_column": "ship_date", "new_column": "ship_days"}
+        ]})
+        with pytest.raises(ClarificationNeeded, match="start_column"):
+            _parse_steps(raw)
+
+    def test_date_diff_missing_end_column_asks_clarification(self):
+        raw = json.dumps({"steps": [
+            {"type": "date_diff", "start_column": "order_date", "new_column": "ship_days"}
+        ]})
+        with pytest.raises(ClarificationNeeded, match="end_column"):
+            _parse_steps(raw)
+
+    def test_date_diff_missing_new_column_asks_clarification(self):
+        raw = json.dumps({"steps": [
+            {"type": "date_diff", "start_column": "order_date", "end_column": "ship_date"}
+        ]})
+        with pytest.raises(ClarificationNeeded, match="new_column"):
+            _parse_steps(raw)

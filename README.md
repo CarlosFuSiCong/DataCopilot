@@ -18,11 +18,11 @@ The current demo supports one uploaded CSV at a time and focuses on transparent 
 
 ## Two Branch Ideas
 
-This repository has explored two product directions.
+This repository has explored two product directions. The default branch, `master`, is the workflow-first product. The agent-loop exploration remains on `experiment/agent-loop`.
 
-### 1. Workflow-First Product Branch
+### 1. Workflow-First Product
 
-Main branch idea: `baseline/workflow-no-loop`
+Default branch: `master`
 
 This is the current recommended demo path.
 
@@ -58,7 +58,7 @@ Important behaviors:
 
 ### 2. Agent-Loop Exploration Branch
 
-Example branch idea: `experiment/agent-loop` and earlier Agent-oriented feature branches.
+Branch: `experiment/agent-loop`
 
 The Agent-loop direction explored a more autonomous assistant architecture:
 
@@ -285,4 +285,4 @@ pnpm test:ui
 
 ## Repository Status
 
-The current product direction is workflow-first. The Agent-loop direction remains useful as architectural research, but the recommended showcase path is the stable workflow product branch.
+The current product direction is workflow-first, and that code is what `master` contains. The Agent-loop direction remains on `experiment/agent-loop` as architectural research.

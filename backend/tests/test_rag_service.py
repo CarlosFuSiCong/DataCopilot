@@ -1,8 +1,8 @@
-"""Unit tests for app.agent.context.rag_service and app.agent.context.retriever."""
+"""Unit tests for app.workflow.context.rag_service and app.workflow.context.retriever."""
 import pytest
 
-from app.agent.context.rag_service import build_context, load_docs, retrieve
-from app.agent.context.retriever import KeywordRetriever, get_retriever
+from app.workflow.context.rag_service import build_context, load_docs, retrieve
+from app.workflow.context.retriever import KeywordRetriever, get_retriever
 from app.models.dataset import ColumnProfile, DatasetProfile
 
 # ---------------------------------------------------------------------------

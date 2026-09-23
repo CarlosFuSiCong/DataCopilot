@@ -1,0 +1,22 @@
+{
+  "doc_type": "transformation",
+  "step_type": "distribution_summary",
+  "issue_code": null,
+  "source_path": "transformations/distribution_summary.json",
+  "type": "distribution_summary",
+  "title": "distribution_summary: return quartile, skewness, and outlier stats for a numeric column",
+  "description": "Return min, Q1, median, Q3, max, std, skewness, and IQR-based outlier count for a numeric column. Helps identify whether data is skewed or has extreme outliers.",
+  "keywords": [
+    "distribution", "skewness", "skewed", "outliers", "quartile", "spread",
+    "box plot", "percentile", "tail", "extreme values",
+    "分布", "偏态", "异常值", "四分位", "极端值", "分布形状"
+  ],
+  "parameters": [
+    {"name": "column", "type": "string", "required": true, "description": "Name of the numeric column to analyze."}
+  ],
+  "example": {
+    "type": "distribution_summary",
+    "column": "price"
+  },
+  "rag_note": "Column must be numeric. Returns stat/value rows including skew_label (symmetric / right-skewed / left-skewed). Use when observation signals data_quality_issue or suspected_wrong_value."
+}

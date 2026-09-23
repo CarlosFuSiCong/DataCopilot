@@ -16,15 +16,15 @@ from app.models.workflow import (
     SortValuesStep,
     TrimTextStep,
 )
-from app.agent.execution.executor import execute
-from app.agent.observation.observations import (
+from app.workflow.execution.executor import execute
+from app.workflow.observation.observations import (
     detect_duplicates,
     detect_missing_values,
     detect_outliers,
     observation_tools,
     suggest_cleaning_steps,
 )
-from app.agent.validation.workflow_validator import validate
+from app.workflow.validation.workflow_validator import validate
 
 
 BASE_CSV = (

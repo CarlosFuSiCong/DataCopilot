@@ -7,7 +7,7 @@ import logging
 
 from fastapi import APIRouter
 
-from app.agent.context import rag_service
+from app.workflow.context import rag_service
 from app.models.rag import RAGContext, RAGContextRequest
 from app.services import dataset_store
 from app.services.profiler import profile

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ChatResponse, UploadResponse, WorkflowStep } from '../types'
+import type { ChatResponse, QueryModeHint, UploadResponse, WorkflowStep } from '../types'
 import type { NotebookCellData } from '../types/notebook'
 import { ApiCallError, sendChat, confirmWorkflow, rerunWorkflow, previewWorkflow } from '../api/client'
 
@@ -25,7 +25,9 @@ function errorCell(base: Pick<NotebookCellData, 'id' | 'query'>, err: unknown): 
 
 // Extract previous steps from the last confirmed ok cell for workflow chaining.
 function getPreviousSteps(cells: NotebookCellData[]) {
-  const lastOkCell = [...cells].reverse().find(c => c.status === 'ok')
+  const lastOkCell = [...cells].reverse().find(c =>
+    c.status === 'ok' && (c.confirmResult || !c.result?.is_read_only)
+  )
   return (
     lastOkCell?.confirmResult?.planned_steps ??
     lastOkCell?.result?.planned_steps ??
@@ -56,7 +58,7 @@ export function useNotebook(dataset: UploadResponse | null) {
     })
   }
 
-  async function handleSubmit(query: string) {
+  async function handleSubmit(query: string, modeHint: QueryModeHint = 'auto') {
     if (!dataset || !query.trim()) return
 
     // Read latest cells via ref before any appendCell calls so we never see
@@ -70,11 +72,20 @@ export function useNotebook(dataset: UploadResponse | null) {
       const result = await sendChat({
         dataset_id: dataset.dataset_id,
         query,
+        mode_hint: modeHint,
         previous_steps: previousSteps.length > 0 ? previousSteps : undefined,
       })
       if (result.needs_clarification) {
-        appendCell({ id, query, status: 'clarifying', clarificationQuestion: result.clarification_question ?? '' })
-      } else if (result.execution_result !== null) {
+        appendCell({
+          id,
+          query,
+          status: 'clarifying',
+          clarificationQuestion: result.clarification_question ?? '',
+          clarificationType: result.clarification_type ?? null,
+          clarificationContext: result.clarification_context ?? null,
+          clarificationChoices: result.clarification_context?.choices ?? result.clarification_choices ?? [],
+        })
+      } else if (result.execution_result !== null || result.is_read_only) {
         appendCell({ id, query, status: 'ok', result })
       } else {
         appendCell({ id, query, status: 'preview', result })
@@ -94,25 +105,36 @@ export function useNotebook(dataset: UploadResponse | null) {
     appendCell({ ...cell, clarificationAnswer: answer })
 
     const id = nextId()
-    appendCell({ id, query: cell.query, status: 'loading' })
+    // Display the user's clarification answer as the follow-up cell query.
+    appendCell({ id, query: answer, status: 'loading' })
 
     try {
       const result = await sendChat({
         dataset_id: dataset.dataset_id,
-        query: cell.query,
-        clarification_context: answer,
+        query: cell.query,   // backend still receives the original query
+        clarification_context: cell.clarificationContext
+          ? { ...cell.clarificationContext, user_answer: answer }
+          : answer,
         previous_steps: previousSteps.length > 0 ? previousSteps : undefined,
       })
       if (result.needs_clarification) {
         // Another round of clarification needed.
-        appendCell({ id, query: cell.query, status: 'clarifying', clarificationQuestion: result.clarification_question ?? '' })
-      } else if (result.execution_result !== null) {
-        appendCell({ id, query: cell.query, status: 'ok', result })
+        appendCell({
+          id,
+          query: answer,
+          status: 'clarifying',
+          clarificationQuestion: result.clarification_question ?? '',
+          clarificationType: result.clarification_type ?? null,
+          clarificationContext: result.clarification_context ?? null,
+          clarificationChoices: result.clarification_context?.choices ?? result.clarification_choices ?? [],
+        })
+      } else if (result.execution_result !== null || result.is_read_only) {
+        appendCell({ id, query: answer, status: 'ok', result })
       } else {
-        appendCell({ id, query: cell.query, status: 'preview', result })
+        appendCell({ id, query: answer, status: 'preview', result })
       }
     } catch (err) {
-      appendCell(errorCell({ id, query: cell.query }, err))
+      appendCell(errorCell({ id, query: answer }, err))
     }
   }
 

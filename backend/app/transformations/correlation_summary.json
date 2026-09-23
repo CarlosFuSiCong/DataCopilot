@@ -1,0 +1,22 @@
+{
+  "doc_type": "transformation",
+  "step_type": "correlation_summary",
+  "issue_code": null,
+  "source_path": "transformations/correlation_summary.json",
+  "type": "correlation_summary",
+  "title": "correlation_summary: return pairwise Pearson correlations between numeric columns",
+  "description": "Compute pairwise Pearson correlation between numeric columns and return a long-format table sorted by absolute correlation. Useful for exploring numeric relationships.",
+  "keywords": [
+    "correlation", "relationship", "correlated", "linear relationship",
+    "numeric columns", "pearson", "association",
+    "相关性", "关联", "相关系数", "数值关系", "线性关系"
+  ],
+  "parameters": [
+    {"name": "columns", "type": "array", "required": false, "description": "List of numeric columns to include (default: all numeric columns)."}
+  ],
+  "example": {
+    "type": "correlation_summary",
+    "columns": []
+  },
+  "rag_note": "Requires at least 2 numeric columns. Returns col_a, col_b, correlation rows. Empty columns list uses all numeric columns in the dataset."
+}

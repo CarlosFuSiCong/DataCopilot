@@ -165,17 +165,64 @@ export interface RAGContext {
   debug: RetrievalDebug
 }
 
+// ─── Observation ─────────────────────────────────────────────────────────────
+
+export type CandidateFixAction = 'suggest_query' | 'inspect_column' | 'back_to_preview' | 'relax_filter'
+
+export interface CandidateFix {
+  id: string
+  label: string
+  description: string
+  action_type: CandidateFixAction
+  query?: string | null
+}
+
+export interface ObservationSummary {
+  status: 'not_observed' | 'ok' | 'warning' | 'error'
+  signals: string[]
+  message?: string | null
+  diagnostic_explanation?: string | null
+  possible_causes: string[]
+  candidate_fixes: CandidateFix[]
+  recommended_next_action?: string | null
+  workflow_state?: string | null
+}
+
 // ─── Chat ─────────────────────────────────────────────────────────────────────
 
 export interface ChatRequest {
   dataset_id: string
   query: string
+  mode_hint?: QueryModeHint
   auto_confirm?: boolean
   // Steps from the last confirmed workflow. When present the new query chains
   // onto the prior result instead of starting from the raw dataset.
   previous_steps?: WorkflowStep[]
   // User's answer to a clarification question, merged into the planner query.
-  clarification_context?: string
+  clarification_context?: string | ClarificationContext
+}
+
+export type QueryModeHint = 'auto' | 'ask' | 'analysis' | 'workflow'
+
+export interface ClarificationContext {
+  dataset_id: string
+  original_query: string
+  question?: string | null
+  user_answer?: string | null
+  resolved_parameter?: string | null
+  affected_step?: WorkflowStep | null
+  status: 'pending' | 'resolved'
+  scope_key: string
+  clarification_type?: string | null
+  choices?: ClarificationChoice[] | null
+}
+
+export interface ClarificationChoice {
+  id: string
+  label: string
+  description: string
+  query: string
+  tool?: string | null
 }
 
 export interface PreviewResponse {
@@ -202,9 +249,21 @@ export interface ChatResponse {
   // True when the planner needs clarification before producing a workflow.
   needs_clarification?: boolean
   clarification_question?: string | null
+  clarification_type?: 'slot_validation' | 'planning' | string | null
+  clarification_context?: ClarificationContext | null
+  // Suggested analysis directions for broad / ambiguous requests (rendered as buttons).
+  clarification_choices?: ClarificationChoice[] | null
   state?: WorkflowRunState
   attempts?: WorkflowAttempt[]
   context_summary?: WorkflowContextSummary | null
+  // Read-only analytical result fields (task 3).
+  is_read_only?: boolean
+  ask_mode_type?: string | null
+  evidence_source?: string | null
+  // Route decision debug info from the query classifier (task 5).
+  route_decision?: Record<string, unknown> | null
+  // Structured observation from the preview pass (task 6).
+  observation?: ObservationSummary | null
 }
 
 // ─── Run history ──────────────────────────────────────────────────────────────

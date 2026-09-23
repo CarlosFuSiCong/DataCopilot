@@ -112,9 +112,33 @@ def test_execute_filter_rows_reduces_row_count():
     did = _upload()
     data = _execute(
         did,
-        [{"type": "filter_rows", "column": "sales", "operator": ">", "value": 1000}],
+        [{"type": "filter_rows", "column": "region", "operator": "!=", "value": "West"}],
     ).json()
-    assert data["row_count"] == 2
+    assert data["row_count"] == 4
+
+
+def test_preview_filter_rows_supports_missing_value_condition():
+    did = _upload()
+    resp = _preview(
+        did,
+        [{"type": "filter_rows", "column": "sales", "operator": "is_null"}],
+    )
+    data = resp.json()
+    assert resp.status_code == 200
+    assert data["step_results"][0]["output_row_count"] == 1
+    assert data["step_results"][0]["preview"][0]["region"] == "West"
+
+
+def test_preview_filter_rows_normalizes_null_equality_condition():
+    did = _upload()
+    resp = _preview(
+        did,
+        [{"type": "filter_rows", "column": "sales", "operator": "=", "value": None}],
+    )
+    data = resp.json()
+    assert resp.status_code == 200
+    assert data["step_results"][0]["output_row_count"] == 1
+    assert data["step_results"][0]["message"] == "Filtered 'sales' is_null: 1 rows kept."
 
 
 def test_execute_generate_summary_sets_flag():
@@ -274,7 +298,7 @@ def test_preview_clean_workflow_has_no_warnings_or_errors():
     did = _upload()
     data = _preview(
         did,
-        [{"type": "filter_rows", "column": "region", "operator": "=", "value": "North"}],
+        [{"type": "filter_rows", "column": "region", "operator": "!=", "value": "West"}],
     ).json()
     assert data["has_warnings"] is False
     assert data["has_errors"] is False
