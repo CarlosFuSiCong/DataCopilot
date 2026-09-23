@@ -30,5 +30,12 @@
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.58.2",
     "vite": "^8.0.16"
+  },
+  "pnpm": {
+    "overrides": {
+      "brace-expansion@>=5.0.0 <5.0.12": "5.0.12",
+      "browserslist@<=4.28.6": "4.29.0",
+      "@babel/core@<=7.29.0": "7.29.7"
+    }
   }
 }
